@@ -89,7 +89,11 @@ function initSubtitles(srtUrl, playerId, containerId) {
             const idx = cues.findIndex(c => time >= c.start && time <= c.end);
             if (idx !== currentIndex) {
                 currentIndex = idx;
-                container.innerHTML = idx >= 0 ? cues[idx].text : '';
+                if (idx >= 0) {
+                    container.innerHTML = '<span class="subtitle-text-bg">' + cues[idx].text + '</span>';
+                } else {
+                    container.innerHTML = '';
+                }
             }
         }
         requestAnimationFrame(render);

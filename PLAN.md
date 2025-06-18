@@ -3,7 +3,7 @@
 A simple Razor‑Pages app serving as a YouTube wrapper with custom subtitles.
 
 ## A. Domain & Hostname
-- Purchase a custom domain (e.g. `bwtube.com`) so users can replace `youtube.com` with `bwtube.com` for translated videos.
+- Purchase a custom domain (e.g. `bonjwa.tv`) so users can replace `youtube.com` with `bonjwa.tv` for translated videos.
 
 ## B. Master Video List
 - Store the list of supported videos in a local JSON file (e.g. `data/videos.json`).
