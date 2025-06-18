@@ -15,17 +15,41 @@ else
         <iframe id="player"
                 src="https://www.youtube.com/embed/@Model.Video.VideoId?enablejsapi=1"
                 title="@Model.Video.Title"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowfullscreen>
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
         </iframe>
         <div id="subtitle-container"
              class="position-absolute start-50 translate-middle-x subtitle-overlay">
         </div>
+    </div>
+    <div class="btn-group mb-3" role="group">
+        <button id="dec-font" type="button" class="btn btn-secondary btn-sm">A-</button>
+        <button id="inc-font" type="button" class="btn btn-secondary btn-sm">A+</button>
     </div>
     <script src="https://www.youtube.com/iframe_api"></script>
     <script src="~/js/subtitles.js"></script>
     <script>
         // Initialize subtitles after the YouTube IFrame API has loaded
         initSubtitles("@Model.Video.SubtitleUrl", "player", "subtitle-container");
+
+        // Load saved font size from localStorage, if any
+        const subtitleEl = document.getElementById('subtitle-container');
+        const savedSize = parseFloat(localStorage.getItem('subtitleFontSize'));
+        if (!isNaN(savedSize)) {
+            subtitleEl.style.fontSize = savedSize + 'px';
+        }
+
+        // Font size adjustment controls
+        const decBtn = document.getElementById('dec-font');
+        const incBtn = document.getElementById('inc-font');
+        decBtn.addEventListener('click', () => adjustFontSize(-2));
+        incBtn.addEventListener('click', () => adjustFontSize(2));
+
+        function adjustFontSize(deltaPx) {
+            const style = window.getComputedStyle(subtitleEl);
+            const current = parseFloat(style.fontSize) || 16;
+            const next = Math.max(6, current + deltaPx);
+            subtitleEl.style.fontSize = next + 'px';
+            localStorage.setItem('subtitleFontSize', next);
+        }
     </script>
 }
