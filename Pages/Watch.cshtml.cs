@@ -15,9 +15,9 @@ namespace bwkt_webapp.Pages
             _videoService = videoService;
         }
 
-        public IActionResult OnGet(string videoId)
+        public IActionResult OnGet(string v)
         {
-            Video = _videoService.GetById(videoId);
+            Video = _videoService.GetById(v);
             if (Video == null)
             {
                 return NotFound();

@@ -11,15 +11,15 @@
 else
 {
     <h1>@Model.Video.Title</h1>
-    <div class="ratio ratio-16x9 mb-3">
+    <div class="position-relative ratio ratio-16x9 mb-3 video-wrapper">
         <iframe id="player"
                 src="https://www.youtube.com/embed/@Model.Video.VideoId?enablejsapi=1"
                 title="@Model.Video.Title"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowfullscreen>
         </iframe>
+        <div id="subtitle-container" class="position-absolute bottom-0 start-0 w-100 text-center subtitle-overlay"></div>
     </div>
-    <div id="subtitle-container" class="border rounded p-2" style="min-height:3rem;"></div>
     <script src="https://www.youtube.com/iframe_api"></script>
     <script src="~/js/subtitles.js"></script>
     <script>
