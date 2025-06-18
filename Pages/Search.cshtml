@@ -1,0 +1,31 @@
+@page
+@model bwkt_webapp.Pages.SearchModel
+@using System.Linq
+@{
+    ViewData["Title"] = "Search";
+}
+
+<h1>Search Results for "@Model.Query"</h1>
+
+@if (!Model.Videos.Any())
+{
+    <p>No results found.</p>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
+        @foreach (var v in Model.Videos)
+        {
+            <div class="col">
+                <div class="card h-100">
+                    <a asp-page="/Watch" asp-route-videoId="@v.VideoId">
+                        <img src="https://img.youtube.com/vi/@v.VideoId/hqdefault.jpg" class="card-img-top" alt="@v.Title" />
+                    </a>
+                    <div class="card-body">
+                        <h5 class="card-title">@v.Title</h5>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
