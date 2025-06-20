@@ -32,7 +32,7 @@ Key goals:
 
 ## 2. Directory Structure
 
-/bonjwa-pipeline/ /metadata/ videos.json                  # Exported from Google Sheets /audio/ {video\_id}.mp3 /vocals/ {video\_id}*vocals.wav /subtitles/ kr*{video\_id}.srt en\_{video\_id}.srt /cache/ # (for translation chunk caching) /slang/ KoreanSlang.txt /website/ subtitles.json               # Final manifest for bonjwa.tv pipeline-config.json download\_audio.py isolate\_vocals.py transcribe\_audio.py translate\_subtitles.py export\_sheet\_to\_json.py ManifestBuilder.cs PipelineOrchestrator.cs README.md
+/bonjwatv-pipeline/ /metadata/ videos.json                  # Exported from Google Sheets /audio/ {video\_id}.mp3 /vocals/ {video\_id}*vocals.wav /subtitles/ kr*{video\_id}.srt en\_{video\_id}.srt /cache/ # (for translation chunk caching) /slang/ KoreanSlang.txt /website/ subtitles.json               # Final manifest for bonjwa.tv pipeline-config.json download\_audio.py isolate\_vocals.py transcribe\_audio.py translate\_subtitles.py export\_sheet\_to\_json.py ManifestBuilder.cs PipelineOrchestrator.cs README.md
 
 ---
 
@@ -52,6 +52,31 @@ All steps are idempotent—scripts will skip processing if the expected output e
 A. Audio Download
 
 - Downloads audio (yt-dlp) for all videos not already present in /audio/.
+
+##### C0. Audio Download (`download_audio.py`) — PLAN
+
+**Purpose:** Fetch YouTube audio tracks via `yt-dlp` and save as `.mp3` files for subsequent processing.
+
+**Inputs/Outputs:**
+- Input: YouTube URL and `video_id`
+- Output: `/audio/{video_id}.mp3`
+
+**Features:**
+- CLI args: `--url`, `--video-id`, `--output-dir`
+- Idempotent: skip download if target `.mp3` already exists
+- Uses `yt_dlp.YoutubeDL` with audio-extraction postprocessor to produce mp3
+- Minimal logging to `logs/download_audio.log` and stdout
+
+**Testing:**
+1. Pytest smoke test that:
+   - Creates a dummy existing file and asserts skip behavior
+   - Monkeypatches `yt_dlp.YoutubeDL` to simulate download and file creation
+
+**Next Steps:**
+1. Write test suite for `download_audio.py`
+2. Implement the script per this plan
+
+B. Vocal Isolation (Optional)
 
 B. Vocal Isolation (Optional)
 
