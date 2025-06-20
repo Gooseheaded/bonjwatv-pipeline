@@ -70,7 +70,30 @@ D. Translation
 - Uses OpenAI LLM (with glossary prompt) to translate Korean SRTs to English SRTs (/subtitles/en_{video_id}.srt).
 - Caching per chunk, error handling, and logging included.
 
-##### Whisper Post-Processing (`whisper_postprocess.py`) — PLAN
+##### C1. Whisper Transcription (`transcribe_audio.py`) — PLAN
+
+**Purpose:** Transcribe audio files to raw Korean SRT using OpenAI Whisper (local model).
+
+**Inputs/Outputs:**
+- Input audio: `/audio/{video_id}.mp3`
+- Output subtitle: `/subtitles/kr_{video_id}.srt`
+
+**Features:**
+- CLI with `--input-file`, `--output-file`, `--model-size`, `--language` parameters
+- Validate input path, handle errors with nonzero exit code
+- Load Whisper model via `importlib.import_module('whisper')` for lazy import
+- Format timestamps from floats to `HH:MM:SS,mmm`
+- Write segments to `.srt`
+
+**Testing:**
+1. Pytest smoke test with a dummy Whisper module (monkeypatch importlib)
+2. Verify `.srt` file contents, indices, and timestamp formatting
+
+**Next Steps:**
+1. Write the test suite for `transcribe_audio.py`
+2. Implement the script per this plan
+
+##### C2. Whisper Post-Processing (`whisper_postprocess.py`) — PLAN
 
 **Purpose:** Clean up raw Whisper-generated SRT by normalizing timestamp formats and collapsing duplicate subtitle blocks.
 
