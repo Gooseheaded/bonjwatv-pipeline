@@ -13,8 +13,8 @@ namespace bwkt_webapp.Tests
     public class VideoServiceTests
     {
         private const string JsonContent =
-            "[{\"videoId\":\"id1\",\"title\":\"Title1\",\"description\":\"Desc1\",\"subtitleUrl\":\"url1\"}," +
-            "{\"videoId\":\"id2\",\"title\":\"Title2\",\"description\":null,\"subtitleUrl\":\"url2\"}]";
+            "[{\"v\":\"id1\",\"title\":\"Title1\",\"description\":\"Desc1\",\"subtitleUrl\":\"url1\"}," +
+            "{\"v\":\"id2\",\"title\":\"Title2\",\"description\":null,\"subtitleUrl\":\"url2\"}]";
 
         private IWebHostEnvironment CreateEnvironmentWithJson(string json)
         {
@@ -101,7 +101,7 @@ namespace bwkt_webapp.Tests
             var env = CreateEnvironmentWithJson(JsonContent);
             var svc = new VideoService(env);
             var dataFile = Path.Combine(env.ContentRootPath, "data", "videos.json");
-            var updatedJson = "[{\"videoId\":\"new\",\"title\":\"New\",\"description\":null,\"subtitleUrl\":\"url\"}]";
+            var updatedJson = "[{\"v\":\"new\",\"title\":\"New\",\"description\":null,\"subtitleUrl\":\"url\"}]";
             File.WriteAllText(dataFile, updatedJson);
             var sw = Stopwatch.StartNew();
             while (sw.Elapsed < TimeSpan.FromSeconds(1) && svc.GetAll().First().VideoId != "new")

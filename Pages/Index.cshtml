@@ -4,7 +4,30 @@
     ViewData["Title"] = "Home page";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-</div>
+@using System.Linq
+
+<h1>All Videos</h1>
+
+@if (!Model.Videos.Any())
+{
+    <p>No videos available.</p>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
+        @foreach (var v in Model.Videos)
+        {
+            <div class="col">
+                <div class="card h-100">
+                    <a asp-page="/Watch" asp-route-v="@v.VideoId">
+                        <img src="https://img.youtube.com/vi/@v.VideoId/hqdefault.jpg"
+                             class="card-img-top" alt="@v.Title" />
+                    </a>
+                    <div class="card-body">
+                        <h5 class="card-title">@v.Title</h5>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
