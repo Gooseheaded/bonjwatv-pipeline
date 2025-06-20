@@ -4,7 +4,9 @@
     ViewData["Title"] = "Home page";
 }
 
+@using System
 @using System.Linq
+@using bwkt_webapp.Helpers
 
 <h1>All Videos</h1>
 
@@ -25,6 +27,11 @@ else
                     </a>
                     <div class="card-body">
                         <h5 class="card-title">@v.Title</h5>
+                        @foreach (var tag in v.Tags ?? Array.Empty<string>())
+                        {
+                            var (text, css) = TagBadge.Get(tag);
+                            <span class="badge @css me-1">@text</span>
+                        }
                     </div>
                 </div>
             </div>

@@ -1,5 +1,7 @@
 @page
 @model bwkt_webapp.Pages.WatchModel
+@using System
+@using bwkt_webapp.Helpers
 @{
     ViewData["Title"] = Model.Video?.Title ?? "Watch";
 }
@@ -11,6 +13,11 @@
 else
 {
     <h1>@Model.Video.Title</h1>
+    @foreach (var tag in Model.Video.Tags ?? Array.Empty<string>())
+    {
+        var (text, css) = TagBadge.Get(tag);
+        <span class="badge @css me-1">@text</span>
+    }
     <div class="position-relative ratio ratio-16x9 mb-3 video-wrapper">
         <iframe id="player"
                 src="https://www.youtube.com/embed/@Model.Video.VideoId?enablejsapi=1"

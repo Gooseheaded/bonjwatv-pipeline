@@ -86,14 +86,14 @@ The following describes the key building blocks and folder structure of the appl
 
 ### Data Layer
 
-- **videos.json**: JSON file in `data/` containing an array of video entries:
+- **videos.json**: JSON file in `data/` containing an array of video entries (optional `tags` array):
   ```json
   [
-    { "v": "abc123", "title": "My Video", "description": "...", "subtitleUrl": "..." },
+    { "v": "abc123", "title": "My Video", "description": "...", "subtitleUrl": "...", "tags": ["z", "p"] },
     …
   ]
   ```
-- **VideoInfo.cs**: Plain C# record or class matching a JSON entry.
+- **VideoInfo.cs**: Plain C# record or class matching a JSON entry; add a nullable `Tags` property bound to JSON `tags`.
 
 ### Service Layer
 
@@ -120,6 +120,27 @@ The following describes the key building blocks and folder structure of the appl
 - Register `VideoService` as a singleton in `Program.cs`.
 - Configure Razor Pages endpoints for `/`, `/search`, `/watch`, `/account/login`, and `/account/signup`.
 - Serve `data/videos.json` as a physical file (read-only) via `FileProvider`, not as a static asset.
+
+## G. Tags
+
+- Extend each video entry in `data/videos.json` with an optional `tags` array of string codes (e.g. `["z", "p", "t"]`).
+- Update `VideoInfo.cs` to include a nullable `Tags` property bound to JSON `tags`.
+- In the Index, Search, and Watch Razor Pages, render tags as Bootstrap badges using the following mapping:
+
+| Code | Label   | Badge CSS class   |
+|:----:|:--------|:------------------|
+| z    | Zerg    | bg-danger         |
+| p    | Protoss | bg-warning        |
+| t    | Terran  | bg-primary        |
+| *    | (code)  | bg-secondary      |
+
+- No server-side tag management UI; tags are manually managed in the JSON file.
+
+## H. Centralized Tag‑Badge Helper
+
+- Create a static helper class in `Helpers/TagBadge.cs` with a single `Get(string code)` method that returns `(string Text, string CssClass)`.
+- Move the tag-to-label-and-class mapping (z, p, t and fallback) into this helper so updating or adding a new code only requires one file change.
+- Refactor the Index, Search, and Watch Razor Pages to call `TagBadge.Get(tag)` instead of duplicating the switch logic.
 
 ## F. Testing Strategy
 
