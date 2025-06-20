@@ -31,6 +31,10 @@ else
                     </a>
                     <div class="card-body">
                         <h5 class="card-title">@v.Title</h5>
+                        @if (!string.IsNullOrEmpty(v.Creator))
+                        {
+                            <h6 class="card-subtitle mb-2 text-muted">By @v.Creator</h6>
+                        }
                         @foreach (var tag in v.Tags ?? Array.Empty<string>())
                         {
                             var (text, css) = TagBadge.Get(tag);

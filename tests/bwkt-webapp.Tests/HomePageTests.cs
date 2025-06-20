@@ -25,6 +25,7 @@ public class HomePageTests : IClassFixture<TestWebAppFactory>
             // Should display our test data entry
             Assert.Contains("Test Video", html);
             Assert.Contains("img.youtube.com/vi/test1/hqdefault.jpg", html);
+            Assert.Contains("By Test Creator", html);
         }
     }
 }

@@ -12,6 +12,7 @@ A simple Razor‑Pages app serving as a YouTube wrapper with custom subtitles.
   - `videoId` (YouTube ID)
   - `title`
   - `description` (optional)
+  - `creator` (author or channel name)
   - URL or path to the SRT subtitles (e.g. a pastebin raw URL)
 
 ## C. Search
@@ -32,9 +33,9 @@ A simple Razor‑Pages app serving as a YouTube wrapper with custom subtitles.
 - Use the YouTube IFrame embed API for the video player integration.
 
 ## E. UI Pages
-- **Homepage**: Grid of all supported videos (thumbnail + title) with a search bar at the top.
-- **Search Results**: Filtered grid view showing videos matching the query.
-- **Watch Page**: Embedded YouTube player with a custom subtitle overlay below the video.
+- **Homepage**: Grid of all supported videos (thumbnail + title + creator) with a search bar at the top.
+- **Search Results**: Filtered grid view showing videos matching the query, including creator names.
+- **Watch Page**: Embedded YouTube player with creator name, custom subtitle overlay, and controls.
 - **Login & Signup**: Simple stub pages for future authentication.
 - Keep all pages SSR‑rendered and styling minimal (no Web Components or large frameworks).
 
@@ -45,6 +46,7 @@ A simple Razor‑Pages app serving as a YouTube wrapper with custom subtitles.
 4. Write minimal client‑side JS for SRT parsing and subtitle rendering.
 5. Apply basic styling (CSS or lightweight framework) to match a YouTube‑like grid.
 6. Plan for future enhancements: fuzzy search, authentication flow, production subtitle-service, etc.
+7. Add a `creator` field to `data/videos.json`, update model, and display creators in the UI pages.
 
 ## MVP Decisions
 

@@ -16,6 +16,9 @@ namespace bwkt_webapp.Models
         [JsonPropertyName("subtitleUrl")]
         public string SubtitleUrl { get; set; } = null!;
 
+        [JsonPropertyName("creator")]
+        public string? Creator { get; set; }
+
         [JsonPropertyName("tags")]
         public string[]? Tags { get; set; }
     }
