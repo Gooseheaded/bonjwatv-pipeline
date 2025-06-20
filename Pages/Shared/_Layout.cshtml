@@ -23,9 +23,6 @@
                         <li class="nav-item">
                             <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>
-                        </li>
                     </ul>
                     <form class="d-flex" method="get" asp-page="/Search">
                         <input class="form-control me-2" type="search" name="q" placeholder="Search" aria-label="Search" value="@Context.Request.Query["q"]" />
@@ -44,7 +41,7 @@
 
     <footer class="border-top footer text-muted">
         <div class="container">
-            &copy; 2025 - bonjwa.tv - <a asp-area="" asp-page="/Privacy">Privacy</a>
+            &copy; 2025 - bonjwa.tv
         </div>
     </footer>
 
