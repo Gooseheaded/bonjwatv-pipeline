@@ -10,7 +10,11 @@ from dotenv import load_dotenv
 from openai import OpenAI, RateLimitError
 
 load_dotenv()
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+_OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+if _OPENAI_API_KEY:
+    client = OpenAI(api_key=_OPENAI_API_KEY)
+else:
+    client = None
 
 class Subtitle:
     def __init__(self, index: int, start: str, end: str, lines: list):
@@ -86,6 +90,8 @@ def load_cache(cache_file: str) -> str:
         return json.load(f).get('translation')
 
 def call_openai_api(prompt: str, model: str = 'gpt-4', temperature: float = 0.2) -> str:
+    if client is None:
+        raise RuntimeError('OPENAI_API_KEY is not set')
     for attempt in range(5):
         try:
             resp = client.chat.completions.create(
