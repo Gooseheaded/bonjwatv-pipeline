@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using bwkt_webapp.Models;
+using bwkt_webapp.Helpers;
 using Microsoft.AspNetCore.Hosting;
 
 namespace bwkt_webapp.Services
@@ -71,8 +72,17 @@ namespace bwkt_webapp.Services
             if (string.IsNullOrWhiteSpace(query))
                 return _videos;
 
+            // Tokenize on whitespace and require all tokens to match title or tags
+            var tokens = query.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
             return _videos.Where(v =>
-                v.Title.Contains(query, StringComparison.OrdinalIgnoreCase));
+                tokens.All(token =>
+                    v.Title.Contains(token, StringComparison.OrdinalIgnoreCase)
+                    || (v.Tags?.Any(tag =>
+                        string.Equals(tag, token, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(TagBadge.Get(tag).Text, token, StringComparison.OrdinalIgnoreCase)
+                    ) ?? false)
+                )
+            );
         }
 
         public void Dispose()

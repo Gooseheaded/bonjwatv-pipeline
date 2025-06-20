@@ -75,15 +75,54 @@ namespace bwkt_webapp.Tests
             Assert.Equal(2, all.Count());
         }
 
-        [Fact]
-        public void Search_MatchesTitle_CaseInsensitive()
-        {
-            var env = CreateEnvironmentWithJson(JsonContent);
-            var svc = new VideoService(env);
-            var result = svc.Search("title1");
-            Assert.Single(result);
-            Assert.Equal("id1", result.First().VideoId);
-        }
+    [Fact]
+    public void Search_MatchesTitle_CaseInsensitive()
+    {
+        var env = CreateEnvironmentWithJson(JsonContent);
+        var svc = new VideoService(env);
+        var result = svc.Search("title1");
+        Assert.Single(result);
+        Assert.Equal("id1", result.First().VideoId);
+    }
+    [Fact]
+    public void Search_MatchesTagCode()
+    {
+        var tagJson =
+            "[{\"v\":\"id1\",\"title\":\"Foo\",\"description\":null,\"subtitleUrl\":\"u\",\"tags\":[\"z\"]}," +
+            "{\"v\":\"id2\",\"title\":\"Bar\",\"description\":null,\"subtitleUrl\":\"u\",\"tags\":[\"p\"]}]";
+        var env = CreateEnvironmentWithJson(tagJson);
+        var svc = new VideoService(env);
+        var result = svc.Search("z");
+        Assert.Single(result);
+        Assert.Equal("id1", result.First().VideoId);
+    }
+
+    [Fact]
+    public void Search_MatchesTagLabel()
+    {
+        var tagJson =
+            "[{\"v\":\"id1\",\"title\":\"Foo\",\"description\":null,\"subtitleUrl\":\"u\",\"tags\":[\"t\"]}," +
+            "{\"v\":\"id2\",\"title\":\"Bar\",\"description\":null,\"subtitleUrl\":\"u\",\"tags\":[\"p\"]}]";
+        var env = CreateEnvironmentWithJson(tagJson);
+        var svc = new VideoService(env);
+        // 'Terran' is label for code 't'
+        var result = svc.Search("Terran");
+        Assert.Single(result);
+        Assert.Equal("id1", result.First().VideoId);
+    }
+
+    [Fact]
+    public void Search_MultiToken_ANDSemantics()
+    {
+        var tagJson =
+            "[{\"v\":\"id1\",\"title\":\"Foo\",\"description\":null,\"subtitleUrl\":\"u\",\"tags\":[\"z\",\"p\"]}," +
+            "{\"v\":\"id2\",\"title\":\"Foo\",\"description\":null,\"subtitleUrl\":\"u\",\"tags\":[\"z\"]}]";
+        var env = CreateEnvironmentWithJson(tagJson);
+        var svc = new VideoService(env);
+        var result = svc.Search("z p");
+        Assert.Single(result);
+        Assert.Equal("id1", result.First().VideoId);
+    }
 
         [Fact]
         public void Constructor_NoFile_FileCreatesEmptyList()

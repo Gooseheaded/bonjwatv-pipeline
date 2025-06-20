@@ -16,6 +16,10 @@ A simple Razor‑Pages app serving as a YouTube wrapper with custom subtitles.
 
 ## C. Search
 - Implement simple title matching (case-insensitive substring search) initially.
+- Extend search to include tags as well:
+  - Split the query string on whitespace into tokens.
+  - For each token, a video matches if the token (case-insensitive) is found in the video title _or_ exactly matches any tag code or tag label.
+  - Use AND semantics: include a video only if _all_ tokens match in title or tags.
 - Keep the code flexible for future fuzzy search or advanced filtering.
 
 ## D. Subtitle Integration
