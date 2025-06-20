@@ -26,13 +26,21 @@ Key goals:
            │
 ```
 
-┌──────────────┬──────────────┬─────────────┬──────────────┐ │    Audio DL  │  Demucs      │ Whisper     │ Translation  │ │  (Python)    │ (optional)   │ (Python)    │ (Python LLM) │ └──────────────┴──────────────┴─────────────┴──────────────┘ │ [Artifacts: audio, vocals, subtitles] │ [Manifest Builder (C#)] │ [subtitles.json + assets for bonjwa.tv]
+┌──────────────┬──────────────┬─────────────┬──────────────┐ │    Audio DL  │  Demucs      │ Whisper     │ Translation  │ │  (Python)    │ (optional)   │ (Python)    │ (Python LLM) │ └──────────────┴──────────────┴─────────────┴──────────────┘ │ [Artifacts: audio, vocals, subtitles] │ [Manifest Builder (Python)] │ [subtitles.json + assets for bonjwa.tv]
 
 ---
 
 ## 2. Directory Structure
 
-/bonjwatv-pipeline/ /metadata/ videos.json                  # Exported from Google Sheets /audio/ {video\_id}.mp3 /vocals/ {video\_id}*vocals.wav /subtitles/ kr*{video\_id}.srt en\_{video\_id}.srt /cache/ # (for translation chunk caching) /slang/ KoreanSlang.txt /website/ subtitles.json               # Final manifest for bonjwa.tv pipeline-config.json download\_audio.py isolate\_vocals.py transcribe\_audio.py translate\_subtitles.py export\_sheet\_to\_json.py ManifestBuilder.cs PipelineOrchestrator.cs README.md
+/bonjwatv-pipeline/ /metadata/ videos.json                  # Exported from Google Sheets
+/audio/ {video_id}.mp3
+/vocals/ {video_id}*vocals.wav
+/subtitles/ kr*{video_id}.srt en_{video_id}.srt
+/cache/       # (for translation chunk caching)
+/slang/ KoreanSlang.txt
+/website/ subtitles.json               # Final manifest for bonjwa.tv
+
+download_audio.py isolate_vocals.py transcribe_audio.py whisper_postprocess.py translate_subtitles.py export_sheet_to_json.py manifest_builder.py pipeline_orchestrator.py README.md
 
 ---
 
@@ -76,7 +84,27 @@ A. Audio Download
 1. Write test suite for `download_audio.py`
 2. Implement the script per this plan
 
-B. Vocal Isolation (Optional)
+##### B. Vocal Isolation (Optional) (`isolate_vocals.py`) — PLAN
+
+**Purpose:** Separate vocals from background audio using Demucs.
+
+**Inputs/Outputs:**
+- Input: `/audio/{video_id}.mp3`
+- Output vocals: `/vocals/{video_id}/vocals.wav`
+
+**Features:**
+- CLI args: `--input-file`, `--output-dir`, `--model`, `--two-stems`
+- Idempotent: skip processing if `vocals.wav` already exists
+- Uses `subprocess.run(['demucs', ...])` to invoke Demucs CLI
+- Minimal logging to `logs/isolate_vocals.log` and stdout
+
+**Testing:**
+1. Pytest smoke test for existing output skip
+2. Monkeypatch `subprocess.run` to simulate Demucs invocation and output file creation
+
+**Next Steps:**
+1. Write test suite for `isolate_vocals.py`
+2. Implement the script per this plan
 
 B. Vocal Isolation (Optional)
 
@@ -179,12 +207,12 @@ D. Translation
 
 ## 4. Orchestration and Batch Control
 
-- PipelineOrchestrator.cs (C# CLI app):
-  - Reads pipeline-config.json and metadata/videos.json
-  - Sequentially runs batch steps (via subprocess calls to Python scripts)
-  - Logs results and errors (skip-and-log strategy)
-  - Supports resume/retry by skipping complete steps
-  - Outputs summary and error reports for admin review
+- `pipeline_orchestrator.py` (Python CLI):
+- Reads `pipeline-config.json` and `metadata/videos.json`
+- Sequentially runs batch steps (via subprocess calls to Python scripts)
+- Logs skips, progress, and errors (skip-and-log strategy)
+- Supports resume/retry by skipping completed steps
+- Outputs summary and error reports for admin review
 
 ---
 
@@ -199,8 +227,7 @@ D. Translation
 
 ## 6. Integration & Extensibility
 
-- Python for ML/AI steps (audio, Demucs, Whisper, translation)
-- C# for orchestration, manifest generation, future UI, and tighter bonjwa.tv integration
+- Python for all steps (audio download, Demucs isolation, Whisper transcription, post-processing, translation, orchestration, and manifest generation)
 - Future support for:
   - Additional languages (new columns/SRTs, minor changes to manifest builder)
   - Alternate video sources (e.g., SOOP Live)
@@ -217,7 +244,7 @@ python export\_sheet\_to\_json.py --spreadsheet "Translation Tracking" --workshe
 
 # 2. Run orchestrator to process new/changed videos
 
-dotnet run --project PipelineOrchestrator.csproj
+python pipeline_orchestrator.py --config pipeline-config.json
 
 # 3. Deploy /website/subtitles.json and SRTs to bonjwa.tv
 

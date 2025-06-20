@@ -26,7 +26,8 @@ These steps show how to set up the development environment, run tests, and explo
 3. Upgrade pip and install Python dependencies:
    ```bash
    pip install --upgrade pip
-   pip install python-dotenv openai pytest whisper
+pip install python-dotenv openai pytest whisper yt-dlp
+# (Optional) install Demucs for vocal isolation: pip install demucs
    ```
 
 ### Running Tests
