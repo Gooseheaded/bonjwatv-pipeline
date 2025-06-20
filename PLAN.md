@@ -150,6 +150,17 @@ The following describes the key building blocks and folder structure of the appl
 - Move the tag-to-label-and-class mapping (z, p, t and fallback) into this helper so updating or adding a new code only requires one file change.
 - Refactor the Index, Search, and Watch Razor Pages to call `TagBadge.Get(tag)` instead of duplicating the switch logic.
 
+## I. Light/Dark Mode Toggle
+
+- Add a theme toggle button to the shared navbar (`_Layout.cshtml`) for light/dark mode.
+- Use Bootstrap 5.3's color modes via the `data-bs-theme` attribute on `<html>` to switch themes.
+- Implement JavaScript in `site.js` to:
+  1. Load the saved theme (from `localStorage`) or detect `prefers-color-scheme`.
+  2. Set `document.documentElement.setAttribute("data-bs-theme", theme)`.
+  3. Toggle theme on button click, update the attribute, icon, and persist in `localStorage`.
+
+- **TODO**: Add end-to-end or browser-level tests for the theme toggle (e.g. via Playwright) later.
+
 ## F. Testing Strategy
 
 - **Test project layout**: add an xUnit test project (e.g. `tests/bwkt-webapp.Tests`) alongside the main app solution.
