@@ -63,12 +63,33 @@ C. Transcription & Post-Processing
 - Post-process Whisper output (placeholder step):
   - Normalize timestamps to full HH:MM:SS,mmm format
   - Collapse adjacent duplicate subtitle blocks
-  - (Implement later in `whisper_postprocess.py`)
+  - (Implement in `whisper_postprocess.py`)
 
 D. Translation
 
 - Uses OpenAI LLM (with glossary prompt) to translate Korean SRTs to English SRTs (/subtitles/en_{video_id}.srt).
 - Caching per chunk, error handling, and logging included.
+
+##### Whisper Post-Processing (`whisper_postprocess.py`) — PLAN
+
+**Purpose:** Clean up raw Whisper-generated SRT by normalizing timestamp formats and collapsing duplicate subtitle blocks.
+
+**Inputs/Outputs:**
+- Input: `subtitles/kr_{video_id}.srt` (raw)
+- Output: `subtitles/kr_{video_id}.srt` (cleaned, overwritten)
+
+**Features:**
+- Detect and convert non-standard timestamps (e.g. seconds-only or missing hours) to full `HH:MM:SS,mmm` format
+- Collapse adjacent subtitle entries with identical text into a single block spanning the combined duration
+- Simple CLI (`--input-file`, `--output-file`) returning nonzero on error
+
+**Testing:**
+1. Create pytest smoke test that feeds a sample SRT with mixed timestamp formats and duplicate lines
+2. Assert normalized timestamps and collapsed duplicates in output
+
+**Next Steps:**
+1. Write the test suite for `whisper_postprocess.py`
+2. Implement the script per this plan
 
 #### E. Translate Subtitles (`translate_subtitles.py`) - PLAN
 
