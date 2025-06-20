@@ -1,15 +1,16 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
+using bwkt_webapp.Tests;
 using Xunit;
 using bwkt_webapp;
 
 namespace bwkt_webapp.Tests
 {
-    public class TagBadgeTests : IClassFixture<WebApplicationFactory<Program>>
+public class TagBadgeTests : IClassFixture<TestWebAppFactory>
     {
-        private readonly WebApplicationFactory<Program> _factory;
+        private readonly TestWebAppFactory _factory;
 
-        public TagBadgeTests(WebApplicationFactory<Program> factory)
+        public TagBadgeTests(TestWebAppFactory factory)
         {
             _factory = factory;
         }
@@ -25,7 +26,7 @@ namespace bwkt_webapp.Tests
 
             // Assert: known tags for first video should render as badges
             Assert.Contains("<span class=\"badge bg-danger\">Zerg</span>", html);
-            Assert.Contains("<span class=\"badge bg-primary\">Terran</span>", html);
+            Assert.Contains("<span class=\"badge bg-warning\">Protoss</span>", html);
         }
     }
 }

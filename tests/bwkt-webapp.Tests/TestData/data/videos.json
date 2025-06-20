@@ -1,0 +1,9 @@
+[
+  {
+    "v": "test1",
+    "title": "Test Video",
+    "description": "desc",
+    "subtitleUrl": "http://example.com",
+    "tags": ["z", "p"]
+  }
+]

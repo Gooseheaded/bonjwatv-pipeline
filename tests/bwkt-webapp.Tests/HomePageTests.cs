@@ -5,11 +5,11 @@ using bwkt_webapp;
 
 namespace bwkt_webapp.Tests
 {
-    public class HomePageTests : IClassFixture<WebApplicationFactory<Program>>
+public class HomePageTests : IClassFixture<TestWebAppFactory>
     {
-        private readonly WebApplicationFactory<Program> _factory;
+        private readonly TestWebAppFactory _factory;
 
-        public HomePageTests(WebApplicationFactory<Program> factory)
+        public HomePageTests(TestWebAppFactory factory)
         {
             _factory = factory;
         }
@@ -22,8 +22,9 @@ namespace bwkt_webapp.Tests
             response.EnsureSuccessStatusCode();
             var html = await response.Content.ReadAsStringAsync();
 
-            Assert.Contains("Two-Hatchery Against Mech Terran", html);
-            Assert.Contains("img.youtube.com/vi/isIm67yGPzo", html);
+            // Should display our test data entry
+            Assert.Contains("Test Video", html);
+            Assert.Contains("img.youtube.com/vi/test1/hqdefault.jpg", html);
         }
     }
 }
