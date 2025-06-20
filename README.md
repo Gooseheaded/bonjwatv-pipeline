@@ -40,13 +40,17 @@ pytest -q
 ## Project Layout
 
 ```
-.venv/                   # Python virtual environment
-bonjwa.md               # Design & planning document for the pipeline
-transcribe_audio.py     # C1: Whisper transcription driver
-whisper_postprocess.py  # C2: Whisper SRT post-processing
-translate_subtitles.py  # D: OpenAI-based subtitle translation
-tests/                  # Pytest smoke tests for each step
-README.md               # This contributor guide
+.venv/                     # Python virtual environment
+bonjwa.md                 # Design & planning document for the pipeline
+download_audio.py         # A: Audio download via yt-dlp
+isolate_vocals.py         # B: Vocal isolation via Demucs
+transcribe_audio.py       # C1: Whisper transcription driver
+whisper_postprocess.py    # C2: Whisper SRT post-processing
+translate_subtitles.py    # D: OpenAI-based subtitle translation
+manifest_builder.py       # 3.3: Build subtitles.json manifest
+pipeline_orchestrator.py  # 4: Orchestration and batch control
+tests/                    # Pytest smoke tests for each step
+README.md                 # This contributor guide
 ``` 
 
 Refer to `bonjwa.md` for detailed step-by-step plans, directory structure, and orchestration notes.
