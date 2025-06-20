@@ -123,6 +123,10 @@ The following describes the key building blocks and folder structure of the appl
 
 - Register `VideoService` as a singleton in `Program.cs`.
 - Configure Razor Pages endpoints for `/`, `/search`, `/watch`, `/account/login`, and `/account/signup`.
+- Enable global lowercase URLs by adding routing configuration:
+  ```csharp
+  builder.Services.AddRouting(options => options.LowercaseUrls = true);
+  ```
 - Serve `data/videos.json` as a physical file (read-only) via `FileProvider`, not as a static asset.
 
 ## G. Tags
