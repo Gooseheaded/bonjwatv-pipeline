@@ -1,0 +1,10 @@
+{
+  "metadata_file": "metadata/videos.json",
+  "audio_dir": "audio",
+  "vocals_dir": "vocals",
+  "subtitles_dir": "subtitles",
+  "cache_dir": ".cache",
+  "slang_file": "slang/KoreanSlang.txt",
+  "website_dir": "website",
+  "skip_steps": []
+}
