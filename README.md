@@ -50,6 +50,7 @@ translate_subtitles.py    # D: OpenAI-based subtitle translation
 upload_subtitles.py       # F: Upload English SRTs to Pastebin
 manifest_builder.py       # 3.3: Build subtitles.json manifest
 pipeline_orchestrator.py  # 4: Orchestration and batch control
+export_sheet_to_json.py   # 3.1: Export metadata from Google Sheets
 tests/                    # Pytest smoke tests for each step
 README.md                 # This contributor guide
 ``` 
