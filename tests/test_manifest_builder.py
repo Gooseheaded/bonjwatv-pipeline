@@ -46,3 +46,33 @@ def test_build_manifest(tmp_path):
     assert entry['title'] == 'T1'
     assert entry['subtitleUrl'] == 'url1'
     assert entry['tags'] == ['a']
+
+def test_build_manifest_sheet_keys(tmp_path):
+    # metadata with sheet-exported column names
+    metadata = [
+        {
+            'v': 'vidX',
+            'EN Title': 'TX',
+            'Description': 'DescX',
+            'Creator': 'CX',
+            'EN Subtitles': 'urlX',
+            'Tags': ['x'],
+        }
+    ]
+    videos_json = tmp_path / 'videos2.json'
+    videos_json.write_text(json.dumps(metadata), encoding='utf-8')
+
+    subs_dir = tmp_path / 'subs'
+    subs_dir.mkdir()
+    (subs_dir / 'en_vidX.srt').write_text('', encoding='utf-8')
+
+    out = tmp_path / 'out.json'
+    build_manifest(str(videos_json), str(subs_dir), str(out))
+    data2 = json.loads(out.read_text(encoding='utf-8'))
+    assert len(data2) == 1
+    e = data2[0]
+    assert e['title'] == 'TX'
+    assert e['description'] == 'DescX'
+    assert e['creator'] == 'CX'
+    assert e['subtitleUrl'] == 'urlX'
+    assert e['tags'] == ['x']

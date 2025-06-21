@@ -21,11 +21,13 @@ def build_manifest(metadata_file: str, subtitles_dir: str, output_file: str) -> 
             continue
         entries.append({
             'v': vid,
-            'title': meta.get('title_en', ''),
-            'description': meta.get('description', ''),
-            'creator': meta.get('creator', ''),
-            'subtitleUrl': meta.get('subtitleUrl', ''),
-            'tags': meta.get('tags', []),
+            # support sheet-exported keys "EN Title" and "Creator"
+            'title': meta.get('EN Title', meta.get('title_en', '')),
+            'description': meta.get('description', meta.get('Description', '')),
+            'creator': meta.get('Creator', meta.get('creator', '')),
+            # support sheet-exported key "EN Subtitles"
+            'subtitleUrl': meta.get('EN Subtitles', meta.get('subtitleUrl', '')),
+            'tags': meta.get('tags', meta.get('Tags', [])),
         })
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)

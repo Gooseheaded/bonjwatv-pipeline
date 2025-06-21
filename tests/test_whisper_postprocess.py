@@ -36,3 +36,22 @@ def test_process_srt_file(tmp_path):
     assert text.count('Hello') == 1
     # 'World' remains
     assert 'World' in text
+
+def test_normalize_timestamp_overflow():
+    from whisper_postprocess import normalize_timestamp
+
+    # No overflow remains unchanged except zero-padding
+    assert normalize_timestamp('00:00:10,005') == '00:00:10,005'
+    assert normalize_timestamp('1:2:3.4')     == '01:02:03,400'
+
+    # Carry 60 seconds to minutes
+    assert normalize_timestamp('00:00:60,000') == '00:01:00,000'
+
+    # Carry seconds overflow within minutes
+    assert normalize_timestamp('00:00:125,030') == '00:02:05,030'
+
+    # Overflow multiple levels, minutes and seconds
+    assert normalize_timestamp('00:65:70,700') == '01:06:10,700'
+
+    # Excessive seconds to hours
+    assert normalize_timestamp('1:2:3600,123') == '02:02:00,123'

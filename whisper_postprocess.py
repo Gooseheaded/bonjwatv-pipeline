@@ -30,6 +30,10 @@ def parse_srt_file(path: str) -> list:
 
 
 def normalize_timestamp(ts: str) -> str:
+    """
+    Normalize a timestamp string (e.g. "MM:SS,ms" or with overflow) into
+    a semantically correct HH:MM:SS,mmm format, carrying overflow across units.
+    """
     ts = ts.strip()
     # Split milliseconds
     if ',' in ts:
@@ -38,19 +42,22 @@ def normalize_timestamp(ts: str) -> str:
         base, ms = ts.split('.', 1)
     else:
         base, ms = ts, '000'
+    # Exactly three digits of milliseconds
     ms = (ms + '000')[:3]
-    parts = base.split(':')
+    # Parse hours/minutes/seconds components (allow variable lengths)
+    parts = [int(p) for p in base.split(':')]
     if len(parts) == 3:
-        hh, mm, ss = parts
+        h, m, s = parts
     elif len(parts) == 2:
-        hh = '00'
-        mm, ss = parts
+        h, m, s = 0, parts[0], parts[1]
     else:
-        hh, mm, ss = '00', '00', parts[0]
-    hh = hh.zfill(2)
-    mm = mm.zfill(2)
-    ss = ss.zfill(2)
-    return f"{hh}:{mm}:{ss},{ms}"
+        h, m, s = 0, 0, parts[0]
+    # Compute total milliseconds and re-split to correct overflow
+    total_ms = ((h * 3600 + m * 60 + s) * 1000) + int(ms)
+    total_sec, ms = divmod(total_ms, 1000)
+    h, rem_sec = divmod(total_sec, 3600)
+    m, s = divmod(rem_sec, 60)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
 def collapse_subtitles(subs: list) -> list:
