@@ -275,7 +275,8 @@ python pipeline_orchestrator.py --config pipeline-config.json
 ## 8. Implementation Notes
 
 - Config file (pipeline-config.json):
-  - All paths, API keys, options
+-  - All paths, API keys, options
+-  - skip_steps: list of step names to skip (e.g. ["download_audio","isolate_vocals","transcribe_audio"])
 - Modular scripts: Each Python/C# script should work independently, accept CLI args, and return nonzero exit code on failure
 - Testing: All major scripts should have basic smoke tests (e.g., run on a test row/video)
 - Documentation: README.md with all usage instructions, dependencies, known issues

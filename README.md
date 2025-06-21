@@ -47,6 +47,7 @@ isolate_vocals.py         # B: Vocal isolation via Demucs
 transcribe_audio.py       # C1: Whisper transcription driver
 whisper_postprocess.py    # C2: Whisper SRT post-processing
 translate_subtitles.py    # D: OpenAI-based subtitle translation
+upload_subtitles.py       # F: Upload English SRTs to Pastebin
 manifest_builder.py       # 3.3: Build subtitles.json manifest
 pipeline_orchestrator.py  # 4: Orchestration and batch control
 tests/                    # Pytest smoke tests for each step
