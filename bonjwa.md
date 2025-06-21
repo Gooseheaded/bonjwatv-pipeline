@@ -315,7 +315,24 @@ python pipeline_orchestrator.py --config pipeline-config.json
 - Confirm/decide if tags should move to a separate tags.json or remain inline per video
 - Plan for migrating pipeline to a GPU-enabled VPS if Colab becomes too limited
 - Confirm ownership of each pipeline step (who maintains what)
-- Security: manage API keys and access control for translation/ML services
+- Security & Credentials Check: manage API keys and access control for translation/ML services
+
+### H. Credentials Health Check (`check_credentials.py`) — PLAN
+
+**Purpose:** Verify presence and validity of all required credentials (Google service account, OpenAI key, Pastebin key) before running the pipeline.
+
+**Checks:**
+- **Google Sheets**: confirm `service_account_file` exists, parses as JSON, and can open the configured spreadsheet.
+- **OpenAI**: confirm `OPENAI_API_KEY` is set and accepted by calling `openai.Model.list()`.
+- **Pastebin**: confirm `PASTEBIN_API_KEY` is set and accepted by a lightweight HTTP POST to the Pastebin API (e.g. checking error message for invalid key).
+
+**Output:**
+- Prints a summary table indicating for each credential:
+  - Missing, Valid, or Invalid
+  
+**Next Steps:**
+1. Implement `check_credentials.py` per this plan
+2. Run health check early in the orchestrator or CI
 
 ---
 

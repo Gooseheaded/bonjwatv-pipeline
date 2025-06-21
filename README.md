@@ -39,6 +39,15 @@ These steps show how to set up the development environment, run tests, and explo
   PASTEBIN_FOLDER=BWKT
   ```
 
+### Credential Health Check
+
+Before running the pipeline, verify your credentials:
+```bash
+python check_credentials.py \
+  --service-account-file path/to/service-account.json \
+  --spreadsheet "Translation Tracking"
+```
+
 ### Running Tests
 
 Smoke tests for the core Python steps are in `tests/`. To run all tests:
