@@ -5,11 +5,16 @@ import argparse
 import logging
 
 import requests
-import openai
+from dotenv import load_dotenv
+from openai import OpenAI
+
 import gspread
 from openai import OpenAIError
 
 from google.auth.exceptions import GoogleAuthError
+
+# Load .env automatically, so you don't need to source it manually
+load_dotenv()
 
 def check_google(service_account_file: str, spreadsheet: str):
     if not service_account_file or not os.path.isfile(service_account_file):
@@ -25,9 +30,9 @@ def check_openai():
     key = os.getenv('OPENAI_API_KEY')
     if not key:
         return 'Missing'
+    client = OpenAI(api_key=key)
     try:
-        openai.api_key = key
-        openai.Model.list()
+        client.models.list()
         return 'Valid'
     except OpenAIError:
         return 'Invalid'

@@ -223,10 +223,12 @@ D. Translation
  - Cache directory: `.cache/` for chunk-level JSON caches
  - Logs: `logs/translate_subtitles.log`
 
- **Features:**
- - Parse and chunk subtitles (default 50 lines, 5-line overlap)
+- **Features:**
+- Parse and chunk subtitles (default 50 lines, 5-line overlap)
+- On context-length-exceeded errors, automatically reduce chunk size (by 10 lines) and retry
  - Build prompts with glossary and .srt formatting
- - Call OpenAI with retries (up to 5 attempts, backoff)
+- Call OpenAI with retries (up to 5 attempts, backoff)
+- On context-length-exceeded errors, automatically reduce chunk size by 10 lines and retry (initial chunk size default 50)
  - Load/save cached translations per chunk
  - Merge translated chunks, deduplicate overlaps, reindex subtitles
  - Minimal logging to stdout and log file

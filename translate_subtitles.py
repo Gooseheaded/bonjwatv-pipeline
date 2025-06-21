@@ -8,6 +8,10 @@ import logging
 
 from dotenv import load_dotenv
 from openai import OpenAI, RateLimitError
+import openai
+
+class ContextLengthError(Exception):
+    pass
 
 load_dotenv()
 _OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
@@ -107,8 +111,14 @@ def call_openai_api(prompt: str, model: str = 'gpt-4', temperature: float = 0.2)
         except RateLimitError:
             log.warning('Rate limit hit, retrying in 5s...')
             time.sleep(5)
+        except openai.error.InvalidRequestError as e:
+            # Handle context-length errors by raising for outer retry with smaller chunks
+            if getattr(e, 'code', '') == 'context_length_exceeded' or 'context_length_exceeded' in str(e):
+                raise ContextLengthError from e
+            log.warning(f'OpenAI API error: {e}, retrying in 5s...')
+            time.sleep(5)
         except Exception as e:
-            log.warning(f'API error: {e}, retrying in 5s...')
+            log.warning(f'OpenAI API error: {e}, retrying in 5s...')
             time.sleep(5)
     raise RuntimeError('OpenAI API failed after multiple retries')
 
@@ -150,24 +160,30 @@ def translate_srt_file(input_file: str,
     with open(slang_file, encoding='utf-8') as f:
         slang_text = f.read()
 
-    chunks = chunk_subtitles(subs, chunk_size, overlap)
-    log.info(f'Divided into {len(chunks)} chunks (size={chunk_size}, overlap={overlap})')
+    # Translate chunks, reducing chunk_size on context-length errors
+    while chunk_size > overlap:
+        chunks = chunk_subtitles(subs, chunk_size, overlap)
+        log.info(f'Divided into {len(chunks)} chunks (size={chunk_size}, overlap={overlap})')
+        translated = []
+        try:
+            for i, chunk in enumerate(chunks):
+                cache_file = get_cache_filename(cache_dir, input_file, i)
+                cached = load_cache(cache_file)
+                if cached:
+                    log.info(f'Using cache for chunk {i+1}/{len(chunks)}')
+                    translated.append(parse_translated_chunk(cached))
+                    continue
 
-    translated = []
-    for i, chunk in enumerate(chunks):
-        cache_file = get_cache_filename(cache_dir, input_file, i)
-        cached = load_cache(cache_file)
-        if cached:
-            log.info(f'Using cache for chunk {i+1}/{len(chunks)}')
-            chunk_t = parse_translated_chunk(cached)
-        else:
-            log.info(f'Translating chunk {i+1}/{len(chunks)}')
-            prompt = build_prompt(chunk, slang_text)
-            result = call_openai_api(prompt, model=model)
-            save_cache(cache_file, result)
-            chunk_t = parse_translated_chunk(result)
-            time.sleep(1)
-        translated.append(chunk_t)
+                log.info(f'Translating chunk {i+1}/{len(chunks)}')
+                prompt = build_prompt(chunk, slang_text)
+                result = call_openai_api(prompt, model=model)
+                save_cache(cache_file, result)
+                translated.append(parse_translated_chunk(result))
+                time.sleep(1)
+            break
+        except ContextLengthError:
+            log.warning(f'Context length exceeded, reducing chunk_size by 10: {chunk_size} -> {chunk_size-10}')
+            chunk_size -= 10
 
     merged = merge_chunks(translated, overlap)
     log.info(f'Writing output to {output_file}')
