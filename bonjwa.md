@@ -106,6 +106,28 @@ A. Audio Download
 1. Write test suite for `upload_subtitles.py`
 2. Implement the script per this plan
 
+#### G. Update Google Sheet (`update_sheet_to_google.py`) — PLAN
+
+**Purpose:** Write back the Pastebin URL (and/or status) into the source Google Sheet for each video.
+
+**Inputs/Outputs:**
+- Input: `metadata/videos.json`
+- Input: cache files `.cache/pastebin_{video_id}.json` (to get `url`)
+- Configuration: service-account JSON path, column name to update (e.g. "Pastebin URL")
+
+**Features:**
+- CLI args: `--metadata-file`, `--cache-dir`, `--spreadsheet`, `--worksheet`, `--column-name`, `--service-account-file`
+- Idempotent: skip updating if the cell already contains a value
+- Uses `gspread` to open the sheet, find rows by video ID, and update the designated column
+- Minimal logging to `logs/update_sheet.log` and stdout
+
+**Testing:**
+1. Pytest smoke test monkeypatching `gspread` to simulate row lookup and cell update
+
+**Next Steps:**
+1. Write test suite for `update_sheet_to_google.py`
+2. Implement the script per this plan
+
 ##### B. Vocal Isolation (Optional) (`isolate_vocals.py`) — PLAN
 
 **Purpose:** Separate vocals from background audio using Demucs.
@@ -262,7 +284,11 @@ D. Translation
 
 # 1. Export Google Sheets as videos.json
 
-python export\_sheet\_to\_json.py --spreadsheet "Translation Tracking" --worksheet "Translated Videos" --output metadata/videos.json
+python export\_sheet\_to\_json.py \
+  --spreadsheet "Translation Tracking" \
+  --worksheet "Translated Videos" \
+  --output metadata/videos.json \
+  --service-account-file path/to/service-account.json
 
 # 2. Run orchestrator to process new/changed videos
 

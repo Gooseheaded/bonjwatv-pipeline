@@ -111,6 +111,19 @@ def main():
                              '--cache-dir', cache_dir]):
                 continue
 
+        # Update Google Sheet with Pastebin URL
+        if 'update_sheet_to_google' in skip_steps:
+            logging.info('Skipping update_sheet_to_google for %s', vid)
+        else:
+            if not run_step(['python', 'update_sheet_to_google.py',
+                             '--metadata-file', metadata_file,
+                             '--cache-dir', cache_dir,
+                             '--spreadsheet', config.get('spreadsheet'),
+                             '--worksheet', config.get('worksheet'),
+                             '--column-name', config.get('sheet_column'),
+                             '--service-account-file', config.get('service_account_file', '')]):
+                continue
+
     # Build manifest after all videos processed
     if 'manifest_builder' in skip_steps:
         logging.info('Skipping manifest_builder')

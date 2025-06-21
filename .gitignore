@@ -1,3 +1,11 @@
+# Pipeline artifacts and caches
+audio/
+vocals/
+subtitles/
+.cache/
+logs/
+website/subtitles.json
+metadata/videos.json
 # Created by https://www.toptal.com/developers/gitignore/api/python,dotnetcore
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,dotnetcore
 

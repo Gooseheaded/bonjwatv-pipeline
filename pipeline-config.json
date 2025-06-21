@@ -7,5 +7,8 @@
   "slang_file": "slang/KoreanSlang.txt",
   "website_dir": "website",
   "service_account_file": "path/to/service-account.json",
+  "spreadsheet": "Translation Tracking",
+  "worksheet": "Translated Videos",
+  "sheet_column": "Pastebin URL",
   "skip_steps": []
 }
