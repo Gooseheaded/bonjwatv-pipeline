@@ -33,6 +33,10 @@ def test_upload_subtitles(tmp_path, monkeypatch, caplog):
         assert data['api_paste_folder'] == 'BWKT'
         return DummyResponse()
 
+    # Prevent accidental login via .env credentials
+    monkeypatch.delenv('PASTEBIN_USER_KEY', raising=False)
+    monkeypatch.delenv('PASTEBIN_USERNAME', raising=False)
+    monkeypatch.delenv('PASTEBIN_PASSWORD', raising=False)
     monkeypatch.setenv('PASTEBIN_API_KEY', 'test-key')
     monkeypatch.setenv('PASTEBIN_FOLDER', 'BWKT')
     monkeypatch.setattr('upload_subtitles.requests.post', fake_post)
@@ -70,6 +74,9 @@ def test_user_key_env(tmp_path, monkeypatch, caplog):
     input_srt.write_text('x', encoding='utf-8')
     cache_dir = tmp_path / '.cache'
 
+    # Prevent accidental login via .env credentials
+    monkeypatch.delenv('PASTEBIN_USERNAME', raising=False)
+    monkeypatch.delenv('PASTEBIN_PASSWORD', raising=False)
     monkeypatch.setenv('PASTEBIN_API_KEY', 'test-key')
     monkeypatch.setenv('PASTEBIN_FOLDER', 'BWKT')
     monkeypatch.setenv('PASTEBIN_USER_KEY', 'USERKEY123')
@@ -102,6 +109,8 @@ def test_login_and_cache_user_key(tmp_path, monkeypatch, caplog):
     input_srt.write_text('y', encoding='utf-8')
     cache_dir = tmp_path / '.cache'
 
+    # Force login via credentials, clear any cached user key
+    monkeypatch.delenv('PASTEBIN_USER_KEY', raising=False)
     monkeypatch.setenv('PASTEBIN_API_KEY', 'devkey')
     monkeypatch.setenv('PASTEBIN_USERNAME', 'user1')
     monkeypatch.setenv('PASTEBIN_PASSWORD', 'pass1')
@@ -140,8 +149,66 @@ def test_login_and_cache_user_key(tmp_path, monkeypatch, caplog):
     data = json.loads(key_file.read_text(encoding='utf-8'))
     assert data['user_key'] == 'LOGINKEY'
 
-    # Second call should reuse cached user_key and skip login
+    # Second call should use the per-video cache (no additional HTTP requests)
     calls.clear()
     url2 = upload_subtitles(str(input_srt), str(cache_dir))
     assert url2 == 'https://pastebin.com/raw/PASTEID'
-    assert calls == ['paste']
+    assert calls == []
+    assert 'Using cached Pastebin URL' in caplog.text
+
+def test_api_returns_full_url(tmp_path, monkeypatch, caplog):
+    # Simulate API returning a full Pastebin page URL, not just the ID
+    input_srt = tmp_path / 'en_vid.srt'
+    input_srt.write_text('code', encoding='utf-8')
+    cache_dir = tmp_path / '.cache'
+
+    class DummyResponse:
+        def __init__(self, text):
+            self.status_code = 200
+            self.text = text
+
+    def fake_post(url, data):
+        return DummyResponse('https://pastebin.com/RZRNVxU5')
+
+    # Prevent accidental login via .env credentials
+    monkeypatch.delenv('PASTEBIN_USER_KEY', raising=False)
+    monkeypatch.delenv('PASTEBIN_USERNAME', raising=False)
+    monkeypatch.delenv('PASTEBIN_PASSWORD', raising=False)
+    monkeypatch.setenv('PASTEBIN_API_KEY', 'key')
+    monkeypatch.setenv('PASTEBIN_FOLDER', '')
+    monkeypatch.setattr('upload_subtitles.requests.post', fake_post)
+    caplog.set_level('INFO')
+
+    url = upload_subtitles(str(input_srt), str(cache_dir))
+    # Should convert to raw URL using the ID from the full URL
+    assert url == 'https://pastebin.com/raw/RZRNVxU5'
+    data = json.loads((cache_dir / 'pastebin_vid.json').read_text(encoding='utf-8'))
+    assert data['paste_id'] == 'RZRNVxU5'
+
+def test_api_returns_raw_url(tmp_path, monkeypatch, caplog):
+    # Simulate API returning a raw URL directly
+    input_srt = tmp_path / 'en_vid.srt'
+    input_srt.write_text('code', encoding='utf-8')
+    cache_dir = tmp_path / '.cache'
+
+    class DummyResponse:
+        def __init__(self, text):
+            self.status_code = 200
+            self.text = text
+
+    def fake_post(url, data):
+        return DummyResponse('https://pastebin.com/raw/XYZ123')
+
+    # Prevent accidental login via .env credentials
+    monkeypatch.delenv('PASTEBIN_USER_KEY', raising=False)
+    monkeypatch.delenv('PASTEBIN_USERNAME', raising=False)
+    monkeypatch.delenv('PASTEBIN_PASSWORD', raising=False)
+    monkeypatch.setenv('PASTEBIN_API_KEY', 'key')
+    monkeypatch.setenv('PASTEBIN_FOLDER', '')
+    monkeypatch.setattr('upload_subtitles.requests.post', fake_post)
+    caplog.set_level('INFO')
+
+    url = upload_subtitles(str(input_srt), str(cache_dir))
+    assert url == 'https://pastebin.com/raw/XYZ123'
+    data = json.loads((cache_dir / 'pastebin_vid.json').read_text(encoding='utf-8'))
+    assert data['paste_id'] == 'XYZ123'

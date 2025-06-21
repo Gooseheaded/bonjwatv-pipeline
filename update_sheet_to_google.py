@@ -49,8 +49,15 @@ def update_sheet_to_google(metadata_file: str,
         if not url:
             continue
 
-        # Find the video ID cell in the sheet
-        cell = ws.find(vid)
+        # Find the video ID cell in the sheet (skip if not found)
+        try:
+            cell = ws.find(vid)
+        except Exception as e:
+            logging.warning("Video ID %s not found in sheet, skipping update (%s)", vid, e)
+            continue
+        if not cell:
+            logging.warning("Video ID %s not found in sheet, skipping update", vid)
+            continue
         # Check existing value in target column
         existing = ws.cell(cell.row, col_idx).value
         if existing:

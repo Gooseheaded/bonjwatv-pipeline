@@ -102,3 +102,26 @@ def test_update_sheet_to_google(tmp_path, caplog, patch_gspread):
     # The patched DummyWorksheet captured updates
     ws = patch_gspread
     assert ws.updates == [(2, 2, 'https://pastebin.com/raw/ABC')]
+
+def test_skip_missing_id(tmp_path, caplog, patch_gspread):
+    # If a video ID is not found in the sheet, it should be skipped without error
+    metadata = [{'v': 'nope'}]
+    meta_file = tmp_path / 'videos2.json'
+    meta_file.write_text(json.dumps(metadata), encoding='utf-8')
+
+    cache_dir = tmp_path / '.cache2'
+    cache_dir.mkdir()
+    # Create a cache entry so update is attempted
+    cache_file = cache_dir / 'pastebin_nope.json'
+    cache_file.write_text(json.dumps({'url': 'https://pastebin.com/raw/XYZ'}), encoding='utf-8')
+
+    caplog.set_level('WARNING')
+    update_sheet_to_google(
+        metadata_file=str(meta_file),
+        cache_dir=str(cache_dir),
+        spreadsheet='MySheet',
+        worksheet='Sheet1',
+        column_name='Pastebin URL',
+        service_account_file=None,
+    )
+    assert 'Video ID nope not found in sheet, skipping update' in caplog.text

@@ -75,8 +75,20 @@ def upload_subtitles(input_file: str,
     if resp.status_code != 200:
         raise RuntimeError(f'Pastebin upload failed: {resp.status_code}')
 
-    paste_id = resp.text.strip()
-    url = f'https://pastebin.com/raw/{paste_id}'
+    resp_text = resp.text.strip()
+    # resp_text may be a pastebin URL or raw URL or just the paste ID
+    if resp_text.startswith('http'):
+        # Strip trailing slash and extract the paste ID
+        pid = resp_text.rstrip('/').split('/')[-1]
+        # If it's already a raw URL, keep it; otherwise build the raw URL
+        if '/raw/' in resp_text:
+            url = resp_text
+        else:
+            url = f'https://pastebin.com/raw/{pid}'
+        paste_id = pid
+    else:
+        paste_id = resp_text
+        url = f'https://pastebin.com/raw/{paste_id}'
     with open(cache_file, 'w', encoding='utf-8') as f:
         json.dump({'paste_id': paste_id, 'url': url}, f, ensure_ascii=False, indent=2)
     logging.info('Uploaded to Pastebin: %s', url)

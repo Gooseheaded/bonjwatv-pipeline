@@ -37,6 +37,10 @@ These steps show how to set up the development environment, run tests, and explo
   OPENAI_API_KEY=your-openai-api-key
   PASTEBIN_API_KEY=your-pastebin-api-key
   PASTEBIN_FOLDER=BWKT
+  # (Optional) to upload under your Pastebin account:
+  PASTEBIN_USER_KEY=your-pastebin-user-key
+  PASTEBIN_USERNAME=your-pastebin-username
+  PASTEBIN_PASSWORD=your-pastebin-password
   ```
 
 ### Credential Health Check
