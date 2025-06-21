@@ -30,7 +30,7 @@ def test_upload_subtitles(tmp_path, monkeypatch, caplog):
         assert data['api_paste_private'] == '1'
         assert data['api_paste_expire_date'] == 'N'
         assert data['api_paste_format'] == ''
-        assert data['api_paste_folder'] == 'BWKT'
+        assert data['api_folder_key'] == 'BWKT'
         return DummyResponse()
 
     # Prevent accidental login via .env credentials

@@ -67,7 +67,8 @@ def upload_subtitles(input_file: str,
         'api_paste_format': '',
     }
     if folder:
-        data['api_paste_folder'] = folder
+        # Pastebin API expects 'api_folder_key' to specify the destination folder
+        data['api_folder_key'] = folder
     if user_key:
         data['api_user_key'] = user_key
 
