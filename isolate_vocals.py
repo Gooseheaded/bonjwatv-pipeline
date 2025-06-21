@@ -3,6 +3,7 @@ import os
 import subprocess
 import argparse
 import logging
+from common import setup_logging
 
 
 def isolate_vocals(input_file: str,
@@ -31,22 +32,11 @@ def isolate_vocals(input_file: str,
     return output_path
 
 
-def setup_logging():
-    os.makedirs('logs', exist_ok=True)
-    handler = logging.FileHandler('logs/isolate_vocals.log', encoding='utf-8')
-    fmt = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    handler.setFormatter(fmt)
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    root.addHandler(handler)
-    console = logging.StreamHandler()
-    console.setFormatter(fmt)
-    root.addHandler(console)
-    return root
+log = setup_logging(__name__, 'logs/isolate_vocals.log')
 
 
 def main():
-    log = setup_logging()
+    log = log
     p = argparse.ArgumentParser(description='Isolate vocals from audio using Demucs')
     p.add_argument('--input-file', required=True, help='Path to input audio file')
     p.add_argument('--output-dir', default='vocals', help='Directory for isolated vocals')

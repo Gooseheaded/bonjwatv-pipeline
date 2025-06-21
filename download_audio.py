@@ -2,6 +2,7 @@
 import os
 import argparse
 import logging
+from common import setup_logging
 
 import yt_dlp
 
@@ -29,22 +30,11 @@ def download_audio(url: str, video_id: str, output_dir: str = 'audio') -> str:
     return output_path
 
 
-def setup_logging():
-    os.makedirs('logs', exist_ok=True)
-    handler = logging.FileHandler('logs/download_audio.log', encoding='utf-8')
-    fmt = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    handler.setFormatter(fmt)
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    root.addHandler(handler)
-    console = logging.StreamHandler()
-    console.setFormatter(fmt)
-    root.addHandler(console)
-    return root
+log = setup_logging(__name__, 'logs/download_audio.log')
 
 
 def main():
-    log = setup_logging()
+    log = log
     p = argparse.ArgumentParser(description='Download YouTube audio as MP3')
     p.add_argument('--url', required=True, help='YouTube video URL')
     p.add_argument('--video-id', required=True, help='Video identifier for output filename')

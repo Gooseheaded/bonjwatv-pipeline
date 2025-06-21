@@ -2,6 +2,7 @@
 import os
 import argparse
 import logging
+from common import setup_logging
 import importlib
 
 from whisper_postprocess import process_srt_file
@@ -43,22 +44,11 @@ def transcribe_audio(
     return output_subtitle
 
 
-def setup_logging():
-    os.makedirs('logs', exist_ok=True)
-    handler = logging.FileHandler('logs/transcribe_audio.log', encoding='utf-8')
-    fmt = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    handler.setFormatter(fmt)
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    root.addHandler(handler)
-    console = logging.StreamHandler()
-    console.setFormatter(fmt)
-    root.addHandler(console)
-    return root
+log = setup_logging(__name__, 'logs/transcribe_audio.log')
 
 
 def main():
-    log = setup_logging()
+    log = log
     p = argparse.ArgumentParser(description='Transcribe audio to Korean SRT (Whisper)')
     p.add_argument('--input-file', required=True, help='Path to audio file')
     p.add_argument('--output-file', required=True, help='Path to output SRT file')

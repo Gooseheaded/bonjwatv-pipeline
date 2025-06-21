@@ -4,6 +4,7 @@ import json
 import argparse
 import logging
 
+import logging
 import gspread
 from dotenv import load_dotenv
 

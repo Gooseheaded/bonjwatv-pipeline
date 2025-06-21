@@ -4,6 +4,7 @@ import json
 import argparse
 import logging
 
+import logging
 import requests
 from dotenv import load_dotenv
 
