@@ -22,7 +22,7 @@ Key goals:
            │
 [Sheet Export → videos.json]
            │
-   [Pipeline Orchestrator (C# CLI)]
+[Pipeline Orchestrator (Python CLI)]
            │
 ```
 
@@ -276,6 +276,7 @@ python pipeline_orchestrator.py --config pipeline-config.json
 
 - Config file (pipeline-config.json):
 -  - All paths, API keys, options
+-  - service_account_file: path to Google Sheets service-account JSON (for export metadata)
 -  - skip_steps: list of step names to skip (e.g. ["download_audio","isolate_vocals","transcribe_audio"])
 - Modular scripts: Each Python/C# script should work independently, accept CLI args, and return nonzero exit code on failure
 - Testing: All major scripts should have basic smoke tests (e.g., run on a test row/video)

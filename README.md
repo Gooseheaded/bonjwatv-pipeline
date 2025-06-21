@@ -26,9 +26,18 @@ These steps show how to set up the development environment, run tests, and explo
 3. Upgrade pip and install Python dependencies:
    ```bash
    pip install --upgrade pip
-   pip install python-dotenv openai pytest whisper yt-dlp requests
+   pip install python-dotenv openai pytest whisper yt-dlp requests gspread oauth2client
    # (Optional) install Demucs for vocal isolation: pip install demucs
    ```
+
+### Environment Variables
+
+- Create a `.env` file in the project root with:
+  ```dotenv
+  OPENAI_API_KEY=your-openai-api-key
+  PASTEBIN_API_KEY=your-pastebin-api-key
+  PASTEBIN_FOLDER=BWKT
+  ```
 
 ### Running Tests
 

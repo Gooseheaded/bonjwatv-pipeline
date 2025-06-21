@@ -6,5 +6,6 @@
   "cache_dir": ".cache",
   "slang_file": "slang/KoreanSlang.txt",
   "website_dir": "website",
+  "service_account_file": "path/to/service-account.json",
   "skip_steps": []
 }
