@@ -111,7 +111,7 @@ def call_openai_api(prompt: str, model: str = 'gpt-4', temperature: float = 0.2)
         except RateLimitError:
             log.warning('Rate limit hit, retrying in 5s...')
             time.sleep(5)
-        except openai.error.InvalidRequestError as e:
+        except openai.BadRequestError as e:
             # Handle context-length errors by raising for outer retry with smaller chunks
             if getattr(e, 'code', '') == 'context_length_exceeded' or 'context_length_exceeded' in str(e):
                 raise ContextLengthError from e
@@ -161,7 +161,9 @@ def translate_srt_file(input_file: str,
         slang_text = f.read()
 
     # Translate chunks, reducing chunk_size on context-length errors
-    while chunk_size > overlap:
+    if chunk_size <= overlap or chunk_size < 1:
+        raise ValueError('chunk_size must be greater than overlap and >=1')
+    while True:
         chunks = chunk_subtitles(subs, chunk_size, overlap)
         log.info(f'Divided into {len(chunks)} chunks (size={chunk_size}, overlap={overlap})')
         translated = []
@@ -182,8 +184,11 @@ def translate_srt_file(input_file: str,
                 time.sleep(1)
             break
         except ContextLengthError:
-            log.warning(f'Context length exceeded, reducing chunk_size by 10: {chunk_size} -> {chunk_size-10}')
-            chunk_size -= 10
+            new_size = chunk_size - 10
+            if new_size <= overlap:
+                raise RuntimeError(f'Cannot reduce chunk_size below overlap+1 ({overlap+1})')
+            log.warning('Context length exceeded, reducing chunk_size by 10: %d -> %d', chunk_size, new_size)
+            chunk_size = new_size
 
     merged = merge_chunks(translated, overlap)
     log.info(f'Writing output to {output_file}')

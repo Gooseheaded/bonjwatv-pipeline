@@ -224,11 +224,11 @@ D. Translation
  - Logs: `logs/translate_subtitles.log`
 
 - **Features:**
-- Parse and chunk subtitles (default 50 lines, 5-line overlap)
+- Parse and chunk subtitles (default 50 lines, 5-line overlap; chunk_size > overlap and >=1)
 - On context-length-exceeded errors, automatically reduce chunk size (by 10 lines) and retry
  - Build prompts with glossary and .srt formatting
 - Call OpenAI with retries (up to 5 attempts, backoff)
-- On context-length-exceeded errors, automatically reduce chunk size by 10 lines and retry (initial chunk size default 50)
+- On context-length-exceeded errors, automatically reduce chunk size by 10 lines and retry (as long as chunk_size > overlap and >=1)
  - Load/save cached translations per chunk
  - Merge translated chunks, deduplicate overlaps, reindex subtitles
  - Minimal logging to stdout and log file
