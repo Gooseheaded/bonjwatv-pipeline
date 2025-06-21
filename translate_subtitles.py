@@ -4,7 +4,7 @@ import re
 import json
 import argparse
 import time
-import logging
+from common import setup_logging
 
 from dotenv import load_dotenv
 from openai import OpenAI, RateLimitError
@@ -194,25 +194,10 @@ def translate_srt_file(input_file: str,
     log.info(f'Writing output to {output_file}')
     write_srt_file(output_file, merged)
 
-def setup_logging():
-    os.makedirs('logs', exist_ok=True)
-    handler = logging.FileHandler('logs/translate_subtitles.log', encoding='utf-8')
-    fmt = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    handler.setFormatter(fmt)
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    root.addHandler(handler)
-    console = logging.StreamHandler()
-    console.setFormatter(fmt)
-    root.addHandler(console)
-    return root
-
-# initialize logger for module usage
-log = setup_logging()
+log = setup_logging(__name__, 'logs/translate_subtitles.log')
 
 def main():
-    global log
-    log = setup_logging()
+    # Logger already initialized at module level
     p = argparse.ArgumentParser(description='Translate Korean SRT to English with caching and glossary')
     p.add_argument('--input-file', required=True)
     p.add_argument('--output-file')
@@ -220,7 +205,7 @@ def main():
     p.add_argument('--chunk-size', type=int, default=50)
     p.add_argument('--overlap', type=int, default=5)
     p.add_argument('--cache-dir', default='.cache')
-    p.add_argument('--model', default='gpt-4')
+    p.add_argument('--model', default='gpt-4.1-mini')
     args = p.parse_args()
 
     inp = args.input_file
