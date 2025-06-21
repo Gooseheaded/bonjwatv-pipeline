@@ -26,6 +26,17 @@ class DummyWorksheet:
         raise ValueError
 
     def update_cell(self, row, col, value):
+        # Simulate transient APIError on first attempt, succeed thereafter
+        if not hasattr(self, '_fail_once'):
+            self._fail_once = True
+            from gspread.exceptions import APIError
+            # Construct a fake response object for APIError
+            class FakeResp:
+                def __init__(self, text):
+                    self.text = text
+                def json(self):
+                    raise ValueError
+            raise APIError(FakeResp('Temporary rate limit'))
         self._updates.append((row, col, value))
 
     def cell(self, row, col):

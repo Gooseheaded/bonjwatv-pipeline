@@ -8,6 +8,9 @@ import logging
 import gspread
 from dotenv import load_dotenv
 
+import time
+from gspread.exceptions import APIError
+
 load_dotenv()
 
 
@@ -49,24 +52,61 @@ def update_sheet_to_google(metadata_file: str,
         if not url:
             continue
 
-        # Find the video ID cell in the sheet (skip if not found)
+        # Find the video ID cell with retry/backoff (skip if not found)
         try:
-            cell = ws.find(vid)
+            cell = None
+            for attempt in range(5):
+                try:
+                    cell = ws.find(vid)
+                    break
+                except APIError as e:
+                    delay = 2 ** attempt
+                    logging.warning(
+                        "Google Sheets APIError on find(%s): %s; retrying in %ds",
+                        vid, e, delay
+                    )
+                    time.sleep(delay)
+            if not cell:
+                logging.warning("Video ID %s not found in sheet after retries, skipping update", vid)
+                continue
         except Exception as e:
             logging.warning("Video ID %s not found in sheet, skipping update (%s)", vid, e)
             continue
-        if not cell:
-            logging.warning("Video ID %s not found in sheet, skipping update", vid)
-            continue
-        # Check existing value in target column
-        existing = ws.cell(cell.row, col_idx).value
-        if existing:
-            logging.info("Skipping update for %s (already set)", vid)
+
+        # Check existing value in target column with retry/backoff
+        try:
+            existing = None
+            for attempt in range(5):
+                try:
+                    existing = ws.cell(cell.row, col_idx).value
+                    break
+                except APIError as e:
+                    delay = 2 ** attempt
+                    logging.warning(
+                        "Google Sheets APIError on cell(%d,%d): %s; retrying in %ds",
+                        cell.row, col_idx, e, delay
+                    )
+                    time.sleep(delay)
+            if existing:
+                logging.info("Skipping update for %s (already set)", vid)
+                continue
+        except Exception as e:
+            logging.warning("Error reading existing value for %s: %s", vid, e)
             continue
 
-        # Write the Pastebin URL
-        ws.update_cell(cell.row, col_idx, url)
-        logging.info("Updated %s in row %d, col %d", vid, cell.row, col_idx)
+        # Write the Pastebin URL with retry/backoff
+        for attempt in range(5):
+            try:
+                ws.update_cell(cell.row, col_idx, url)
+                logging.info("Updated %s in row %d, col %d", vid, cell.row, col_idx)
+                break
+            except APIError as e:
+                delay = 2 ** attempt
+                logging.warning(
+                    "Google Sheets APIError on update_cell(%d,%d): %s; retrying in %ds",
+                    cell.row, col_idx, e, delay
+                )
+                time.sleep(delay)
 
 
 def setup_logging():
