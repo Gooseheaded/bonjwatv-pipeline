@@ -21,7 +21,7 @@ These steps show how to set up the development environment, run tests, and explo
 2. Create and activate a virtual environment:
    ```bash
    python3 -m venv .venv
-   source .venv/bin/activate
+   source ./.venv/bin/activate
    ```
 3. Upgrade pip and install Python dependencies:
    ```bash

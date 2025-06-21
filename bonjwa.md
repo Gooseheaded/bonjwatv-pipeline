@@ -92,9 +92,10 @@ A. Audio Download
 - Input: translated English SRT file `subtitles/en_{video_id}.srt`
 - Output: raw Pastebin URL (e.g. `https://pastebin.com/raw/{paste_id}`)
 
-**Optional Inputs (login):**
-- `PASTEBIN_USER_KEY` or `--user-key` to associate pastes with your account
-- `PASTEBIN_USERNAME` & `PASTEBIN_PASSWORD` (or `--username`/`--password`) to fetch a `api_user_key` via the Pastebin login API
+**Optional Inputs (login/caching):**
+- `PASTEBIN_USER_KEY` or `--user-key` to directly supply your `api_user_key`
+- `PASTEBIN_USERNAME` & `PASTEBIN_PASSWORD` (or `--username`/`--password`) to login and obtain an `api_user_key`
+- Cache the user key in `.cache/pastebin_user_key.json` to avoid repeated logins
 - Cache mapping in `.cache/pastebin_{video_id}.json` to avoid re‑upload
 
 - **Features:**
