@@ -84,6 +84,28 @@ A. Audio Download
 1. Write test suite for `download_audio.py`
 2. Implement the script per this plan
 
+#### F. Upload Subtitles to Pastebin (`upload_subtitles.py`) — PLAN
+
+**Purpose:** Upload translated English SRTs to Pastebin and retrieve raw URLs for public hosting.
+
+**Inputs/Outputs:**
+- Input: `subtitles/en_{video_id}.srt`
+- Output: raw Pastebin URL (e.g. `https://pastebin.com/raw/{paste_id}`)
+- Cache mapping in `.cache/pastebin_{video_id}.json` to avoid re‑upload
+
+**Features:**
+- CLI args: `--input-file`, `--cache-dir`, `--api-key` (or via `.env`)
+- Idempotent: skip upload if cache entry exists
+- Use Pastebin API to create a new paste (private/unlisted)
+- Minimal logging to `logs/upload_subtitles.log` and stdout
+
+**Testing:**
+1. Pytest smoke test mocking HTTP POST to Pastebin API and cache file creation
+
+**Next Steps:**
+1. Write test suite for `upload_subtitles.py`
+2. Implement the script per this plan
+
 ##### B. Vocal Isolation (Optional) (`isolate_vocals.py`) — PLAN
 
 **Purpose:** Separate vocals from background audio using Demucs.
