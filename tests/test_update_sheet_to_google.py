@@ -136,3 +136,70 @@ def test_skip_missing_id(tmp_path, caplog, patch_gspread):
         service_account_file=None,
     )
     assert 'Video ID nope not found in sheet, skipping update' in caplog.text
+
+def test_skip_google_cached(tmp_path, caplog, patch_gspread):
+    # If we've already updated this video+URL, skip without any sheet calls
+    metadata = [{'v': 'vid1'}]
+    meta_file = tmp_path / 'videos.json'
+    meta_file.write_text(json.dumps(metadata), encoding='utf-8')
+
+    cache_dir = tmp_path / '.cache'
+    cache_dir.mkdir()
+    # Pastebin cache entry
+    pb = cache_dir / 'pastebin_vid1.json'
+    pb.write_text(json.dumps({'url': 'https://pastebin.com/raw/ABC'}), encoding='utf-8')
+    # Google Sheet cache entry matching the same URL
+    gs = cache_dir / 'google_vid1.json'
+    gs.write_text(json.dumps({'url': 'https://pastebin.com/raw/ABC'}), encoding='utf-8')
+
+    caplog.set_level('INFO')
+    update_sheet_to_google(
+        metadata_file=str(meta_file),
+        cache_dir=str(cache_dir),
+        spreadsheet='MySheet',
+        worksheet='Sheet1',
+        column_name='Pastebin URL',
+        service_account_file=None,
+    )
+    # Should log the cache skip and make no updates
+    assert 'Skipping update for vid1 (cached Google Sheet)' in caplog.text
+    assert patch_gspread.updates == []
+
+def test_existing_sheet_sets_cache(tmp_path, monkeypatch, caplog, patch_gspread):
+    # If sheet already has a URL (existing cell), we should cache and skip updating
+    metadata = [{'v': 'vid1'}]
+    meta_file = tmp_path / 'videos.json'
+    meta_file.write_text(json.dumps(metadata), encoding='utf-8')
+
+    cache_dir = tmp_path / '.cache'
+    cache_dir.mkdir()
+    # Pastebin cache entry with URL
+    paste_cache = cache_dir / 'pastebin_vid1.json'
+    paste_cache.write_text(json.dumps({'url': 'https://pastebin.com/raw/XYZ'}), encoding='utf-8')
+
+    # Monkeypatch ws.cell to simulate existing sheet cell value
+    existing_url = 'https://pastebin.com/raw/XYZ'
+    def fake_cell(row, col):
+        class C:
+            value = existing_url
+        return C()
+    monkeypatch.setattr(patch_gspread, 'cell', fake_cell)
+
+    caplog.set_level('INFO')
+    update_sheet_to_google(
+        metadata_file=str(meta_file),
+        cache_dir=str(cache_dir),
+        spreadsheet='MySheet',
+        worksheet='Sheet1',
+        column_name='Pastebin URL',
+        service_account_file=None,
+    )
+
+    # Should skip update and write google cache
+    assert 'Skipping update for vid1 (already set)' in caplog.text
+    gs_file = cache_dir / 'google_vid1.json'
+    assert gs_file.exists()
+    data = json.loads(gs_file.read_text(encoding='utf-8'))
+    assert data['url'] == existing_url
+    # No actual sheet updates
+    assert patch_gspread.updates == []

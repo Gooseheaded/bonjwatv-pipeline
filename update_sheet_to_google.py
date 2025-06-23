@@ -29,6 +29,8 @@ def update_sheet_to_google(metadata_file: str,
     else:
         gc = gspread.service_account()
 
+    # Ensure cache directory exists for Google Sheet caching
+    os.makedirs(cache_dir, exist_ok=True)
     sh = gc.open(spreadsheet)
     ws = sh.worksheet(worksheet)
 
@@ -51,6 +53,14 @@ def update_sheet_to_google(metadata_file: str,
         url = data.get('url')
         if not url:
             continue
+
+        # Skip if we've already updated this video+URL before
+        sheet_cache = os.path.join(cache_dir, f'google_{vid}.json')
+        if os.path.exists(sheet_cache):
+            cached = json.load(open(sheet_cache, encoding='utf-8')).get('url')
+            if cached == url:
+                logging.info('Skipping update for %s (cached Google Sheet)', vid)
+                continue
 
         # Find the video ID cell with retry/backoff (skip if not found)
         try:
@@ -89,6 +99,9 @@ def update_sheet_to_google(metadata_file: str,
                     time.sleep(delay)
             if existing:
                 logging.info("Skipping update for %s (already set)", vid)
+                # Cache this video so future runs skip without sheet calls
+                with open(sheet_cache, 'w', encoding='utf-8') as f:
+                    json.dump({'url': url}, f, ensure_ascii=False, indent=2)
                 continue
         except Exception as e:
             logging.warning("Error reading existing value for %s: %s", vid, e)
@@ -99,6 +112,9 @@ def update_sheet_to_google(metadata_file: str,
             try:
                 ws.update_cell(cell.row, col_idx, url)
                 logging.info("Updated %s in row %d, col %d", vid, cell.row, col_idx)
+                # Cache sheet update to avoid future redundant writes
+                with open(sheet_cache, 'w', encoding='utf-8') as f:
+                    json.dump({'url': url}, f, ensure_ascii=False, indent=2)
                 break
             except APIError as e:
                 delay = 2 ** attempt

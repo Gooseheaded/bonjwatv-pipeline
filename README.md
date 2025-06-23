@@ -68,15 +68,38 @@ download_audio.py         # A: Audio download via yt-dlp
 isolate_vocals.py         # B: Vocal isolation via Demucs
 transcribe_audio.py       # C1: Whisper transcription driver
 whisper_postprocess.py    # C2: Whisper SRT post-processing
-translate_subtitles.py    # D: OpenAI-based subtitle translation
-upload_subtitles.py       # F: Upload English SRTs to Pastebin
+translate_subtitles.py        # D: OpenAI-based subtitle translation
+translate_subtitles_folder.py # Standalone: translate a folder of .srt files recursively
+upload_subtitles.py           # F: Upload English SRTs to Pastebin
 manifest_builder.py       # 3.3: Build subtitles.json manifest
 update_sheet_to_google.py # G: Update Google Sheet with Pastebin URLs
 pipeline_orchestrator.py  # 4: Orchestration and batch control
 export_sheet_to_json.py   # 3.1: Export metadata from Google Sheets
 tests/                    # Pytest smoke tests for each step
 README.md                 # This contributor guide
-``` 
+```
+
+### Translating a directory of subtitles
+
+To recursively translate all `.srt` files under a folder into English SRTs, preserving directory structure:
+
+```bash
+python translate_subtitles_folder.py \
+  --input-dir path/to/input_subtitles \
+  --output-dir path/to/output_en_subtitles \
+  [--slang-file slang/KoreanSlang.txt] \
+  [--chunk-size 50] \
+  [--overlap 5] \
+  [--cache-dir .cache] \
+  [--model gpt-4]
+```
+
+This script first post-processes each raw `.srt` (normalizing timestamps & collapsing duplicates via `whisper_postprocess.py`), then translates via OpenAI. It uses `python-dotenv` to load your `.env` file for the OpenAI API key.
+Ensure you have an `.env` in the project root containing at least:
+
+```dotenv
+OPENAI_API_KEY=your-openai-api-key
+```
 
 Refer to `bonjwa.md` for detailed step-by-step plans, directory structure, and orchestration notes.
 
