@@ -46,23 +46,14 @@ download_audio.py isolate_vocals.py transcribe_audio.py whisper_postprocess.py t
 
 ## 3. Pipeline Steps
 
-### 3.1 Export Metadata
+The full pipeline is composed of the following sequential steps, each implemented as a standalone Python script. The `pipeline_orchestrator.py` calls these scripts in order. All steps are idempotent—scripts will skip processing if the expected output already exists.
 
+### A. Export Metadata (`export_sheet_to_json.py`)
+- **Purpose:** Fetches video metadata curated in Google Sheets and saves it as `metadata/videos.json`.
 - Admin curates all videos and metadata in Google Sheets.
-- Export script reads the relevant worksheet and writes metadata/videos.json:
-  - One object per video, e.g.: { "v": "isIm67yGPzo", "youtube\_url": "[https://www.youtube.com/watch?v=isIm67yGPzo](https://www.youtube.com/watch?v=isIm67yGPzo)", "title\_kr": "[ZvT] 2해처리 메카닉 업테란 상대법", "title\_en": "Two-Hatchery Against Mech Terran - "Master Mech Strategies"", "description": "(no description)", "creator": "", "subtitleUrl": "[https://pastebin.com/raw/Miy3QqBn](https://pastebin.com/raw/Miy3QqBn)", "tags": ["z", "zvt"] }
-- Tags may be edited by hand or tracked separately.
+- Export script reads the relevant worksheet and writes `metadata/videos.json`.
 
-### 3.2 Batch Processing Pipeline
-
-All steps are idempotent—scripts will skip processing if the expected output exists.
-
-A. Audio Download
-
-- Downloads audio (yt-dlp) for all videos not already present in /audio/.
-
-##### C0. Audio Download (`download_audio.py`) — PLAN
-
+### B. Audio Download (`download_audio.py`)
 **Purpose:** Fetch YouTube audio tracks via `yt-dlp` and save as `.mp3` files for subsequent processing.
 
 **Inputs/Outputs:**
@@ -84,59 +75,7 @@ A. Audio Download
 1. Write test suite for `download_audio.py`
 2. Implement the script per this plan
 
-#### F. Upload Subtitles to Pastebin (`upload_subtitles.py`) — PLAN
-
-**Purpose:** Upload translated English SRTs to Pastebin and retrieve raw URLs for public hosting.
-
-**Inputs/Outputs:**
-- Input: translated English SRT file `subtitles/en_{video_id}.srt`
-- Output: raw Pastebin URL (e.g. `https://pastebin.com/raw/{paste_id}`)
-
-**Optional Inputs (login/caching):**
-- `PASTEBIN_USER_KEY` or `--user-key` to directly supply your `api_user_key`
-- `PASTEBIN_USERNAME` & `PASTEBIN_PASSWORD` (or `--username`/`--password`) to login and obtain an `api_user_key`
-- Cache the user key in `.cache/pastebin_user_key.json` to avoid repeated logins
-- Cache mapping in `.cache/pastebin_{video_id}.json` to avoid re‑upload
-
-- **Features:**
--- CLI args: `--input-file`, `--cache-dir`, `--api-key`, `--user-key`, `--username`, `--password` (or via `.env`)
--- Idempotent: skip upload if a Pastebin cache entry exists
--- Automatically login to Pastebin to obtain `api_user_key` when only credentials are supplied
--- Include `api_user_key` in the paste-creation request to publish under your account
--- Use Pastebin API to create a new unlisted paste (no syntax highlighting)
--- Minimal logging to `logs/upload_subtitles.log` and stdout
-
-**Testing:**
-1. Pytest smoke test mocking HTTP POST to Pastebin API and cache file creation
-
-**Next Steps:**
-1. Write test suite for `upload_subtitles.py`
-2. Implement the script per this plan
-
-#### G. Update Google Sheet (`update_sheet_to_google.py`) — PLAN
-
-**Purpose:** Write back the Pastebin URL (and/or status) into the source Google Sheet for each video.
-
-**Inputs/Outputs:**
-- Input: `metadata/videos.json`
-- Input: cache files `.cache/pastebin_{video_id}.json` (to get `url`)
-- Configuration: service-account JSON path, column name to update (e.g. "Pastebin URL")
-
-**Features:**
-- CLI args: `--metadata-file`, `--cache-dir`, `--spreadsheet`, `--worksheet`, `--column-name`, `--service-account-file`
-- Idempotent: skip updating if the cell already contains a value
-- Uses `gspread` to open the sheet, find rows by video ID, and update the designated column
-- Minimal logging to `logs/update_sheet.log` and stdout
-
-**Testing:**
-1. Pytest smoke test monkeypatching `gspread` to simulate row lookup and cell update
-
-**Next Steps:**
-1. Write test suite for `update_sheet_to_google.py`
-2. Implement the script per this plan
-
-##### B. Vocal Isolation (Optional) (`isolate_vocals.py`) — PLAN
-
+### C. Vocal Isolation (Optional) (`isolate_vocals.py`)
 **Purpose:** Separate vocals from background audio using Demucs.
 
 **Inputs/Outputs:**
@@ -157,25 +96,7 @@ A. Audio Download
 1. Write test suite for `isolate_vocals.py`
 2. Implement the script per this plan
 
-B. Vocal Isolation (Optional)
-
-- Runs Demucs on each audio file, outputting vocals to /vocals/.
-
-C. Transcription & Post-Processing
-
-- Uses Whisper to transcribe audio to Korean SRT (/subtitles/kr\_{video\_id}.srt).
-- Post-process Whisper output (placeholder step):
-  - Normalize timestamps to full HH:MM:SS,mmm format
-  - Collapse adjacent duplicate subtitle blocks
-  - (Implement in `whisper_postprocess.py`)
-
-D. Translation
-
-- Uses OpenAI LLM (with glossary prompt) to translate Korean SRTs to English SRTs (/subtitles/en_{video_id}.srt).
-- Caching per chunk, error handling, and logging included.
-
-##### C1. Whisper Transcription (`transcribe_audio.py`) — PLAN
-
+### D. Whisper Transcription (`transcribe_audio.py`)
 **Purpose:** Transcribe audio files to raw Korean SRT using OpenAI Whisper (local model).
 
 **Inputs/Outputs:**
@@ -197,8 +118,7 @@ D. Translation
 1. Write the test suite for `transcribe_audio.py`
 2. Implement the script per this plan
 
-##### C2. Whisper Post-Processing (`whisper_postprocess.py`) — PLAN
-
+### E. Whisper Post-Processing (`whisper_postprocess.py`)
 **Purpose:** Clean up raw Whisper-generated SRT by normalizing timestamp formats and collapsing duplicate subtitle blocks.
 
 **Inputs/Outputs:**
@@ -218,11 +138,10 @@ D. Translation
 1. Write the test suite for `whisper_postprocess.py`
 2. Implement the script per this plan
 
-#### E. Translate Subtitles (`translate_subtitles.py`) - PLAN
+### F. Translate Subtitles (`translate_subtitles.py`)
+**Purpose:** Translate Korean `.srt` files to English `.srt` using the OpenAI API.
 
- **Purpose:** Translate Korean `.srt` files to English `.srt` using the OpenAI API.
-
- **Inputs/Outputs:**
+**Inputs/Outputs:**
  - Input SRT: `subtitles/kr_{video_id}.srt`
  - Slang glossary: `slang/KoreanSlang.txt`
  - Output SRT: `subtitles/en_{video_id}.srt`
@@ -230,7 +149,7 @@ D. Translation
  - Cache directory: `.cache/` for chunk-level JSON caches
  - Logs: `logs/translate_subtitles.log`
 
-- **Features:**
+**Features:**
 - Parse and chunk subtitles (default 50 lines, 5-line overlap; chunk_size > overlap and >=1)
 - On context-length-exceeded errors, automatically reduce chunk size (by 10 lines) and retry
  - Build prompts with glossary and .srt formatting
@@ -240,20 +159,69 @@ D. Translation
  - Merge translated chunks, deduplicate overlaps, reindex subtitles
  - Minimal logging to stdout and log file
 
- **Testing:** A pytest-based smoke test will be created first to:
+**Testing:** A pytest-based smoke test will be created first to:
    1. Verify parsing/chunking logic on a sample SRT
    2. Mock the OpenAI client and test prompt construction
    3. Ensure merged output preserves timestamps and formatting
 
- **Next Steps:**
+**Next Steps:**
    1. Write the test suite for `translate_subtitles.py`
    2. Implement the script per this plan
 
-### 3.3 Manifest Builder
+### G. Upload Subtitles to Pastebin (`upload_subtitles.py`)
+**Purpose:** Upload translated English SRTs to Pastebin and retrieve raw URLs for public hosting.
 
+**Inputs/Outputs:**
+- Input: translated English SRT file `subtitles/en_{video_id}.srt`
+- Output: raw Pastebin URL (e.g. `https://pastebin.com/raw/{paste_id}`)
+
+**Optional Inputs (login/caching):**
+- `PASTEBIN_USER_KEY` or `--user-key` to directly supply your `api_user_key`
+- `PASTEBIN_USERNAME` & `PASTEBIN_PASSWORD` (or `--username`/`--password`) to login and obtain an `api_user_key`
+- Cache the user key in `.cache/pastebin_user_key.json` to avoid repeated logins
+- Cache mapping in `.cache/pastebin_{video_id}.json` to avoid re‑upload
+
+**Features:**
+-- CLI args: `--input-file`, `--cache-dir`, `--api-key`, `--user-key`, `--username`, `--password` (or via `.env`)
+-- Idempotent: skip upload if a Pastebin cache entry exists
+-- Automatically login to Pastebin to obtain `api_user_key` when only credentials are supplied
+-- Include `api_user_key` in the paste-creation request to publish under your account
+-- Use Pastebin API to create a new unlisted paste (no syntax highlighting)
+-- Minimal logging to `logs/upload_subtitles.log` and stdout
+
+**Testing:**
+1. Pytest smoke test mocking HTTP POST to Pastebin API and cache file creation
+
+**Next Steps:**
+1. Write test suite for `upload_subtitles.py`
+2. Implement the script per this plan
+
+### H. Update Google Sheet (`update_sheet_to_google.py`)
+**Purpose:** Write back the Pastebin URL (and/or status) into the source Google Sheet for each video.
+
+**Inputs/Outputs:**
+- Input: `metadata/videos.json`
+- Input: cache files `.cache/pastebin_{video_id}.json` (to get `url`)
+- Configuration: service-account JSON path, column name to update (e.g. "Pastebin URL")
+
+**Features:**
+- CLI args: `--metadata-file`, `--cache-dir`, `--spreadsheet`, `--worksheet`, `--column-name`, `--service-account-file`
+- Idempotent: skip updating if the cell already contains a value
+- Uses `gspread` to open the sheet, find rows by video ID, and update the designated column
+- Minimal logging to `logs/update_sheet.log` and stdout
+
+**Testing:**
+1. Pytest smoke test monkeypatching `gspread` to simulate row lookup and cell update
+
+**Next Steps:**
+1. Write test suite for `update_sheet_to_google.py`
+2. Implement the script per this plan
+
+### I. Manifest Builder (`manifest_builder.py`)
+- **Purpose:** Builds the final `subtitles.json` manifest for the website.
 - Scans /subtitles/ for available EN SRTs.
 - Collects metadata from videos.json.
-- Builds /website/subtitles.json in the format: { "v": "isIm67yGPzo", "title": "Two-Hatchery Against Mech Terran - "Master Mech Strategies"", "description": "(no description)", "creator": "", "subtitleUrl": "[https://pastebin.com/raw/Miy3QqBn](https://pastebin.com/raw/Miy3QqBn)", "tags": ["z", "zvt"] }
+- Builds /website/subtitles.json in the format: { "v": "isIm67yGPzo", "title": "Two-Hatchery Against Mech Terran - "Master Mech Strategies"", "description": "(no description)", "creator": "", "subtitleUrl": "https://pastebin.com/raw/Miy3QqBn", "tags": ["z", "zvt"] }
 - Only includes videos with translated subtitles.
 
 ---

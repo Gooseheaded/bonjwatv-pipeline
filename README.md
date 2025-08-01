@@ -15,7 +15,7 @@ These steps show how to set up the development environment, run tests, and explo
 ### Setup
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/bonjwatv-pipeline.git
+   git clone https://github.com/Gooseheaded/bonjwatv-pipeline.git
    cd bonjwatv-pipeline
    ```
 2. Create and activate a virtual environment:
@@ -43,15 +43,6 @@ These steps show how to set up the development environment, run tests, and explo
   PASTEBIN_PASSWORD=your-pastebin-password
   ```
 
-### Credential Health Check
-
-Before running the pipeline, verify your credentials:
-```bash
-python check_credentials.py \
-  --service-account-file path/to/service-account.json \
-  --spreadsheet "Translation Tracking"
-```
-
 ### Running Tests
 
 Smoke tests for the core Python steps are in `tests/`. To run all tests:
@@ -61,47 +52,73 @@ pytest -q
 
 ## Project Layout
 
+The project is organized into two main user-facing scripts and several sub-scripts that they orchestrate. Users should primarily focus on the main scripts for their respective workflows.
+
 ```
-.venv/                     # Python virtual environment
-bonjwa.md                 # Design & planning document for the pipeline
-download_audio.py         # A: Audio download via yt-dlp
-isolate_vocals.py         # B: Vocal isolation via Demucs
-transcribe_audio.py       # C1: Whisper transcription driver
-whisper_postprocess.py    # C2: Whisper SRT post-processing
-translate_subtitles.py        # D: OpenAI-based subtitle translation
-translate_subtitles_folder.py # Standalone: translate a folder of .srt files recursively
-upload_subtitles.py           # F: Upload English SRTs to Pastebin
-manifest_builder.py       # 3.3: Build subtitles.json manifest
-update_sheet_to_google.py # G: Update Google Sheet with Pastebin URLs
-pipeline_orchestrator.py  # 4: Orchestration and batch control
-export_sheet_to_json.py   # 3.1: Export metadata from Google Sheets
+# Main Scripts (User Entry Points)
+pipeline_orchestrator.py      # 1. Main script for the full, end-to-end pipeline
+translate_subtitles_folder.py # 2. Main script for ad-hoc folder translation
+
+# Pipeline Sub-scripts (Internal components)
+export_sheet_to_json.py   # A. Fetches video metadata from Google Sheets
+download_audio.py         # B. Downloads video audio using yt-dlp
+isolate_vocals.py         # C. Isolates vocals from audio using Demucs
+transcribe_audio.py       # D. Transcribes audio to subtitles using Whisper
+whisper_postprocess.py    # E. Post-processes raw Whisper SRT files
+translate_subtitles.py    # F. Translates subtitles using the OpenAI API
+upload_subtitles.py       # G. Uploads translated SRTs to Pastebin
+update_sheet_to_google.py # H. Updates the Google Sheet with Pastebin links
+manifest_builder.py       # I. Builds the subtitles.json manifest
+
+# Other Project Files
+.venv/                    # Python virtual environment
+bonjwa.md                 # Design & planning document
 tests/                    # Pytest smoke tests for each step
 README.md                 # This contributor guide
 ```
 
-### Translating a directory of subtitles
+## Workflows
 
-To recursively translate all `.srt` files under a folder into English SRTs, preserving directory structure:
+This project supports two primary workflows for subtitle processing: a simple, ad-hoc folder translation and a comprehensive, end-to-end pipeline.
 
+### 1. Simple Workflow: Ad-hoc Folder Translation
+
+For quick, one-off translation tasks, use the `translate_subtitles_folder.py` script. This is the easiest way to get started. It recursively finds all `.srt` files in a specified input directory, translates them to English, and saves them to an output directory while preserving the original folder structure.
+
+This workflow is self-contained and only requires an OpenAI API key. It does **not** interact with external services like Google Sheets or Pastebin.
+
+**Example:**
 ```bash
 python translate_subtitles_folder.py \
-  --input-dir path/to/input_subtitles \
-  --output-dir path/to/output_en_subtitles \
+  --input-dir path/to/korean_subtitles \
+  --output-dir path/to/english_subtitles \
   [--slang-file slang/KoreanSlang.txt] \
-  [--chunk-size 50] \
-  [--overlap 5] \
-  [--cache-dir .cache] \
   [--model gpt-4]
 ```
+Ensure you have an `.env` file in the project root containing your `OPENAI_API_KEY`.
 
-This script first post-processes each raw `.srt` (normalizing timestamps & collapsing duplicates via `whisper_postprocess.py`), then translates via OpenAI. It uses `python-dotenv` to load your `.env` file for the OpenAI API key.
-Ensure you have an `.env` in the project root containing at least:
+### 2. Advanced Workflow: Full End-to-End Pipeline
 
-```dotenv
-OPENAI_API_KEY=your-openai-api-key
-```
+For fully automated, large-scale processing, the `pipeline_orchestrator.py` script manages the entire pipeline from video to final translated subtitles. This is the "fat" pipeline that handles all steps.
+
+This advanced workflow includes:
+1.  Fetching video metadata from a Google Sheet.
+2.  Downloading video audio (`download_audio.py`).
+3.  Transcribing audio to create source subtitles (`transcribe_audio.py`).
+4.  Translating subtitles into English (`translate_subtitles.py`).
+5.  Uploading the translated subtitles to Pastebin (`upload_subtitles.py`).
+6.  Updating the Google Sheet with the new Pastebin links (`update_sheet_to_google.py`).
+
+This workflow is ideal for batch processing and requires credentials for Google Sheets and Pastebin in addition to the OpenAI API key.
 
 Refer to `bonjwa.md` for detailed step-by-step plans, directory structure, and orchestration notes.
+
+Before running the full pipeline, please verify your credentials:
+```bash
+python check_credentials.py \
+  --service-account-file path/to/service-account.json \
+  --spreadsheet "Translation Tracking"
+```
 
 ## Contributing
 
