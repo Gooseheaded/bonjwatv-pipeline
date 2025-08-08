@@ -10,5 +10,6 @@
   "spreadsheet": "Translation Tracking",
   "worksheet": "Translated Videos",
   "sheet_column": "Pastebin URL",
-  "skip_steps": []
+  "skip_steps": [],
+  "metadata_output_dir": "metadata"
 }

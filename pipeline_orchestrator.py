@@ -38,6 +38,7 @@ def main():
     # Load configuration
     config = json.load(open(args.config, encoding='utf-8'))
     metadata_file = config['metadata_file']
+    metadata_output_dir = config['metadata_output_dir']
     audio_dir = config['audio_dir']
     vocals_dir = config['vocals_dir']
     subtitles_dir = config['subtitles_dir']
@@ -51,6 +52,15 @@ def main():
 
     for v in videos:
         vid = v['v']
+        # Fetch video metadata
+        if 'fetch_video_metadata' in skip_steps:
+            logging.info('Skipping fetch_video_metadata for %s', vid)
+        else:
+            if not run_step(['python', 'fetch_video_metadata.py',
+                             '--video-id', vid,
+                             '--output-dir', metadata_output_dir]):
+                continue
+
         # Download audio
         if 'download_audio' in skip_steps:
             logging.info('Skipping download_audio for %s', vid)
