@@ -20,6 +20,12 @@ def test_build_manifest(tmp_path):
     videos_json = meta_dir / 'videos.json'
     videos_json.write_text(json.dumps(metadata), encoding='utf-8')
 
+    # Prepare details directory
+    details_dir = tmp_path / 'details'
+    details_dir.mkdir()
+    details_json = details_dir / 'vid1.json'
+    details_json.write_text(json.dumps({"upload_date": "20230101"}), encoding='utf-8')
+
     # Create subtitles folder with only vid1 translated
     subs_dir = tmp_path / 'subtitles'
     subs_dir.mkdir()
@@ -33,6 +39,7 @@ def test_build_manifest(tmp_path):
     build_manifest(
         metadata_file=str(videos_json),
         subtitles_dir=str(subs_dir),
+        details_dir=str(details_dir),
         output_file=str(out_file)
     )
 
@@ -46,6 +53,7 @@ def test_build_manifest(tmp_path):
     assert entry['title'] == 'T1'
     assert entry['subtitleUrl'] == 'url1'
     assert entry['tags'] == ['a']
+    assert entry['releaseDate'] == '20230101'
 
 def test_build_manifest_sheet_keys(tmp_path):
     # metadata with sheet-exported column names
@@ -66,8 +74,11 @@ def test_build_manifest_sheet_keys(tmp_path):
     subs_dir.mkdir()
     (subs_dir / 'en_vidX.srt').write_text('', encoding='utf-8')
 
+    details_dir = tmp_path / 'details'
+    details_dir.mkdir()
+
     out = tmp_path / 'out.json'
-    build_manifest(str(videos_json), str(subs_dir), str(out))
+    build_manifest(str(videos_json), str(subs_dir), str(details_dir), str(out))
     data2 = json.loads(out.read_text(encoding='utf-8'))
     assert len(data2) == 1
     e = data2[0]

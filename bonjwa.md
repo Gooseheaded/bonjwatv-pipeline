@@ -32,7 +32,11 @@ Key goals:
 
 ## 2. Directory Structure
 
-/bonjwatv-pipeline/ /metadata/ videos.json                  # Exported from Google Sheets
+/bonjwatv-pipeline/
+/metadata/
+  videos.json                  # Exported from Google Sheets
+  /details/
+    {video_id}.json            # Cached raw video metadata from yt-dlp
 /audio/ {video_id}.mp3
 /vocals/ {video_id}*vocals.wav
 /subtitles/ kr*{video_id}.srt en_{video_id}.srt
@@ -40,7 +44,7 @@ Key goals:
 /slang/ KoreanSlang.txt
 /website/ subtitles.json               # Final manifest for bonjwa.tv
 
-download_audio.py isolate_vocals.py transcribe_audio.py whisper_postprocess.py translate_subtitles.py export_sheet_to_json.py manifest_builder.py pipeline_orchestrator.py README.md
+fetch_video_metadata.py download_audio.py isolate_vocals.py transcribe_audio.py whisper_postprocess.py translate_subtitles.py export_sheet_to_json.py manifest_builder.py pipeline_orchestrator.py README.md
 
 ---
 
@@ -53,7 +57,31 @@ The full pipeline is composed of the following sequential steps, each implemente
 - Admin curates all videos and metadata in Google Sheets.
 - Export script reads the relevant worksheet and writes `metadata/videos.json`.
 
-### B. Audio Download (`download_audio.py`)
+### B. Fetch Video Metadata (`fetch_video_metadata.py`)
+**Purpose:** Fetch detailed video metadata from YouTube, including the upload date, and cache it locally.
+
+**Inputs/Outputs:**
+- Input: `video_id`
+- Output: `/metadata/details/{video_id}.json`
+
+**Features:**
+- CLI args: `--video-id`, `--output-dir`
+- Idempotent: skip download if target `.json` already exists
+- Uses `yt_dlp.YoutubeDL` to extract video information without downloading the audio.
+- Saves the `upload_date` and other relevant metadata to a JSON file.
+- Minimal logging to `logs/fetch_video_metadata.log` and stdout
+
+**Testing:**
+1. Pytest smoke test that:
+   - Creates a dummy existing file and asserts skip behavior
+   - Monkeypatches `yt_dlp.YoutubeDL` to simulate the API call and the creation of the JSON file.
+   - Verifies the content of the created JSON file.
+
+**Next Steps:**
+1. Write test suite for `fetch_video_metadata.py`
+2. Implement the script per this plan
+
+### C. Audio Download (`download_audio.py`)
 **Purpose:** Fetch YouTube audio tracks via `yt-dlp` and save as `.mp3` files for subsequent processing.
 
 **Inputs/Outputs:**
@@ -75,7 +103,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 1. Write test suite for `download_audio.py`
 2. Implement the script per this plan
 
-### C. Vocal Isolation (Optional) (`isolate_vocals.py`)
+### D. Vocal Isolation (Optional) (`isolate_vocals.py`)
 **Purpose:** Separate vocals from background audio using Demucs.
 
 **Inputs/Outputs:**
@@ -96,7 +124,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 1. Write test suite for `isolate_vocals.py`
 2. Implement the script per this plan
 
-### D. Whisper Transcription (`transcribe_audio.py`)
+### E. Whisper Transcription (`transcribe_audio.py`)
 **Purpose:** Transcribe audio files to raw Korean SRT using OpenAI Whisper (local model).
 
 **Inputs/Outputs:**
@@ -118,7 +146,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 1. Write the test suite for `transcribe_audio.py`
 2. Implement the script per this plan
 
-### E. Whisper Post-Processing (`whisper_postprocess.py`)
+### F. Whisper Post-Processing (`whisper_postprocess.py`)
 **Purpose:** Clean up raw Whisper-generated SRT by normalizing timestamp formats and collapsing duplicate subtitle blocks.
 
 **Inputs/Outputs:**
@@ -138,7 +166,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 1. Write the test suite for `whisper_postprocess.py`
 2. Implement the script per this plan
 
-### F. Translate Subtitles (`translate_subtitles.py`)
+### G. Translate Subtitles (`translate_subtitles.py`)
 **Purpose:** Translate Korean `.srt` files to English `.srt` using the OpenAI API.
 
 **Inputs/Outputs:**
@@ -168,7 +196,7 @@ The full pipeline is composed of the following sequential steps, each implemente
    1. Write the test suite for `translate_subtitles.py`
    2. Implement the script per this plan
 
-### G. Upload Subtitles to Pastebin (`upload_subtitles.py`)
+### H. Upload Subtitles to Pastebin (`upload_subtitles.py`)
 **Purpose:** Upload translated English SRTs to Pastebin and retrieve raw URLs for public hosting.
 
 **Inputs/Outputs:**
@@ -196,7 +224,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 1. Write test suite for `upload_subtitles.py`
 2. Implement the script per this plan
 
-### H. Update Google Sheet (`update_sheet_to_google.py`)
+### I. Update Google Sheet (`update_sheet_to_google.py`)
 **Purpose:** Write back the Pastebin URL (and/or status) into the source Google Sheet for each video.
 
 **Inputs/Outputs:**
@@ -217,11 +245,12 @@ The full pipeline is composed of the following sequential steps, each implemente
 1. Write test suite for `update_sheet_to_google.py`
 2. Implement the script per this plan
 
-### I. Manifest Builder (`manifest_builder.py`)
+### J. Manifest Builder (`manifest_builder.py`)
 - **Purpose:** Builds the final `subtitles.json` manifest for the website.
 - Scans /subtitles/ for available EN SRTs.
 - Collects metadata from videos.json.
-- Builds /website/subtitles.json in the format: { "v": "isIm67yGPzo", "title": "Two-Hatchery Against Mech Terran - "Master Mech Strategies"", "description": "(no description)", "creator": "", "subtitleUrl": "https://pastebin.com/raw/Miy3QqBn", "tags": ["z", "zvt"] }
+- Reads `upload_date` from `/metadata/details/{video_id}.json`.
+- Builds /website/subtitles.json in the format: { "v": "isIm67yGPzo", "title": "Two-Hatchery Against Mech Terran - "Master Mech Strategies"", "description": "(no description)", "creator": "", "subtitleUrl": "https://pastebin.com/raw/Miy3QqBn", "releaseDate": "2023-10-26", "tags": ["z", "zvt"] }
 - Only includes videos with translated subtitles.
 
 ---

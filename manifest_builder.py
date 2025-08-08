@@ -4,7 +4,7 @@ import json
 import argparse
 
 
-def build_manifest(metadata_file: str, subtitles_dir: str, output_file: str) -> None:
+def build_manifest(metadata_file: str, subtitles_dir: str, details_dir: str, output_file: str) -> None:
     # Load metadata
     with open(metadata_file, encoding='utf-8') as f:
         videos = json.load(f)
@@ -19,6 +19,14 @@ def build_manifest(metadata_file: str, subtitles_dir: str, output_file: str) -> 
         meta = video_map.get(vid)
         if not meta:
             continue
+
+        # Load detailed metadata
+        details_file = os.path.join(details_dir, f"{vid}.json")
+        details = {}
+        if os.path.exists(details_file):
+            with open(details_file, encoding='utf-8') as f:
+                details = json.load(f)
+
         entries.append({
             'v': vid,
             # support sheet-exported keys "EN Title" and "Creator"
@@ -27,6 +35,7 @@ def build_manifest(metadata_file: str, subtitles_dir: str, output_file: str) -> 
             'creator': meta.get('Creator', meta.get('creator', '')),
             # support sheet-exported key "EN Subtitles"
             'subtitleUrl': meta.get('EN Subtitles', meta.get('subtitleUrl', '')),
+            'releaseDate': details.get('upload_date'),
             'tags': meta.get('tags', meta.get('Tags', [])),
         })
 
@@ -39,10 +48,11 @@ def main():
     p = argparse.ArgumentParser(description='Build subtitles.json manifest for bonjwa.tv')
     p.add_argument('--metadata-file', required=True, help='Path to metadata/videos.json')
     p.add_argument('--subtitles-dir', required=True, help='Path to translated subtitles directory')
+    p.add_argument('--details-dir', required=True, help='Path to detailed metadata directory')
     p.add_argument('--output-file', required=True, help='Path to write subtitles.json')
     args = p.parse_args()
 
-    build_manifest(args.metadata_file, args.subtitles_dir, args.output_file)
+    build_manifest(args.metadata_file, args.subtitles_dir, args.details_dir, args.output_file)
 
 
 if __name__ == '__main__':

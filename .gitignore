@@ -5,7 +5,10 @@ subtitles/
 .cache/
 logs/
 website/subtitles.json
-metadata/videos.json
+metadata/
+mini/
+mini_cache/
+mini_translated
 # Created by https://www.toptal.com/developers/gitignore/api/python,dotnetcore
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,dotnetcore
 

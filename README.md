@@ -3,6 +3,49 @@
 Subtitle processing pipeline for Bonjwa.tv, implementing transcription, post-processing, translation,
 and orchestration of Korean StarCraft: Brood War video subtitles.
 
+## Workflows
+
+This project supports two primary workflows for subtitle processing: a simple, ad-hoc folder translation and a comprehensive, end-to-end pipeline.
+
+### 1. Simple Workflow: Ad-hoc Folder Translation
+
+For quick, one-off translation tasks, use the `translate_subtitles_folder.py` script. This is the easiest way to get started. It recursively finds all `.srt` files in a specified input directory, translates them to English, and saves them to an output directory while preserving the original folder structure.
+
+This workflow is self-contained and only requires an OpenAI API key. It does **not** interact with external services like Google Sheets or Pastebin.
+
+**Example:**
+```bash
+python translate_subtitles_folder.py \
+  --input-dir path/to/korean_subtitles \
+  --output-dir path/to/english_subtitles \
+  [--slang-file slang/KoreanSlang.txt] \
+  [--model gpt-4]
+```
+Ensure you have an `.env` file in the project root containing your `OPENAI_API_KEY`.
+
+### 2. Advanced Workflow: Full End-to-End Pipeline
+
+For fully automated, large-scale processing, the `pipeline_orchestrator.py` script manages the entire pipeline from video to final translated subtitles. This is the "fat" pipeline that handles all steps.
+
+This advanced workflow includes:
+1.  Fetching video metadata from a Google Sheet.
+2.  Downloading video audio (`download_audio.py`).
+3.  Transcribing audio to create source subtitles (`transcribe_audio.py`).
+4.  Translating subtitles into English (`translate_subtitles.py`).
+5.  Uploading the translated subtitles to Pastebin (`upload_subtitles.py`).
+6.  Updating the Google Sheet with the new Pastebin links (`update_sheet_to_google.py`).
+
+This workflow is ideal for batch processing and requires credentials for Google Sheets and Pastebin in addition to the OpenAI API key.
+
+Refer to `bonjwa.md` for detailed step-by-step plans, directory structure, and orchestration notes.
+
+Before running the full pipeline, please verify your credentials:
+```bash
+python check_credentials.py \
+  --service-account-file path/to/service-account.json \
+  --spreadsheet "Translation Tracking"
+```
+
 ## Getting Started
 
 These steps show how to set up the development environment, run tests, and explore the pipeline thus far.
@@ -61,63 +104,21 @@ translate_subtitles_folder.py # 2. Main script for ad-hoc folder translation
 
 # Pipeline Sub-scripts (Internal components)
 export_sheet_to_json.py   # A. Fetches video metadata from Google Sheets
-download_audio.py         # B. Downloads video audio using yt-dlp
-isolate_vocals.py         # C. Isolates vocals from audio using Demucs
-transcribe_audio.py       # D. Transcribes audio to subtitles using Whisper
-whisper_postprocess.py    # E. Post-processes raw Whisper SRT files
-translate_subtitles.py    # F. Translates subtitles using the OpenAI API
-upload_subtitles.py       # G. Uploads translated SRTs to Pastebin
-update_sheet_to_google.py # H. Updates the Google Sheet with Pastebin links
-manifest_builder.py       # I. Builds the subtitles.json manifest
+fetch_video_metadata.py   # B. Fetches detailed video metadata from YouTube
+download_audio.py         # C. Downloads video audio using yt-dlp
+isolate_vocals.py         # D. Isolates vocals from audio using Demucs
+transcribe_audio.py       # E. Transcribes audio to subtitles using Whisper
+whisper_postprocess.py    # F. Post-processes raw Whisper SRT files
+translate_subtitles.py    # G. Translates subtitles using the OpenAI API
+upload_subtitles.py       # H. Uploads translated SRTs to Pastebin
+update_sheet_to_google.py # I. Updates the Google Sheet with Pastebin links
+manifest_builder.py       # J. Builds the subtitles.json manifest
 
 # Other Project Files
 .venv/                    # Python virtual environment
 bonjwa.md                 # Design & planning document
 tests/                    # Pytest smoke tests for each step
 README.md                 # This contributor guide
-```
-
-## Workflows
-
-This project supports two primary workflows for subtitle processing: a simple, ad-hoc folder translation and a comprehensive, end-to-end pipeline.
-
-### 1. Simple Workflow: Ad-hoc Folder Translation
-
-For quick, one-off translation tasks, use the `translate_subtitles_folder.py` script. This is the easiest way to get started. It recursively finds all `.srt` files in a specified input directory, translates them to English, and saves them to an output directory while preserving the original folder structure.
-
-This workflow is self-contained and only requires an OpenAI API key. It does **not** interact with external services like Google Sheets or Pastebin.
-
-**Example:**
-```bash
-python translate_subtitles_folder.py \
-  --input-dir path/to/korean_subtitles \
-  --output-dir path/to/english_subtitles \
-  [--slang-file slang/KoreanSlang.txt] \
-  [--model gpt-4]
-```
-Ensure you have an `.env` file in the project root containing your `OPENAI_API_KEY`.
-
-### 2. Advanced Workflow: Full End-to-End Pipeline
-
-For fully automated, large-scale processing, the `pipeline_orchestrator.py` script manages the entire pipeline from video to final translated subtitles. This is the "fat" pipeline that handles all steps.
-
-This advanced workflow includes:
-1.  Fetching video metadata from a Google Sheet.
-2.  Downloading video audio (`download_audio.py`).
-3.  Transcribing audio to create source subtitles (`transcribe_audio.py`).
-4.  Translating subtitles into English (`translate_subtitles.py`).
-5.  Uploading the translated subtitles to Pastebin (`upload_subtitles.py`).
-6.  Updating the Google Sheet with the new Pastebin links (`update_sheet_to_google.py`).
-
-This workflow is ideal for batch processing and requires credentials for Google Sheets and Pastebin in addition to the OpenAI API key.
-
-Refer to `bonjwa.md` for detailed step-by-step plans, directory structure, and orchestration notes.
-
-Before running the full pipeline, please verify your credentials:
-```bash
-python check_credentials.py \
-  --service-account-file path/to/service-account.json \
-  --spreadsheet "Translation Tracking"
 ```
 
 ## Contributing
