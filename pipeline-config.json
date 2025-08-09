@@ -1,5 +1,5 @@
 {
-  "metadata_file": "metadata/videos.json",
+  "video_list_file": "metadata/videos.json",
   "audio_dir": "audio",
   "vocals_dir": "vocals",
   "subtitles_dir": "subtitles",
@@ -11,5 +11,5 @@
   "worksheet": "Translated Videos",
   "sheet_column": "Pastebin URL",
   "skip_steps": [],
-  "metadata_output_dir": "metadata"
+  "video_metadata_dir": "metadata"
 }

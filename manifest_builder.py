@@ -4,9 +4,9 @@ import json
 import argparse
 
 
-def build_manifest(metadata_file: str, subtitles_dir: str, details_dir: str, output_file: str) -> None:
+def build_manifest(video_list_file: str, subtitles_dir: str, details_dir: str, output_file: str) -> None:
     # Load metadata
-    with open(metadata_file, encoding='utf-8') as f:
+    with open(video_list_file, encoding='utf-8') as f:
         videos = json.load(f)
     video_map = {v['v']: v for v in videos}
 
@@ -46,13 +46,13 @@ def build_manifest(metadata_file: str, subtitles_dir: str, details_dir: str, out
 
 def main():
     p = argparse.ArgumentParser(description='Build subtitles.json manifest for bonjwa.tv')
-    p.add_argument('--metadata-file', required=True, help='Path to metadata/videos.json')
+    p.add_argument('--video-list-file', required=True, help='Path to metadata/videos.json')
     p.add_argument('--subtitles-dir', required=True, help='Path to translated subtitles directory')
-    p.add_argument('--details-dir', required=True, help='Path to detailed metadata directory')
+    p.add_argument('--details-dir', required=True, help='Path to detailed video metadata directory')
     p.add_argument('--output-file', required=True, help='Path to write subtitles.json')
     args = p.parse_args()
 
-    build_manifest(args.metadata_file, args.subtitles_dir, args.details_dir, args.output_file)
+    build_manifest(args.video_list_file, args.subtitles_dir, args.details_dir, args.output_file)
 
 
 if __name__ == '__main__':

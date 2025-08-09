@@ -32,7 +32,7 @@ def fetch_video_metadata(video_id, output_dir):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fetch video metadata from YouTube.")
     parser.add_argument("--video-id", required=True, help="The YouTube video ID.")
-    parser.add_argument("--output-dir", required=True, help="The directory to save the metadata JSON file.")
+    parser.add_argument("--video-metadata-dir", required=True, help="The directory to save the video metadata JSON file.")
     args = parser.parse_args()
 
-    fetch_video_metadata(args.video_id, args.output_dir)
+    fetch_video_metadata(args.video_id, args.video_metadata_dir)

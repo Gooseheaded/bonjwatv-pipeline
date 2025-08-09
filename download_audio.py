@@ -34,7 +34,6 @@ log = setup_logging(__name__, 'logs/download_audio.log')
 
 
 def main():
-    log = log
     p = argparse.ArgumentParser(description='Download YouTube audio as MP3')
     p.add_argument('--url', required=True, help='YouTube video URL')
     p.add_argument('--video-id', required=True, help='Video identifier for output filename')

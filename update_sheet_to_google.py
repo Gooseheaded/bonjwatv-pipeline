@@ -14,7 +14,7 @@ from gspread.exceptions import APIError
 load_dotenv()
 
 
-def update_sheet_to_google(metadata_file: str,
+def update_sheet_to_google(video_list_file: str,
                            cache_dir: str,
                            spreadsheet: str,
                            worksheet: str,
@@ -42,7 +42,7 @@ def update_sheet_to_google(metadata_file: str,
         raise RuntimeError(f"Column '{column_name}' not found in header")
 
     # Load metadata and process each video
-    videos = json.load(open(metadata_file, encoding='utf-8'))
+    videos = json.load(open(video_list_file, encoding='utf-8'))
     for v in videos:
         vid = v['v']
         cache_file = os.path.join(cache_dir, f'pastebin_{vid}.json')
@@ -142,7 +142,7 @@ def setup_logging():
 def main():
     log = setup_logging()
     p = argparse.ArgumentParser(description='Update Google Sheet with Pastebin URLs')
-    p.add_argument('--metadata-file', required=True)
+    p.add_argument('--video-list-file', required=True)
     p.add_argument('--cache-dir', required=True)
     p.add_argument('--spreadsheet', required=True)
     p.add_argument('--worksheet', required=True)
@@ -152,7 +152,7 @@ def main():
 
     try:
         update_sheet_to_google(
-            metadata_file=args.metadata_file,
+            video_list_file=args.video_list_file,
             cache_dir=args.cache_dir,
             spreadsheet=args.spreadsheet,
             worksheet=args.worksheet,

@@ -87,8 +87,8 @@ def patch_gspread(monkeypatch):
 def test_update_sheet_to_google(tmp_path, caplog, patch_gspread):
     # Prepare metadata and cache
     metadata = [{'v': 'vid1'}, {'v': 'vid2'}]
-    meta_file = tmp_path / 'videos.json'
-    meta_file.write_text(json.dumps(metadata), encoding='utf-8')
+    video_list_file = tmp_path / 'videos.json'
+    video_list_file.write_text(json.dumps(metadata), encoding='utf-8')
 
     cache_dir = tmp_path / '.cache'
     cache_dir.mkdir()
@@ -99,7 +99,7 @@ def test_update_sheet_to_google(tmp_path, caplog, patch_gspread):
     caplog.set_level('INFO')
     # Run update
     update_sheet_to_google(
-        metadata_file=str(meta_file),
+        video_list_file=str(video_list_file),
         cache_dir=str(cache_dir),
         spreadsheet='MySheet',
         worksheet='Sheet1',
@@ -117,8 +117,8 @@ def test_update_sheet_to_google(tmp_path, caplog, patch_gspread):
 def test_skip_missing_id(tmp_path, caplog, patch_gspread):
     # If a video ID is not found in the sheet, it should be skipped without error
     metadata = [{'v': 'nope'}]
-    meta_file = tmp_path / 'videos2.json'
-    meta_file.write_text(json.dumps(metadata), encoding='utf-8')
+    video_list_file = tmp_path / 'videos2.json'
+    video_list_file.write_text(json.dumps(metadata), encoding='utf-8')
 
     cache_dir = tmp_path / '.cache2'
     cache_dir.mkdir()
@@ -128,7 +128,7 @@ def test_skip_missing_id(tmp_path, caplog, patch_gspread):
 
     caplog.set_level('WARNING')
     update_sheet_to_google(
-        metadata_file=str(meta_file),
+        video_list_file=str(video_list_file),
         cache_dir=str(cache_dir),
         spreadsheet='MySheet',
         worksheet='Sheet1',
@@ -140,8 +140,8 @@ def test_skip_missing_id(tmp_path, caplog, patch_gspread):
 def test_skip_google_cached(tmp_path, caplog, patch_gspread):
     # If we've already updated this video+URL, skip without any sheet calls
     metadata = [{'v': 'vid1'}]
-    meta_file = tmp_path / 'videos.json'
-    meta_file.write_text(json.dumps(metadata), encoding='utf-8')
+    video_list_file = tmp_path / 'videos.json'
+    video_list_file.write_text(json.dumps(metadata), encoding='utf-8')
 
     cache_dir = tmp_path / '.cache'
     cache_dir.mkdir()
@@ -154,7 +154,7 @@ def test_skip_google_cached(tmp_path, caplog, patch_gspread):
 
     caplog.set_level('INFO')
     update_sheet_to_google(
-        metadata_file=str(meta_file),
+        video_list_file=str(video_list_file),
         cache_dir=str(cache_dir),
         spreadsheet='MySheet',
         worksheet='Sheet1',
@@ -168,8 +168,8 @@ def test_skip_google_cached(tmp_path, caplog, patch_gspread):
 def test_existing_sheet_sets_cache(tmp_path, monkeypatch, caplog, patch_gspread):
     # If sheet already has a URL (existing cell), we should cache and skip updating
     metadata = [{'v': 'vid1'}]
-    meta_file = tmp_path / 'videos.json'
-    meta_file.write_text(json.dumps(metadata), encoding='utf-8')
+    video_list_file = tmp_path / 'videos.json'
+    video_list_file.write_text(json.dumps(metadata), encoding='utf-8')
 
     cache_dir = tmp_path / '.cache'
     cache_dir.mkdir()
@@ -187,7 +187,7 @@ def test_existing_sheet_sets_cache(tmp_path, monkeypatch, caplog, patch_gspread)
 
     caplog.set_level('INFO')
     update_sheet_to_google(
-        metadata_file=str(meta_file),
+        video_list_file=str(video_list_file),
         cache_dir=str(cache_dir),
         spreadsheet='MySheet',
         worksheet='Sheet1',

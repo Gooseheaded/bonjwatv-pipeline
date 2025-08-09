@@ -37,7 +37,7 @@ def test_build_manifest(tmp_path):
     out_file = out_dir / 'subtitles.json'
 
     build_manifest(
-        metadata_file=str(videos_json),
+                    video_list_file=str(videos_json),
         subtitles_dir=str(subs_dir),
         details_dir=str(details_dir),
         output_file=str(out_file)

@@ -33,7 +33,7 @@ Key goals:
 ## 2. Directory Structure
 
 /bonjwatv-pipeline/
-/metadata/
+/video_metadata_dir/
   videos.json                  # Exported from Google Sheets
   /details/
     {video_id}.json            # Cached raw video metadata from yt-dlp
@@ -53,16 +53,16 @@ fetch_video_metadata.py download_audio.py isolate_vocals.py transcribe_audio.py 
 The full pipeline is composed of the following sequential steps, each implemented as a standalone Python script. The `pipeline_orchestrator.py` calls these scripts in order. All steps are idempotent—scripts will skip processing if the expected output already exists.
 
 ### A. Export Metadata (`export_sheet_to_json.py`)
-- **Purpose:** Fetches video metadata curated in Google Sheets and saves it as `metadata/videos.json`.
+- **Purpose:** Fetches video metadata curated in Google Sheets and saves it as `video_list_file`.
 - Admin curates all videos and metadata in Google Sheets.
-- Export script reads the relevant worksheet and writes `metadata/videos.json`.
+- Export script reads the relevant worksheet and writes `video_list_file`.
 
 ### B. Fetch Video Metadata (`fetch_video_metadata.py`)
 **Purpose:** Fetch detailed video metadata from YouTube, including the upload date, and cache it locally.
 
 **Inputs/Outputs:**
 - Input: `video_id`
-- Output: `/metadata/details/{video_id}.json`
+- Output: `/video_metadata_dir/details/{video_id}.json`
 
 **Features:**
 - CLI args: `--video-id`, `--output-dir`
@@ -228,12 +228,12 @@ The full pipeline is composed of the following sequential steps, each implemente
 **Purpose:** Write back the Pastebin URL (and/or status) into the source Google Sheet for each video.
 
 **Inputs/Outputs:**
-- Input: `metadata/videos.json`
+- Input: `video_list_file`
 - Input: cache files `.cache/pastebin_{video_id}.json` (to get `url`)
 - Configuration: service-account JSON path, column name to update (e.g. "Pastebin URL")
 
 **Features:**
-- CLI args: `--metadata-file`, `--cache-dir`, `--spreadsheet`, `--worksheet`, `--column-name`, `--service-account-file`
+- CLI args: `--video-list-file`, `--cache-dir`, `--spreadsheet`, `--worksheet`, `--column-name`, `--service-account-file`
 - Idempotent: skip updating if the cell already contains a value
 - Uses `gspread` to open the sheet, find rows by video ID, and update the designated column
 - Minimal logging to `logs/update_sheet.log` and stdout
@@ -249,7 +249,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 - **Purpose:** Builds the final `subtitles.json` manifest for the website.
 - Scans /subtitles/ for available EN SRTs.
 - Collects metadata from videos.json.
-- Reads `upload_date` from `/metadata/details/{video_id}.json`.
+- Reads `upload_date` from `/video_metadata_dir/details/{video_id}.json`.
 - Builds /website/subtitles.json in the format: { "v": "isIm67yGPzo", "title": "Two-Hatchery Against Mech Terran - "Master Mech Strategies"", "description": "(no description)", "creator": "", "subtitleUrl": "https://pastebin.com/raw/Miy3QqBn", "releaseDate": "2023-10-26", "tags": ["z", "zvt"] }
 - Only includes videos with translated subtitles.
 
@@ -258,7 +258,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 ## 4. Orchestration and Batch Control
 
 - `pipeline_orchestrator.py` (Python CLI):
-- Reads `pipeline-config.json` and `metadata/videos.json`
+- Reads `pipeline-config.json` and `video_list_file`
 - Sequentially runs batch steps (via subprocess calls to Python scripts)
 - Logs skips, progress, and errors (skip-and-log strategy)
 - Supports resume/retry by skipping completed steps
@@ -293,7 +293,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 python export\_sheet\_to\_json.py \
   --spreadsheet "Translation Tracking" \
   --worksheet "Translated Videos" \
-  --output metadata/videos.json \
+  --output video_list_file \
   --service-account-file path/to/service-account.json
 
 # 2. Run orchestrator to process new/changed videos

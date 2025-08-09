@@ -37,8 +37,8 @@ def main():
 
     # Load configuration
     config = json.load(open(args.config, encoding='utf-8'))
-    metadata_file = config['metadata_file']
-    metadata_output_dir = config['metadata_output_dir']
+    video_list_file = config['video_list_file']
+    video_metadata_dir = config['video_metadata_dir']
     audio_dir = config['audio_dir']
     vocals_dir = config['vocals_dir']
     subtitles_dir = config['subtitles_dir']
@@ -48,7 +48,7 @@ def main():
     skip_steps = set(config.get('skip_steps', []))
 
     # Load video list
-    videos = json.load(open(metadata_file, encoding='utf-8'))
+    videos = json.load(open(video_list_file, encoding='utf-8'))
 
     for v in videos:
         vid = v['v']
@@ -58,7 +58,7 @@ def main():
         else:
             if not run_step(['python', 'fetch_video_metadata.py',
                              '--video-id', vid,
-                             '--output-dir', metadata_output_dir]):
+                             '--output-dir', video_metadata_dir]):
                 continue
 
         # Download audio
@@ -66,7 +66,7 @@ def main():
             logging.info('Skipping download_audio for %s', vid)
         else:
             if not run_step(['python', 'download_audio.py',
-                             '--url', v.get('youtube_url', ''),
+                             '--url', v.get('youtube_url', f'https://www.youtube.com/watch?v={vid}'),
                              '--video-id', vid,
                              '--output-dir', audio_dir]):
                 continue
@@ -126,7 +126,7 @@ def main():
             logging.info('Skipping update_sheet_to_google for %s', vid)
         else:
             if not run_step(['python', 'update_sheet_to_google.py',
-                             '--metadata-file', metadata_file,
+                             '--video-list-file', video_list_file,
                              '--cache-dir', cache_dir,
                              '--spreadsheet', config.get('spreadsheet'),
                              '--worksheet', config.get('worksheet'),
@@ -140,9 +140,10 @@ def main():
     else:
         manifest_out = os.path.join(website_dir, 'subtitles.json')
         run_step(['python', 'manifest_builder.py',
-                  '--metadata-file', metadata_file,
+                  '--video-list-file', video_list_file,
                   '--subtitles-dir', subtitles_dir,
-                  '--output-file', manifest_out])
+                  '--output-file', manifest_out,
+                  '--details-dir', video_metadata_dir])
 
 
 if __name__ == '__main__':

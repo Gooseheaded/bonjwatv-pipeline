@@ -48,7 +48,6 @@ log = setup_logging(__name__, 'logs/transcribe_audio.log')
 
 
 def main():
-    log = log
     p = argparse.ArgumentParser(description='Transcribe audio to Korean SRT (Whisper)')
     p.add_argument('--input-file', required=True, help='Path to audio file')
     p.add_argument('--output-file', required=True, help='Path to output SRT file')

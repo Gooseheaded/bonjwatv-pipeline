@@ -36,7 +36,6 @@ log = setup_logging(__name__, 'logs/isolate_vocals.log')
 
 
 def main():
-    log = log
     p = argparse.ArgumentParser(description='Isolate vocals from audio using Demucs')
     p.add_argument('--input-file', required=True, help='Path to input audio file')
     p.add_argument('--output-dir', default='vocals', help='Directory for isolated vocals')
