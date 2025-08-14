@@ -6,7 +6,7 @@ sys.path.insert(0, os.getcwd())
 import json
 import pytest
 
-from update_sheet_to_google import update_sheet_to_google
+from google_sheet_write import google_sheet_write
 
 
 class DummyWorksheet:
@@ -84,7 +84,7 @@ def patch_gspread(monkeypatch):
     return dummy_ws
 
 
-def test_update_sheet_to_google(tmp_path, caplog, patch_gspread):
+def test_google_sheet_write(tmp_path, caplog, patch_gspread):
     # Prepare metadata and cache
     metadata = [{'v': 'vid1'}, {'v': 'vid2'}]
     video_list_file = tmp_path / 'videos.json'
@@ -98,7 +98,7 @@ def test_update_sheet_to_google(tmp_path, caplog, patch_gspread):
 
     caplog.set_level('INFO')
     # Run update
-    update_sheet_to_google(
+    google_sheet_write(
         video_list_file=str(video_list_file),
         cache_dir=str(cache_dir),
         spreadsheet='MySheet',
@@ -127,7 +127,7 @@ def test_skip_missing_id(tmp_path, caplog, patch_gspread):
     cache_file.write_text(json.dumps({'url': 'https://pastebin.com/raw/XYZ'}), encoding='utf-8')
 
     caplog.set_level('WARNING')
-    update_sheet_to_google(
+    google_sheet_write(
         video_list_file=str(video_list_file),
         cache_dir=str(cache_dir),
         spreadsheet='MySheet',
@@ -153,7 +153,7 @@ def test_skip_google_cached(tmp_path, caplog, patch_gspread):
     gs.write_text(json.dumps({'url': 'https://pastebin.com/raw/ABC'}), encoding='utf-8')
 
     caplog.set_level('INFO')
-    update_sheet_to_google(
+    google_sheet_write(
         video_list_file=str(video_list_file),
         cache_dir=str(cache_dir),
         spreadsheet='MySheet',
@@ -186,7 +186,7 @@ def test_existing_sheet_sets_cache(tmp_path, monkeypatch, caplog, patch_gspread)
     monkeypatch.setattr(patch_gspread, 'cell', fake_cell)
 
     caplog.set_level('INFO')
-    update_sheet_to_google(
+    google_sheet_write(
         video_list_file=str(video_list_file),
         cache_dir=str(cache_dir),
         spreadsheet='MySheet',

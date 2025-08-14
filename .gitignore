@@ -5,6 +5,7 @@ subtitles/
 .cache/
 logs/
 website/subtitles.json
+video_metadata_dir/
 metadata/
 mini/
 mini_cache/

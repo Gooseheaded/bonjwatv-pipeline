@@ -6,7 +6,7 @@ sys.path.insert(0, os.getcwd())
 
 import pytest
 
-from export_sheet_to_json import export_sheet_to_json
+from google_sheet_read import google_sheet_read
 
 
 class DummyWS:
@@ -28,13 +28,13 @@ class DummyGC:
 
 @pytest.fixture(autouse=True)
 def patch_gspread(monkeypatch):
-    monkeypatch.setattr('export_sheet_to_json.gspread',
+    monkeypatch.setattr('google_sheet_read.gspread',
                         type('G', (), {'service_account': lambda filename=None: DummyGC()}))
 
 
-def test_export_sheet_to_json(tmp_path):
+def test_google_sheet_read(tmp_path):
     output = tmp_path / 'videos.json'
-    export_sheet_to_json(spreadsheet='MySheet', worksheet='Sheet1', output=str(output))
+    google_sheet_read(spreadsheet='MySheet', worksheet='Sheet1', output=str(output))
     assert output.exists()
     data = json.loads(output.read_text(encoding='utf-8'))
     assert isinstance(data, list)

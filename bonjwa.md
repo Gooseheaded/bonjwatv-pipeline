@@ -8,7 +8,7 @@ Key goals:
 
 - Batchable and idempotent processing
 - Modular, maintainable, and easy to extend
-- Integration between C# (pipeline orchestration, manifest building) and Python (ML tasks)
+- Python-only implementation across orchestration, processing, and manifest building
 - Human-friendly, JSON-driven metadata and artifacts
 - Robust error handling, logging, and reporting
 
@@ -16,27 +16,27 @@ Key goals:
 
 ## 1. High-Level Architecture
 
-```
-     [Google Sheets]
-     (video curation)
-           │
-[Sheet Export → videos.json]
-           │
-[Pipeline Orchestrator (Python CLI)]
-           │
-```
-
-┌──────────────┬──────────────┬─────────────┬──────────────┐ │    Audio DL  │  Demucs      │ Whisper     │ Translation  │ │  (Python)    │ (optional)   │ (Python)    │ (Python LLM) │ └──────────────┴──────────────┴─────────────┴──────────────┘ │ [Artifacts: audio, vocals, subtitles] │ [Manifest Builder (Python)] │ [subtitles.json + assets for bonjwa.tv]
+- Source curation: Google Sheets → exported to `videos.json`.
+- Orchestrator: `pipeline_orchestrator.py` reads config and coordinates steps.
+- Steps per video:
+  - Fetch metadata (`fetch_video_metadata.py`) → `metadata/{video_id}.json`.
+  - Download audio (`download_audio.py`) → `audio/{video_id}.mp3`.
+  - Isolate vocals (optional, `isolate_vocals.py`) → `vocals/{video_id}/vocals.wav`.
+  - Transcribe (`transcribe_audio.py`) → `subtitles/kr_{video_id}.srt`.
+  - Post-process (`whisper_postprocess.py`) → normalized Korean SRT.
+  - Translate (`translate_subtitles.py`) → `subtitles/en_{video_id}.srt`.
+  - Upload (`upload_subtitles.py`) → Pastebin raw URL (cached).
+  - Update sheet (`update_sheet_to_google.py`) with paste URL.
+- Manifest: `manifest_builder.py` → `website/subtitles.json` for bonjwa.tv.
 
 ---
 
 ## 2. Directory Structure
 
 /bonjwatv-pipeline/
-/video_metadata_dir/
+/metadata/
   videos.json                  # Exported from Google Sheets
-  /details/
-    {video_id}.json            # Cached raw video metadata from yt-dlp
+  {video_id}.json              # Cached raw video metadata from yt-dlp
 /audio/ {video_id}.mp3
 /vocals/ {video_id}*vocals.wav
 /subtitles/ kr*{video_id}.srt en_{video_id}.srt
@@ -52,8 +52,8 @@ fetch_video_metadata.py download_audio.py isolate_vocals.py transcribe_audio.py 
 
 The full pipeline is composed of the following sequential steps, each implemented as a standalone Python script. The `pipeline_orchestrator.py` calls these scripts in order. All steps are idempotent—scripts will skip processing if the expected output already exists.
 
-### A. Export Metadata (`export_sheet_to_json.py`)
-- **Purpose:** Fetches video metadata curated in Google Sheets and saves it as `video_list_file`.
+### A. Google Sheet Read (`google_sheet_read.py`)
+- **Purpose:** Export curated Google Sheet rows and save them as `video_list_file`.
 - Admin curates all videos and metadata in Google Sheets.
 - Export script reads the relevant worksheet and writes `video_list_file`.
 
@@ -62,7 +62,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 
 **Inputs/Outputs:**
 - Input: `video_id`
-- Output: `/video_metadata_dir/details/{video_id}.json`
+- Output: `metadata/{video_id}.json`
 
 **Features:**
 - CLI args: `--video-id`, `--output-dir`
@@ -179,6 +179,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 
 **Features:**
 - Parse and chunk subtitles (default 50 lines, 5-line overlap; chunk_size > overlap and >=1)
+- Default model: `gpt-4.1-mini` (configurable via `--model`)
 - On context-length-exceeded errors, automatically reduce chunk size (by 10 lines) and retry
  - Build prompts with glossary and .srt formatting
 - Call OpenAI with retries (up to 5 attempts, backoff)
@@ -224,7 +225,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 1. Write test suite for `upload_subtitles.py`
 2. Implement the script per this plan
 
-### I. Update Google Sheet (`update_sheet_to_google.py`)
+### I. Google Sheet Write (`google_sheet_write.py`)
 **Purpose:** Write back the Pastebin URL (and/or status) into the source Google Sheet for each video.
 
 **Inputs/Outputs:**
@@ -249,7 +250,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 - **Purpose:** Builds the final `subtitles.json` manifest for the website.
 - Scans /subtitles/ for available EN SRTs.
 - Collects metadata from videos.json.
-- Reads `upload_date` from `/video_metadata_dir/details/{video_id}.json`.
+- Reads `upload_date` from `metadata/{video_id}.json`.
 - Builds /website/subtitles.json in the format: { "v": "isIm67yGPzo", "title": "Two-Hatchery Against Mech Terran - "Master Mech Strategies"", "description": "(no description)", "creator": "", "subtitleUrl": "https://pastebin.com/raw/Miy3QqBn", "releaseDate": "2023-10-26", "tags": ["z", "zvt"] }
 - Only includes videos with translated subtitles.
 
@@ -258,11 +259,11 @@ The full pipeline is composed of the following sequential steps, each implemente
 ## 4. Orchestration and Batch Control
 
 - `pipeline_orchestrator.py` (Python CLI):
-- Reads `pipeline-config.json` and `video_list_file`
-- Sequentially runs batch steps (via subprocess calls to Python scripts)
-- Logs skips, progress, and errors (skip-and-log strategy)
-- Supports resume/retry by skipping completed steps
-- Outputs summary and error reports for admin review
+- Reads `pipeline-config.json` and executes an ordered list of `steps`.
+- Global steps (run once): `google_sheet_read` (export sheet to JSON), `google_sheet_write` (write Pastebin URLs), `manifest_builder` (build website manifest).
+- Per-video steps (run for each `v` in `videos.json`): `fetch_video_metadata`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `whisper_postprocess`, `translate_subtitles`, `upload_subtitles`.
+- Validates `steps` presence and order (e.g., `google_sheet_read` before per-video steps; `manifest_builder` last).
+- Logs progress and errors; continues on per-video failures to process subsequent videos.
 
 ---
 
@@ -290,10 +291,10 @@ The full pipeline is composed of the following sequential steps, each implemente
 
 # 1. Export Google Sheets as videos.json
 
-python export\_sheet\_to\_json.py \
+python google_sheet_read.py \
   --spreadsheet "Translation Tracking" \
   --worksheet "Translated Videos" \
-  --output video_list_file \
+  --output metadata/videos.json \
   --service-account-file path/to/service-account.json
 
 # 2. Run orchestrator to process new/changed videos
@@ -309,8 +310,8 @@ python pipeline_orchestrator.py --config pipeline-config.json
 - Config file (pipeline-config.json):
 -  - All paths, API keys, options
 -  - service_account_file: path to Google Sheets service-account JSON (for export metadata)
--  - skip_steps: list of step names to skip (e.g. ["download_audio","isolate_vocals","transcribe_audio"])
-- Modular scripts: Each Python/C# script should work independently, accept CLI args, and return nonzero exit code on failure
+-  - steps: ordered list of step names to run (e.g. ["google_sheet_read", "fetch_video_metadata", ... , "manifest_builder"]) 
+- Modular scripts: Each Python script should work independently, accept CLI args, and return nonzero exit code on failure
 - Testing: All major scripts should have basic smoke tests (e.g., run on a test row/video)
 - Documentation: README.md with all usage instructions, dependencies, known issues
 
@@ -365,4 +366,3 @@ python pipeline_orchestrator.py --config pipeline-config.json
 ---
 
 # END OF DOCUMENT
-

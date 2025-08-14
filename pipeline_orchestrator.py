@@ -37,6 +37,55 @@ def main():
 
     # Load configuration
     config = json.load(open(args.config, encoding='utf-8'))
+    required_keys = ['video_list_file', 'video_metadata_dir', 'audio_dir', 'vocals_dir',
+                     'subtitles_dir', 'cache_dir', 'slang_file', 'website_dir']
+    for k in required_keys:
+        if k not in config:
+            logging.error('Missing required config key: %s', k)
+            exit(1)
+
+    steps = config.get('steps')
+    if not steps or not isinstance(steps, list):
+        logging.error('Config must define an ordered list of steps under "steps"')
+        exit(1)
+
+    allowed_per_video = [
+        'fetch_video_metadata',
+        'download_audio',
+        'isolate_vocals',
+        'transcribe_audio',
+        'whisper_postprocess',
+        'translate_subtitles',
+        'upload_subtitles',
+    ]
+    allowed_global = [
+        'google_sheet_read',
+        'google_sheet_write',
+        'manifest_builder',
+    ]
+    allowed = set(allowed_per_video + allowed_global)
+
+    # Validate steps
+    seen = set()
+    for s in steps:
+        if s not in allowed:
+            logging.error('Unknown step "%s". Allowed: %s', s, ', '.join(sorted(allowed)))
+            exit(1)
+        if s in seen:
+            logging.error('Duplicate step "%s" in steps list', s)
+            exit(1)
+        seen.add(s)
+
+    if 'manifest_builder' in steps and steps[-1] != 'manifest_builder':
+        logging.error('manifest_builder must be the last step in the list')
+        exit(1)
+    if 'google_sheet_read' in steps:
+        gs_read_index = steps.index('google_sheet_read')
+        for s in steps:
+            if s in allowed_per_video and steps.index(s) < gs_read_index:
+                logging.error('google_sheet_read must come before all per-video steps')
+                exit(1)
+
     video_list_file = config['video_list_file']
     video_metadata_dir = config['video_metadata_dir']
     audio_dir = config['audio_dir']
@@ -45,105 +94,97 @@ def main():
     cache_dir = config['cache_dir']
     slang_file = config['slang_file']
     website_dir = config['website_dir']
-    skip_steps = set(config.get('skip_steps', []))
 
-    # Load video list
-    videos = json.load(open(video_list_file, encoding='utf-8'))
+    # Execute global steps that come before per-video steps
+    for s in steps:
+        if s == 'google_sheet_read':
+            if not run_step(['python', 'google_sheet_read.py',
+                             '--spreadsheet', config.get('spreadsheet', ''),
+                             '--worksheet', config.get('worksheet', ''),
+                             '--output', video_list_file,
+                             '--service-account-file', config.get('service_account_file', '')]):
+                logging.error('google_sheet_read failed, aborting pipeline')
+                exit(1)
+        elif s in allowed_per_video:
+            break
 
+    # Load video list after potential google_sheet_read
+    try:
+        videos = json.load(open(video_list_file, encoding='utf-8'))
+    except Exception as e:
+        logging.error('Failed to load video list file %s: %s', video_list_file, e)
+        exit(1)
+
+    # Process per-video steps in the specified order
     for v in videos:
         vid = v['v']
-        # Fetch video metadata
-        if 'fetch_video_metadata' in skip_steps:
-            logging.info('Skipping fetch_video_metadata for %s', vid)
-        else:
-            if not run_step(['python', 'fetch_video_metadata.py',
-                             '--video-id', vid,
-                             '--output-dir', video_metadata_dir]):
+        for s in steps:
+            if s not in allowed_per_video:
                 continue
+            if s == 'fetch_video_metadata':
+                if not run_step(['python', 'fetch_video_metadata.py',
+                                 '--video-id', vid,
+                                 '--output-dir', video_metadata_dir]):
+                    break
+            elif s == 'download_audio':
+                if not run_step(['python', 'download_audio.py',
+                                 '--url', v.get('youtube_url', f'https://www.youtube.com/watch?v={vid}'),
+                                 '--video-id', vid,
+                                 '--output-dir', audio_dir]):
+                    break
+            elif s == 'isolate_vocals':
+                audio_path = os.path.join(audio_dir, f'{vid}.mp3')
+                if not run_step(['python', 'isolate_vocals.py',
+                                 '--input-file', audio_path,
+                                 '--output-dir', vocals_dir]):
+                    break
+            elif s == 'transcribe_audio':
+                audio_path = os.path.join(audio_dir, f'{vid}.mp3')
+                kr_srt = os.path.join(subtitles_dir, f'kr_{vid}.srt')
+                if not run_step(['python', 'transcribe_audio.py',
+                                 '--input-file', audio_path,
+                                 '--output-file', kr_srt]):
+                    break
+            elif s == 'whisper_postprocess':
+                kr_srt = os.path.join(subtitles_dir, f'kr_{vid}.srt')
+                if not run_step(['python', 'whisper_postprocess.py',
+                                 '--input-file', kr_srt,
+                                 '--output-file', kr_srt]):
+                    break
+            elif s == 'translate_subtitles':
+                kr_srt = os.path.join(subtitles_dir, f'kr_{vid}.srt')
+                en_srt = os.path.join(subtitles_dir, f'en_{vid}.srt')
+                if not run_step(['python', 'translate_subtitles.py',
+                                 '--input-file', kr_srt,
+                                 '--output-file', en_srt,
+                                 '--slang-file', slang_file,
+                                 '--cache-dir', cache_dir]):
+                    break
+            elif s == 'upload_subtitles':
+                en_srt = os.path.join(subtitles_dir, f'en_{vid}.srt')
+                if not run_step(['python', 'upload_subtitles.py',
+                                 '--input-file', en_srt,
+                                 '--cache-dir', cache_dir]):
+                    break
 
-        # Download audio
-        if 'download_audio' in skip_steps:
-            logging.info('Skipping download_audio for %s', vid)
-        else:
-            if not run_step(['python', 'download_audio.py',
-                             '--url', v.get('youtube_url', f'https://www.youtube.com/watch?v={vid}'),
-                             '--video-id', vid,
-                             '--output-dir', audio_dir]):
-                continue
-
-        # Vocal isolation
-        audio_path = os.path.join(audio_dir, f'{vid}.mp3')
-        if 'isolate_vocals' in skip_steps:
-            logging.info('Skipping isolate_vocals for %s', vid)
-        else:
-            if not run_step(['python', 'isolate_vocals.py',
-                             '--input-file', audio_path,
-                             '--output-dir', vocals_dir]):
-                continue
-
-        # Transcription
-        kr_srt = os.path.join(subtitles_dir, f'kr_{vid}.srt')
-        if 'transcribe_audio' in skip_steps:
-            logging.info('Skipping transcribe_audio for %s', vid)
-        else:
-            if not run_step(['python', 'transcribe_audio.py',
-                             '--input-file', audio_path,
-                             '--output-file', kr_srt]):
-                continue
-
-        # Post-process
-        if 'whisper_postprocess' in skip_steps:
-            logging.info('Skipping whisper_postprocess for %s', vid)
-        else:
-            if not run_step(['python', 'whisper_postprocess.py',
-                             '--input-file', kr_srt,
-                             '--output-file', kr_srt]):
-                continue
-
-        # Translation
-        en_srt = os.path.join(subtitles_dir, f'en_{vid}.srt')
-        if 'translate_subtitles' in skip_steps:
-            logging.info('Skipping translate_subtitles for %s', vid)
-        else:
-            if not run_step(['python', 'translate_subtitles.py',
-                             '--input-file', kr_srt,
-                             '--output-file', en_srt,
-                             '--slang-file', slang_file,
-                             '--cache-dir', cache_dir]):
-                continue
-
-        # Upload to Pastebin
-        if 'upload_subtitles' in skip_steps:
-            logging.info('Skipping upload_subtitles for %s', vid)
-        else:
-            if not run_step(['python', 'upload_subtitles.py',
-                             '--input-file', en_srt,
-                             '--cache-dir', cache_dir]):
-                continue
-
-        # Update Google Sheet with Pastebin URL
-        if 'update_sheet_to_google' in skip_steps:
-            logging.info('Skipping update_sheet_to_google for %s', vid)
-        else:
-            if not run_step(['python', 'update_sheet_to_google.py',
+    # Execute remaining global steps in order
+    for s in steps:
+        if s == 'google_sheet_write':
+            if not run_step(['python', 'google_sheet_write.py',
                              '--video-list-file', video_list_file,
                              '--cache-dir', cache_dir,
-                             '--spreadsheet', config.get('spreadsheet'),
-                             '--worksheet', config.get('worksheet'),
-                             '--column-name', config.get('sheet_column'),
+                             '--spreadsheet', config.get('spreadsheet', ''),
+                             '--worksheet', config.get('worksheet', ''),
+                             '--column-name', config.get('sheet_column', ''),
                              '--service-account-file', config.get('service_account_file', '')]):
-                continue
-
-    # Build manifest after all videos processed
-    if 'manifest_builder' in skip_steps:
-        logging.info('Skipping manifest_builder')
-    else:
-        manifest_out = os.path.join(website_dir, 'subtitles.json')
-        run_step(['python', 'manifest_builder.py',
-                  '--video-list-file', video_list_file,
-                  '--subtitles-dir', subtitles_dir,
-                  '--output-file', manifest_out,
-                  '--details-dir', video_metadata_dir])
+                logging.error('google_sheet_write failed')
+        elif s == 'manifest_builder':
+            manifest_out = os.path.join(website_dir, 'subtitles.json')
+            run_step(['python', 'manifest_builder.py',
+                      '--video-list-file', video_list_file,
+                      '--subtitles-dir', subtitles_dir,
+                      '--output-file', manifest_out,
+                      '--details-dir', video_metadata_dir])
 
 
 if __name__ == '__main__':

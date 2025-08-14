@@ -1,5 +1,6 @@
 {
   "video_list_file": "metadata/videos.json",
+  "video_metadata_dir": "metadata",
   "audio_dir": "audio",
   "vocals_dir": "vocals",
   "subtitles_dir": "subtitles",
@@ -10,7 +11,6 @@
   "spreadsheet": "Translation Tracking",
   "worksheet": "Translated Videos",
   "sheet_column": "Pastebin URL",
-  "video_metadata_dir": "metadata",
   "steps": [
     "google_sheet_read",
     "fetch_video_metadata",

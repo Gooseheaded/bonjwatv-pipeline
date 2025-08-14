@@ -32,7 +32,12 @@ def fetch_video_metadata(video_id, output_dir):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fetch video metadata from YouTube.")
     parser.add_argument("--video-id", required=True, help="The YouTube video ID.")
-    parser.add_argument("--video-metadata-dir", required=True, help="The directory to save the video metadata JSON file.")
+    # Accept both for backward compatibility; prefer --output-dir to match orchestrator and docs
+    parser.add_argument("--output-dir", dest="output_dir", required=False, help="Directory to save the metadata JSON.")
+    parser.add_argument("--video-metadata-dir", dest="output_dir", required=False, help="(Deprecated) Same as --output-dir.")
     args = parser.parse_args()
 
-    fetch_video_metadata(args.video_id, args.video_metadata_dir)
+    if not args.output_dir:
+        parser.error("--output-dir is required")
+
+    fetch_video_metadata(args.video_id, args.output_dir)

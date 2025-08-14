@@ -19,7 +19,7 @@ python translate_subtitles_folder.py \
   --input-dir path/to/korean_subtitles \
   --output-dir path/to/english_subtitles \
   [--slang-file slang/KoreanSlang.txt] \
-  [--model gpt-4]
+  [--model gpt-4.1-mini]
 ```
 Ensure you have an `.env` file in the project root containing your `OPENAI_API_KEY`.
 
@@ -93,6 +93,28 @@ Smoke tests for the core Python steps are in `tests/`. To run all tests:
 pytest -q
 ```
 
+### Config Template
+- Copy and edit the example config (ordered steps):
+  ```bash
+  cp pipeline-config.example.json pipeline-config.json
+  # edit spreadsheet, worksheet, and service_account_file
+  ```
+  The `steps` array defines the pipeline order. Allowed values:
+  - Global: `google_sheet_read`, `google_sheet_write`, `manifest_builder`
+  - Per-video: `fetch_video_metadata`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `whisper_postprocess`, `translate_subtitles`, `upload_subtitles`
+  Then run the orchestrator:
+  ```bash
+  python pipeline_orchestrator.py --config pipeline-config.json
+  ```
+
+## Defaults
+
+- Model (translation): `gpt-4.1-mini` (`--model` to override)
+- Chunking: `--chunk-size 50`, `--overlap 5`
+- Directories: `audio/`, `subtitles/`, `metadata/`, `.cache/`, `website/`
+- Whisper transcription: `--model-size large`, `--language ko`
+- Orchestrator config: see `pipeline-config.json` for `video_list_file`, dirs, and `skip_steps`
+
 ## Project Layout
 
 The project is organized into two main user-facing scripts and several sub-scripts that they orchestrate. Users should primarily focus on the main scripts for their respective workflows.
@@ -103,7 +125,7 @@ pipeline_orchestrator.py      # 1. Main script for the full, end-to-end pipeline
 translate_subtitles_folder.py # 2. Main script for ad-hoc folder translation
 
 # Pipeline Sub-scripts (Internal components)
-export_sheet_to_json.py   # A. Fetches video metadata from Google Sheets
+google_sheet_read.py      # A. Export Google Sheet rows to metadata/videos.json
 fetch_video_metadata.py   # B. Fetches detailed video metadata from YouTube
 download_audio.py         # C. Downloads video audio using yt-dlp
 isolate_vocals.py         # D. Isolates vocals from audio using Demucs
@@ -111,7 +133,7 @@ transcribe_audio.py       # E. Transcribes audio to subtitles using Whisper
 whisper_postprocess.py    # F. Post-processes raw Whisper SRT files
 translate_subtitles.py    # G. Translates subtitles using the OpenAI API
 upload_subtitles.py       # H. Uploads translated SRTs to Pastebin
-update_sheet_to_google.py # I. Updates the Google Sheet with Pastebin links
+google_sheet_write.py     # I. Updates the Google Sheet with Pastebin links
 manifest_builder.py       # J. Builds the subtitles.json manifest
 
 # Other Project Files
