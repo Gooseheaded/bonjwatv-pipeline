@@ -27,13 +27,17 @@ Ensure you have an `.env` file in the project root containing your `OPENAI_API_K
 
 For fully automated, large-scale processing, the `pipeline_orchestrator.py` script manages the entire pipeline from video to final translated subtitles. This is the "fat" pipeline that handles all steps.
 
-This advanced workflow includes:
-1.  Fetching video metadata from a Google Sheet.
-2.  Downloading video audio (`download_audio.py`).
-3.  Transcribing audio to create source subtitles (`transcribe_audio.py`).
-4.  Translating subtitles into English (`translate_subtitles.py`).
-5.  Uploading the translated subtitles to Pastebin (`upload_subtitles.py`).
-6.  Updating the Google Sheet with the new Pastebin links (`update_sheet_to_google.py`).
+This advanced workflow typically includes (order is configurable via `steps`):
+1.  Export video rows from Google Sheet (`google_sheet_read.py`).
+2.  Fetch YouTube metadata per video (`fetch_video_metadata.py`).
+3.  Download audio (`download_audio.py`).
+4.  Isolate vocals (optional) (`isolate_vocals.py`).
+5.  Transcribe to Korean SRT (`transcribe_audio.py`).
+6.  Normalize SRT timestamps and collapse duplicates (`normalize_srt.py`).
+7.  Translate subtitles to English (`translate_subtitles.py`).
+8.  Upload translated SRTs to Pastebin (`upload_subtitles.py`).
+9.  Write Pastebin URLs back to the sheet (`google_sheet_write.py`).
+10. Build the website manifest (`manifest_builder.py`).
 
 This workflow is ideal for batch processing and requires credentials for Google Sheets and Pastebin in addition to the OpenAI API key.
 
@@ -125,16 +129,16 @@ pipeline_orchestrator.py      # 1. Main script for the full, end-to-end pipeline
 translate_subtitles_folder.py # 2. Main script for ad-hoc folder translation
 
 # Pipeline Sub-scripts (Internal components)
-google_sheet_read.py      # A. Export Google Sheet rows to metadata/videos.json
-fetch_video_metadata.py   # B. Fetches detailed video metadata from YouTube
-download_audio.py         # C. Downloads video audio using yt-dlp
-isolate_vocals.py         # D. Isolates vocals from audio using Demucs
-transcribe_audio.py       # E. Transcribes audio to subtitles using Whisper
-normalize_srt.py          # F. Normalizes SRT timestamps and collapses duplicates
-translate_subtitles.py    # G. Translates subtitles using the OpenAI API
-upload_subtitles.py       # H. Uploads translated SRTs to Pastebin
-google_sheet_write.py     # I. Updates the Google Sheet with Pastebin links
-manifest_builder.py       # J. Builds the subtitles.json manifest
+google_sheet_read.py      # Export Google Sheet rows to metadata/videos.json
+fetch_video_metadata.py   # Fetch detailed video metadata from YouTube
+download_audio.py         # Download video audio using yt-dlp
+isolate_vocals.py         # Isolate vocals from audio using Demucs
+transcribe_audio.py       # Transcribe audio to subtitles using Whisper
+normalize_srt.py          # Normalize SRT timestamps and collapse duplicates
+translate_subtitles.py    # Translate subtitles using the OpenAI API
+upload_subtitles.py       # Upload translated SRTs to Pastebin
+google_sheet_write.py     # Update the Google Sheet with Pastebin links
+manifest_builder.py       # Build the subtitles.json manifest
 
 # Other Project Files
 .venv/                    # Python virtual environment

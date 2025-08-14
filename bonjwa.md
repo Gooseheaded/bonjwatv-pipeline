@@ -26,7 +26,7 @@ Key goals:
 - Normalize (`normalize_srt.py`) → normalized Korean SRT.
   - Translate (`translate_subtitles.py`) → `subtitles/en_{video_id}.srt`.
   - Upload (`upload_subtitles.py`) → Pastebin raw URL (cached).
-  - Update sheet (`update_sheet_to_google.py`) with paste URL.
+  - Update sheet (`google_sheet_write.py`) with paste URL.
 - Manifest: `manifest_builder.py` → `website/subtitles.json` for bonjwa.tv.
 
 ---
@@ -44,7 +44,7 @@ Key goals:
 /slang/ KoreanSlang.txt
 /website/ subtitles.json               # Final manifest for bonjwa.tv
 
-fetch_video_metadata.py download_audio.py isolate_vocals.py transcribe_audio.py whisper_postprocess.py translate_subtitles.py export_sheet_to_json.py manifest_builder.py pipeline_orchestrator.py README.md
+fetch_video_metadata.py download_audio.py isolate_vocals.py transcribe_audio.py normalize_srt.py translate_subtitles.py google_sheet_read.py google_sheet_write.py manifest_builder.py pipeline_orchestrator.py README.md
 
 ---
 
@@ -53,7 +53,7 @@ fetch_video_metadata.py download_audio.py isolate_vocals.py transcribe_audio.py 
 The full pipeline is composed of the following sequential steps, each implemented as a standalone Python script. The `pipeline_orchestrator.py` calls these scripts in order. All steps are idempotent—scripts will skip processing if the expected output already exists.
 
 ### A. Google Sheet Read (`google_sheet_read.py`)
-- **Purpose:** Export curated Google Sheet rows and save them as `video_list_file`.
+- Purpose: Export curated Google Sheet rows and save them as `video_list_file`.
 - Admin curates all videos and metadata in Google Sheets.
 - Export script reads the relevant worksheet and writes `video_list_file`.
 
@@ -71,15 +71,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 - Saves the `upload_date` and other relevant metadata to a JSON file.
 - Minimal logging to `logs/fetch_video_metadata.log` and stdout
 
-**Testing:**
-1. Pytest smoke test that:
-   - Creates a dummy existing file and asserts skip behavior
-   - Monkeypatches `yt_dlp.YoutubeDL` to simulate the API call and the creation of the JSON file.
-   - Verifies the content of the created JSON file.
-
-**Next Steps:**
-1. Write test suite for `fetch_video_metadata.py`
-2. Implement the script per this plan
+Testing: Implemented; see `tests/test_fetch_video_metadata.py`.
 
 ### C. Audio Download (`download_audio.py`)
 **Purpose:** Fetch YouTube audio tracks via `yt-dlp` and save as `.mp3` files for subsequent processing.
@@ -94,14 +86,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 - Uses `yt_dlp.YoutubeDL` with audio-extraction postprocessor to produce mp3
 - Minimal logging to `logs/download_audio.log` and stdout
 
-**Testing:**
-1. Pytest smoke test that:
-   - Creates a dummy existing file and asserts skip behavior
-   - Monkeypatches `yt_dlp.YoutubeDL` to simulate download and file creation
-
-**Next Steps:**
-1. Write test suite for `download_audio.py`
-2. Implement the script per this plan
+Testing: Implemented; see `tests/test_download_audio.py`.
 
 ### D. Vocal Isolation (Optional) (`isolate_vocals.py`)
 **Purpose:** Separate vocals from background audio using Demucs.
@@ -116,13 +101,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 - Uses `subprocess.run(['demucs', ...])` to invoke Demucs CLI
 - Minimal logging to `logs/isolate_vocals.log` and stdout
 
-**Testing:**
-1. Pytest smoke test for existing output skip
-2. Monkeypatch `subprocess.run` to simulate Demucs invocation and output file creation
-
-**Next Steps:**
-1. Write test suite for `isolate_vocals.py`
-2. Implement the script per this plan
+Testing: Implemented; see `tests/test_isolate_vocals.py`.
 
 ### E. Whisper Transcription (`transcribe_audio.py`)
 **Purpose:** Transcribe audio files to raw Korean SRT using OpenAI Whisper (local model).
@@ -138,13 +117,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 - Format timestamps from floats to `HH:MM:SS,mmm`
 - Write segments to `.srt`
 
-**Testing:**
-1. Pytest smoke test with a dummy Whisper module (monkeypatch importlib)
-2. Verify `.srt` file contents, indices, and timestamp formatting
-
-**Next Steps:**
-1. Write the test suite for `transcribe_audio.py`
-2. Implement the script per this plan
+Testing: Implemented; see `tests/test_transcribe_audio.py`.
 
 ### F. Normalize SRT (`normalize_srt.py`)
 **Purpose:** Clean up raw SRT by normalizing timestamp formats and collapsing duplicate subtitle blocks.
@@ -158,13 +131,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 - Collapse adjacent subtitle entries with identical text into a single block spanning the combined duration
 - Simple CLI (`--input-file`, `--output-file`) returning nonzero on error
 
-**Testing:**
-1. Create pytest smoke test that feeds a sample SRT with mixed timestamp formats and duplicate lines
-2. Assert normalized timestamps and collapsed duplicates in output
-
-**Next Steps:**
-1. Write the test suite for `whisper_postprocess.py`
-2. Implement the script per this plan
+Testing: Implemented; see `tests/test_normalize_srt.py`.
 
 ### G. Translate Subtitles (`translate_subtitles.py`)
 **Purpose:** Translate Korean `.srt` files to English `.srt` using the OpenAI API.
@@ -188,14 +155,7 @@ The full pipeline is composed of the following sequential steps, each implemente
  - Merge translated chunks, deduplicate overlaps, reindex subtitles
  - Minimal logging to stdout and log file
 
-**Testing:** A pytest-based smoke test will be created first to:
-   1. Verify parsing/chunking logic on a sample SRT
-   2. Mock the OpenAI client and test prompt construction
-   3. Ensure merged output preserves timestamps and formatting
-
-**Next Steps:**
-   1. Write the test suite for `translate_subtitles.py`
-   2. Implement the script per this plan
+Testing: Implemented; see `tests/test_translate_subtitles.py` and `tests/test_translate_subtitles_folder.py`.
 
 ### H. Upload Subtitles to Pastebin (`upload_subtitles.py`)
 **Purpose:** Upload translated English SRTs to Pastebin and retrieve raw URLs for public hosting.
@@ -218,12 +178,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 -- Use Pastebin API to create a new unlisted paste (no syntax highlighting)
 -- Minimal logging to `logs/upload_subtitles.log` and stdout
 
-**Testing:**
-1. Pytest smoke test mocking HTTP POST to Pastebin API and cache file creation
-
-**Next Steps:**
-1. Write test suite for `upload_subtitles.py`
-2. Implement the script per this plan
+Testing: Implemented; see `tests/test_upload_subtitles.py`.
 
 ### I. Google Sheet Write (`google_sheet_write.py`)
 **Purpose:** Write back the Pastebin URL (and/or status) into the source Google Sheet for each video.
@@ -239,12 +194,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 - Uses `gspread` to open the sheet, find rows by video ID, and update the designated column
 - Minimal logging to `logs/update_sheet.log` and stdout
 
-**Testing:**
-1. Pytest smoke test monkeypatching `gspread` to simulate row lookup and cell update
-
-**Next Steps:**
-1. Write test suite for `update_sheet_to_google.py`
-2. Implement the script per this plan
+Testing: Implemented; see `tests/test_google_sheet_write.py`.
 
 ### J. Manifest Builder (`manifest_builder.py`)
 - **Purpose:** Builds the final `subtitles.json` manifest for the website.
