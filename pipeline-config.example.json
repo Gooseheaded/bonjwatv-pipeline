@@ -17,7 +17,7 @@
     "download_audio",
     "isolate_vocals",
     "transcribe_audio",
-    "whisper_postprocess",
+    "normalize_srt",
     "translate_subtitles",
     "upload_subtitles",
     "google_sheet_write",

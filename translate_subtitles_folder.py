@@ -8,7 +8,7 @@ import argparse
 
 from common import setup_logging
 from translate_subtitles import translate_srt_file
-from whisper_postprocess import process_srt_file
+from normalize_srt import process_srt_file
 import tempfile
 
 log = setup_logging(__name__, 'logs/translate_folder.log')
@@ -37,7 +37,7 @@ def main():
     input_dir = args.input_dir
     output_dir = args.output_dir
 
-    # Use a temporary workspace to whisper-postprocess raw .srt before translation
+    # Use a temporary workspace to normalize raw .srt before translation
     with tempfile.TemporaryDirectory(prefix='cleaned_srt_') as clean_root:
         for root, _, files in os.walk(input_dir, topdown=False):
             for fname in files:

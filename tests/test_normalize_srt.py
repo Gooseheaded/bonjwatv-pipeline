@@ -3,7 +3,7 @@ import sys
 
 sys.path.insert(0, os.getcwd())
 
-from whisper_postprocess import process_srt_file
+from normalize_srt import process_srt_file
 
 SAMPLE_RAW = '''1
 59.9 --> 69.9
@@ -38,7 +38,7 @@ def test_process_srt_file(tmp_path):
     assert 'World' in text
 
 def test_normalize_timestamp_overflow():
-    from whisper_postprocess import normalize_timestamp
+    from normalize_srt import normalize_timestamp
 
     # No overflow remains unchanged except zero-padding
     assert normalize_timestamp('00:00:10,005') == '00:00:10,005'

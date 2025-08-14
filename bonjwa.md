@@ -23,7 +23,7 @@ Key goals:
   - Download audio (`download_audio.py`) → `audio/{video_id}.mp3`.
   - Isolate vocals (optional, `isolate_vocals.py`) → `vocals/{video_id}/vocals.wav`.
   - Transcribe (`transcribe_audio.py`) → `subtitles/kr_{video_id}.srt`.
-  - Post-process (`whisper_postprocess.py`) → normalized Korean SRT.
+- Normalize (`normalize_srt.py`) → normalized Korean SRT.
   - Translate (`translate_subtitles.py`) → `subtitles/en_{video_id}.srt`.
   - Upload (`upload_subtitles.py`) → Pastebin raw URL (cached).
   - Update sheet (`update_sheet_to_google.py`) with paste URL.
@@ -146,8 +146,8 @@ The full pipeline is composed of the following sequential steps, each implemente
 1. Write the test suite for `transcribe_audio.py`
 2. Implement the script per this plan
 
-### F. Whisper Post-Processing (`whisper_postprocess.py`)
-**Purpose:** Clean up raw Whisper-generated SRT by normalizing timestamp formats and collapsing duplicate subtitle blocks.
+### F. Normalize SRT (`normalize_srt.py`)
+**Purpose:** Clean up raw SRT by normalizing timestamp formats and collapsing duplicate subtitle blocks.
 
 **Inputs/Outputs:**
 - Input: `subtitles/kr_{video_id}.srt` (raw)
@@ -261,7 +261,7 @@ The full pipeline is composed of the following sequential steps, each implemente
 - `pipeline_orchestrator.py` (Python CLI):
 - Reads `pipeline-config.json` and executes an ordered list of `steps`.
 - Global steps (run once): `google_sheet_read` (export sheet to JSON), `google_sheet_write` (write Pastebin URLs), `manifest_builder` (build website manifest).
-- Per-video steps (run for each `v` in `videos.json`): `fetch_video_metadata`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `whisper_postprocess`, `translate_subtitles`, `upload_subtitles`.
+- Per-video steps (run for each `v` in `videos.json`): `fetch_video_metadata`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `normalize_srt`, `translate_subtitles`, `upload_subtitles`.
 - Validates `steps` presence and order (e.g., `google_sheet_read` before per-video steps; `manifest_builder` last).
 - Logs progress and errors; continues on per-video failures to process subsequent videos.
 

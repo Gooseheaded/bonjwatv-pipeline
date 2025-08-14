@@ -54,7 +54,7 @@ def main():
         'download_audio',
         'isolate_vocals',
         'transcribe_audio',
-        'whisper_postprocess',
+        'normalize_srt',
         'translate_subtitles',
         'upload_subtitles',
     ]
@@ -145,9 +145,9 @@ def main():
                                  '--input-file', audio_path,
                                  '--output-file', kr_srt]):
                     break
-            elif s == 'whisper_postprocess':
+            elif s == 'normalize_srt':
                 kr_srt = os.path.join(subtitles_dir, f'kr_{vid}.srt')
-                if not run_step(['python', 'whisper_postprocess.py',
+                if not run_step(['python', 'normalize_srt.py',
                                  '--input-file', kr_srt,
                                  '--output-file', kr_srt]):
                     break

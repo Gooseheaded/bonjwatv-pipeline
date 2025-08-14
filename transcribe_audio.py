@@ -5,7 +5,7 @@ import logging
 from common import setup_logging
 import importlib
 
-from whisper_postprocess import process_srt_file
+from normalize_srt import process_srt_file
 
 
 def format_timestamp(seconds: float) -> str:

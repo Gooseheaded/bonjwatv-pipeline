@@ -101,7 +101,7 @@ pytest -q
   ```
   The `steps` array defines the pipeline order. Allowed values:
   - Global: `google_sheet_read`, `google_sheet_write`, `manifest_builder`
-  - Per-video: `fetch_video_metadata`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `whisper_postprocess`, `translate_subtitles`, `upload_subtitles`
+  - Per-video: `fetch_video_metadata`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `normalize_srt`, `translate_subtitles`, `upload_subtitles`
   Then run the orchestrator:
   ```bash
   python pipeline_orchestrator.py --config pipeline-config.json
@@ -113,7 +113,7 @@ pytest -q
 - Chunking: `--chunk-size 50`, `--overlap 5`
 - Directories: `audio/`, `subtitles/`, `metadata/`, `.cache/`, `website/`
 - Whisper transcription: `--model-size large`, `--language ko`
-- Orchestrator config: see `pipeline-config.json` for `video_list_file`, dirs, and `skip_steps`
+- Orchestrator config: see `pipeline-config.json` for `video_list_file`, dirs, and ordered `steps`
 
 ## Project Layout
 
@@ -130,7 +130,7 @@ fetch_video_metadata.py   # B. Fetches detailed video metadata from YouTube
 download_audio.py         # C. Downloads video audio using yt-dlp
 isolate_vocals.py         # D. Isolates vocals from audio using Demucs
 transcribe_audio.py       # E. Transcribes audio to subtitles using Whisper
-whisper_postprocess.py    # F. Post-processes raw Whisper SRT files
+normalize_srt.py          # F. Normalizes SRT timestamps and collapses duplicates
 translate_subtitles.py    # G. Translates subtitles using the OpenAI API
 upload_subtitles.py       # H. Uploads translated SRTs to Pastebin
 google_sheet_write.py     # I. Updates the Google Sheet with Pastebin links
