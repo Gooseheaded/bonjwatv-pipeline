@@ -4,6 +4,7 @@ import json
 import subprocess
 import argparse
 import logging
+from run_paths import compute_run_paths
 
 
 def setup_logging():
@@ -56,11 +57,14 @@ def main():
         'transcribe_audio',
         'normalize_srt',
         'translate_subtitles',
+        'translate_title',
         'upload_subtitles',
     ]
     allowed_global = [
         'google_sheet_read',
         'google_sheet_write',
+        'read_youtube_urls',
+        'build_videos_json',
         'manifest_builder',
     ]
     allowed = set(allowed_per_video + allowed_global)
@@ -76,15 +80,21 @@ def main():
             exit(1)
         seen.add(s)
 
+    # Enforce single source of videos.json: either Google Sheet or URL list, not both
+    if 'google_sheet_read' in steps and 'read_youtube_urls' in steps:
+        logging.error('Use only one source step: either google_sheet_read or read_youtube_urls, not both')
+        exit(1)
+
     if 'manifest_builder' in steps and steps[-1] != 'manifest_builder':
         logging.error('manifest_builder must be the last step in the list')
         exit(1)
-    if 'google_sheet_read' in steps:
-        gs_read_index = steps.index('google_sheet_read')
-        for s in steps:
-            if s in allowed_per_video and steps.index(s) < gs_read_index:
-                logging.error('google_sheet_read must come before all per-video steps')
-                exit(1)
+    for gstep in ('google_sheet_read', 'read_youtube_urls'):
+        if gstep in steps:
+            g_index = steps.index(gstep)
+            for s in steps:
+                if s in allowed_per_video and steps.index(s) < g_index:
+                    logging.error('%s must come before all per-video steps', gstep)
+                    exit(1)
 
     video_list_file = config['video_list_file']
     video_metadata_dir = config['video_metadata_dir']
@@ -95,6 +105,22 @@ def main():
     slang_file = config['slang_file']
     website_dir = config['website_dir']
 
+    # If using URL list workflow, derive per-run directories from URLs filename
+    if 'read_youtube_urls' in steps:
+        urls_file = config.get('urls_file', '')
+        if not urls_file:
+            logging.error('urls_file must be set in config when using read_youtube_urls')
+            exit(1)
+        paths = compute_run_paths(urls_file)
+        video_list_file = paths['video_list_file']
+        audio_dir = paths['audio_dir']
+        vocals_dir = paths['vocals_dir']
+        subtitles_dir = paths['subtitles_dir']
+        cache_dir = paths['cache_dir']
+        # Ensure directories exist
+        for d in (os.path.dirname(video_list_file), audio_dir, vocals_dir, subtitles_dir, cache_dir):
+            os.makedirs(d, exist_ok=True)
+
     # Execute global steps that come before per-video steps
     for s in steps:
         if s == 'google_sheet_read':
@@ -104,6 +130,12 @@ def main():
                              '--output', video_list_file,
                              '--service-account-file', config.get('service_account_file', '')]):
                 logging.error('google_sheet_read failed, aborting pipeline')
+                exit(1)
+        elif s == 'read_youtube_urls':
+            if not run_step(['python', 'read_youtube_urls.py',
+                             '--urls-file', config.get('urls_file', ''),
+                             '--output', video_list_file]):
+                logging.error('read_youtube_urls failed, aborting pipeline')
                 exit(1)
         elif s in allowed_per_video:
             break
@@ -160,6 +192,12 @@ def main():
                                  '--slang-file', slang_file,
                                  '--cache-dir', cache_dir]):
                     break
+            elif s == 'translate_title':
+                if not run_step(['python', 'translate_title.py',
+                                 '--video-id', vid,
+                                 '--metadata-dir', video_metadata_dir,
+                                 '--cache-dir', cache_dir]):
+                    break
             elif s == 'upload_subtitles':
                 en_srt = os.path.join(subtitles_dir, f'en_{vid}.srt')
                 if not run_step(['python', 'upload_subtitles.py',
@@ -178,6 +216,12 @@ def main():
                              '--column-name', config.get('sheet_column', ''),
                              '--service-account-file', config.get('service_account_file', '')]):
                 logging.error('google_sheet_write failed')
+        elif s == 'build_videos_json':
+            if not run_step(['python', 'build_videos_json.py',
+                             '--video-list-file', video_list_file,
+                             '--metadata-dir', video_metadata_dir,
+                             '--cache-dir', cache_dir]):
+                logging.error('build_videos_json failed')
         elif s == 'manifest_builder':
             manifest_out = os.path.join(website_dir, 'subtitles.json')
             run_step(['python', 'manifest_builder.py',

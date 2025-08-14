@@ -3,9 +3,41 @@
 Subtitle processing pipeline for Bonjwa.tv, implementing transcription, post-processing, translation,
 and orchestration of Korean StarCraft: Brood War video subtitles.
 
+## Quickstart: URL Workflow
+
+1) Create a list of YouTube URLs (one per line):
+```
+mkdir -p metadata
+cat > metadata/urls.txt <<'EOF'
+https://www.youtube.com/watch?v=abcDEF123
+https://youtu.be/XYZ_987
+EOF
+```
+2) Copy the config and run (uses ordered steps including `read_youtube_urls`, `fetch_video_metadata`, `translate_title`, `build_videos_json`).
+   The pipeline will create a per-run folder named after `urls.txt` (e.g., `metadata/urls`), and place `audio/`, `vocals/`, `subtitles/`, and `.cache/` inside it.
+```
+cp pipeline-config.example.json pipeline-config.json
+python pipeline_orchestrator.py --config pipeline-config.json
+```
+
 ## Workflows
 
-This project supports two primary workflows for subtitle processing: a simple, ad-hoc folder translation and a comprehensive, end-to-end pipeline.
+This project supports two primary workflows for subtitle processing: a default URL-list pipeline and a simple ad-hoc folder translation.
+
+### 0. Default Workflow: URL List → Pipeline
+
+Provide a text file with YouTube URLs (one per line). The pipeline will parse IDs, fetch metadata, translate video titles, enrich `videos.json`, and optionally run audio/transcription/translation/upload and manifest steps.
+
+Example `metadata/urls.txt`:
+```
+https://www.youtube.com/watch?v=abcDEF123
+https://youtu.be/XYZ_987
+```
+
+Run with ordered steps (see config template):
+```
+python pipeline_orchestrator.py --config pipeline-config.json
+```
 
 ### 1. Simple Workflow: Ad-hoc Folder Translation
 
@@ -23,21 +55,21 @@ python translate_subtitles_folder.py \
 ```
 Ensure you have an `.env` file in the project root containing your `OPENAI_API_KEY`.
 
-### 2. Advanced Workflow: Full End-to-End Pipeline
+### 2. Advanced Workflow: Full End-to-End Pipeline (Google Sheet)
 
 For fully automated, large-scale processing, the `pipeline_orchestrator.py` script manages the entire pipeline from video to final translated subtitles. This is the "fat" pipeline that handles all steps.
 
-This advanced workflow typically includes (order is configurable via `steps`):
-1.  Export video rows from Google Sheet (`google_sheet_read.py`).
-2.  Fetch YouTube metadata per video (`fetch_video_metadata.py`).
+Typical steps (configurable via `steps`):
+1.  Export rows (`google_sheet_read.py`).
+2.  Fetch metadata (`fetch_video_metadata.py`).
 3.  Download audio (`download_audio.py`).
 4.  Isolate vocals (optional) (`isolate_vocals.py`).
 5.  Transcribe to Korean SRT (`transcribe_audio.py`).
-6.  Normalize SRT timestamps and collapse duplicates (`normalize_srt.py`).
-7.  Translate subtitles to English (`translate_subtitles.py`).
-8.  Upload translated SRTs to Pastebin (`upload_subtitles.py`).
-9.  Write Pastebin URLs back to the sheet (`google_sheet_write.py`).
-10. Build the website manifest (`manifest_builder.py`).
+6.  Normalize SRT (`normalize_srt.py`).
+7.  Translate subtitles (`translate_subtitles.py`).
+8.  Upload to Pastebin (`upload_subtitles.py`).
+9.  Write URLs back (`google_sheet_write.py`).
+10. Build manifest (`manifest_builder.py`).
 
 This workflow is ideal for batch processing and requires credentials for Google Sheets and Pastebin in addition to the OpenAI API key.
 
@@ -104,8 +136,9 @@ pytest -q
   # edit spreadsheet, worksheet, and service_account_file
   ```
   The `steps` array defines the pipeline order. Allowed values:
-  - Global: `google_sheet_read`, `google_sheet_write`, `manifest_builder`
-  - Per-video: `fetch_video_metadata`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `normalize_srt`, `translate_subtitles`, `upload_subtitles`
+  - Global: `read_youtube_urls`, `build_videos_json`, `google_sheet_read`, `google_sheet_write`, `manifest_builder`
+  - Per-video: `fetch_video_metadata`, `translate_title`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `normalize_srt`, `translate_subtitles`, `upload_subtitles`
+  - Note: Use exactly one source step: either `read_youtube_urls` (URL workflow) or `google_sheet_read` (legacy), not both.
   Then run the orchestrator:
   ```bash
   python pipeline_orchestrator.py --config pipeline-config.json

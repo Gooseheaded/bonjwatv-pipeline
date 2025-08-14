@@ -214,6 +214,7 @@ Testing: Implemented; see `tests/test_google_sheet_write.py`.
 - Per-video steps (run for each `v` in `videos.json`): `fetch_video_metadata`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `normalize_srt`, `translate_subtitles`, `upload_subtitles`.
 - Validates `steps` presence and order (e.g., `google_sheet_read` before per-video steps; `manifest_builder` last).
 - Logs progress and errors; continues on per-video failures to process subsequent videos.
+ - Sources are mutually exclusive: use exactly one of `read_youtube_urls` (URL workflow) or `google_sheet_read` (legacy Sheet export).
 
 ---
 
@@ -239,19 +240,35 @@ Testing: Implemented; see `tests/test_google_sheet_write.py`.
 
 ## 7. Sample Workflow
 
-# 1. Export Google Sheets as videos.json
+### A. Default: URL file → pipeline
 
+1) Create `metadata/urls.txt` with one YouTube URL per line.
+2) Use steps like: `read_youtube_urls`, `fetch_video_metadata`, `translate_title`, `build_videos_json`, …, `manifest_builder`.
+   The pipeline derives a per-run folder named after the URLs filename (e.g., `metadata/urls/`) and places `audio/`, `vocals/`, `subtitles/`, and `.cache/` inside it. Global paths like `website_dir`, `slang_file`, and Google Sheets configs remain unchanged.
+3) Run:
+```
+python pipeline_orchestrator.py --config pipeline-config.json
+```
+
+### B. Google Sheet → pipeline
+
+1) Export Google Sheets as videos.json
+
+```
 python google_sheet_read.py \
   --spreadsheet "Translation Tracking" \
   --worksheet "Translated Videos" \
   --output metadata/videos.json \
   --service-account-file path/to/service-account.json
+```
 
-# 2. Run orchestrator to process new/changed videos
+2) Run orchestrator to process new/changed videos
 
+```
 python pipeline_orchestrator.py --config pipeline-config.json
+```
 
-# 3. Deploy /website/subtitles.json and SRTs to bonjwa.tv
+3) Deploy `/website/subtitles.json` and SRTs to bonjwa.tv
 
 ---
 
@@ -264,6 +281,10 @@ python pipeline_orchestrator.py --config pipeline-config.json
 - Modular scripts: Each Python script should work independently, accept CLI args, and return nonzero exit code on failure
 - Testing: All major scripts should have basic smoke tests (e.g., run on a test row/video)
 - Documentation: README.md with all usage instructions, dependencies, known issues
+
+### Naming Convention
+- Default: `action_resource` for steps and filenames (e.g., `fetch_video_metadata`, `translate_title`, `build_videos_json`).
+- Exception: Google Sheets helpers keep `google_sheet_read` / `google_sheet_write`.
 
 ---
 
@@ -316,3 +337,44 @@ python pipeline_orchestrator.py --config pipeline-config.json
 ---
 
 # END OF DOCUMENT
+
+---
+
+## 11. Planned Feature: URL-file Workflow and Title Translation
+
+Overview
+- Default workflow uses a plain text file with one YouTube URL per line to generate an equivalent `videos.json` to the current Google Sheet export.
+- For each URL, derive `video_id`, fetch metadata, translate the title, and build `videos.json` entries with: `v` (id), `youtube_url`, `Creator`, and `EN Title`.
+- Keep Google Sheet workflow intact and optional.
+
+Input handling
+ - Introduce a dedicated input for URLs (e.g., `urls_file`).
+ - Global step `read_youtube_urls`: parse `urls_file`, extract `video_id`, dedupe, validate forms (`watch?v=…`, `youtu.be/…`, `shorts/…`), and write a minimal `videos.json` to `video_list_file` with objects `{ "v": id, "youtube_url": url }`.
+
+Per‑video step: `translate_title`
+- Script: `translate_title.py`.
+- Inputs: `metadata/{video_id}.json` (source title), OpenAI key.
+- Output cache: `.cache/title_{video_id}.json` with `{ "title_en": "<translated>", "source_hash": "<sha1_of_source_title>" }`.
+- Behavior: idempotent; if cache exists and `source_hash` matches, skip. Use retry/backoff like subtitle translation.
+- Recommended order: run after `fetch_video_metadata`.
+
+videos.json build
+ - Global step `build_videos_json` writes `video_list_file` (JSON) enriched with fields beyond the initial `{ v, youtube_url }`:
+  - `EN Title`: taken from cached translation; if absent, fallback to original title from `metadata/{video_id}.json`.
+  - `Creator`: from `metadata/{video_id}.json` (e.g., uploader/channel name).
+- This step can also preserve any existing keys (e.g., when using Google Sheet workflow) and only fill missing fields.
+
+Config and steps
+ - Add an optional `urls_file` key (path to URLs .txt). `video_list_file` remains the canonical JSON output consumed by other steps.
+ - Default steps for URL‑file workflow:
+   1) `read_youtube_urls` (global)
+   2) per‑video: `fetch_video_metadata`, `translate_title`
+   3) `build_videos_json` (global)
+   4) optional downstream per‑video steps: `download_audio`, `isolate_vocals`, `transcribe_audio`, `normalize_srt`, `translate_subtitles`, `upload_subtitles`
+   5) `manifest_builder` (global)
+ - Google Sheet steps (`google_sheet_read`/`google_sheet_write`) remain optional/alternative.
+
+Testing plan (to implement with the feature)
+- `youtube_urls_read`: valid/invalid URL parsing, dedupe, and warnings; writes minimal JSON.
+- `translate_title.py`: mock OpenAI; verify cache write and idempotency via `source_hash`.
+- `videos_json_build`: merges creator and title from metadata/cache; preserves existing fields; verifies enriched `videos.json`.

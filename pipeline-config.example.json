@@ -11,16 +11,18 @@
   "spreadsheet": "Translation Tracking",
   "worksheet": "Translated Videos",
   "sheet_column": "Pastebin URL",
+  "urls_file": "metadata/urls.txt",
   "steps": [
-    "google_sheet_read",
+    "read_youtube_urls",
     "fetch_video_metadata",
+    "translate_title",
+    "build_videos_json",
     "download_audio",
     "isolate_vocals",
     "transcribe_audio",
     "normalize_srt",
     "translate_subtitles",
     "upload_subtitles",
-    "google_sheet_write",
     "manifest_builder"
   ]
 }
