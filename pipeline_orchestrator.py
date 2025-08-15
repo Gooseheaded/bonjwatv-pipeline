@@ -171,10 +171,12 @@ def main():
                                  '--output-dir', vocals_dir]):
                     break
             elif s == 'transcribe_audio':
-                audio_path = os.path.join(audio_dir, f'{vid}.mp3')
+                # Prefer isolated vocals if available; fall back to original audio
+                vocals_path = os.path.join(vocals_dir, vid, 'vocals.wav')
+                input_audio = vocals_path if os.path.exists(vocals_path) else os.path.join(audio_dir, f'{vid}.mp3')
                 kr_srt = os.path.join(subtitles_dir, f'kr_{vid}.srt')
                 if not run_step(['python', 'transcribe_audio.py',
-                                 '--input-file', audio_path,
+                                 '--input-file', input_audio,
                                  '--output-file', kr_srt]):
                     break
             elif s == 'normalize_srt':
@@ -205,6 +207,9 @@ def main():
                                  '--cache-dir', cache_dir]):
                     break
 
+    # Prepare enriched videos path
+    enriched_videos = os.path.join(os.path.dirname(os.path.abspath(video_list_file)), 'videos_enriched.json')
+
     # Execute remaining global steps in order
     for s in steps:
         if s == 'google_sheet_write':
@@ -220,12 +225,15 @@ def main():
             if not run_step(['python', 'build_videos_json.py',
                              '--video-list-file', video_list_file,
                              '--metadata-dir', video_metadata_dir,
-                             '--cache-dir', cache_dir]):
+                             '--cache-dir', cache_dir,
+                             '--output', enriched_videos]):
                 logging.error('build_videos_json failed')
         elif s == 'manifest_builder':
             manifest_out = os.path.join(website_dir, 'subtitles.json')
+            # Use enriched videos list if it has been built in this run
+            videos_input = enriched_videos if 'build_videos_json' in steps else video_list_file
             run_step(['python', 'manifest_builder.py',
-                      '--video-list-file', video_list_file,
+                      '--video-list-file', videos_input,
                       '--subtitles-dir', subtitles_dir,
                       '--output-file', manifest_out,
                       '--details-dir', video_metadata_dir])

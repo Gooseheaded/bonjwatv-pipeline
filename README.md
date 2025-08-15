@@ -13,8 +13,7 @@ https://www.youtube.com/watch?v=abcDEF123
 https://youtu.be/XYZ_987
 EOF
 ```
-2) Copy the config and run (uses ordered steps including `read_youtube_urls`, `fetch_video_metadata`, `translate_title`, `build_videos_json`).
-   The pipeline will create a per-run folder named after `urls.txt` (e.g., `metadata/urls`), and place `audio/`, `vocals/`, `subtitles/`, and `.cache/` inside it.
+2) Copy the config and run (uses ordered steps including `read_youtube_urls`, `fetch_video_metadata`, `translate_title`, `build_videos_json`). The pipeline will create a per-run folder named after `urls.txt` (e.g., `metadata/urls`), and place `audio/`, `vocals/`, `subtitles/`, and `.cache/` inside it. It writes the minimal `videos.json` and an enriched `videos_enriched.json` used by downstream steps like the manifest.
 ```
 cp pipeline-config.example.json pipeline-config.json
 python pipeline_orchestrator.py --config pipeline-config.json
@@ -26,7 +25,7 @@ This project supports two primary workflows for subtitle processing: a default U
 
 ### 0. Default Workflow: URL List → Pipeline
 
-Provide a text file with YouTube URLs (one per line). The pipeline will parse IDs, fetch metadata, translate video titles, enrich `videos.json`, and optionally run audio/transcription/translation/upload and manifest steps.
+Provide a text file with YouTube URLs (one per line). The pipeline will parse IDs, fetch metadata, translate video titles, write a minimal `videos.json`, and then produce an enriched `videos_enriched.json` (adds Creator + EN Title). You can optionally run audio/transcription/translation/upload and manifest steps.
 
 Example `metadata/urls.txt`:
 ```

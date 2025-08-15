@@ -27,7 +27,8 @@ def test_build_videos_json_enriches_fields(tmp_path):
     (metadata_dir / 'id2.json').write_text(json.dumps({'title': '다른 제목', 'uploader': 'Creator2'}), encoding='utf-8')
 
     build_videos_json(str(video_list), str(metadata_dir), str(cache_dir))
-    data = json.loads(video_list.read_text(encoding='utf-8'))
+    enriched = tmp_path / 'videos_enriched.json'
+    data = json.loads(enriched.read_text(encoding='utf-8'))
     d1 = next(x for x in data if x['v'] == 'id1')
     d2 = next(x for x in data if x['v'] == 'id2')
 
@@ -35,4 +36,3 @@ def test_build_videos_json_enriches_fields(tmp_path):
     assert d1['Creator'] == 'Creator1'
     assert d2['EN Title'] == 'Preset EN'  # preserved
     assert d2['Creator'] == 'Creator2'
-

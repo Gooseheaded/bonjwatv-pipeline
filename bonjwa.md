@@ -359,7 +359,7 @@ Per‑video step: `translate_title`
 - Recommended order: run after `fetch_video_metadata`.
 
 videos.json build
- - Global step `build_videos_json` writes `video_list_file` (JSON) enriched with fields beyond the initial `{ v, youtube_url }`:
+ - Global step `build_videos_json` writes an enriched file separate from the minimal list (default name `videos_enriched.json`) with fields beyond the initial `{ v, youtube_url }`:
   - `EN Title`: taken from cached translation; if absent, fallback to original title from `metadata/{video_id}.json`.
   - `Creator`: from `metadata/{video_id}.json` (e.g., uploader/channel name).
 - This step can also preserve any existing keys (e.g., when using Google Sheet workflow) and only fill missing fields.

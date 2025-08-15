@@ -9,14 +9,16 @@ import yt_dlp
 
 def download_audio(url: str, video_id: str, output_dir: str = 'audio') -> str:
     os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"{video_id}.mp3")
-    if os.path.exists(output_path):
-        logging.info(f"{output_path} already exists, skipping download")
-        return output_path
+    # Final expected path after extraction
+    final_path = os.path.join(output_dir, f"{video_id}.mp3")
+    if os.path.exists(final_path):
+        logging.info(f"{final_path} already exists, skipping download")
+        return final_path
 
+    # Use a template without a fixed extension; the postprocessor will write .mp3
     ydl_opts = {
         'format': 'bestaudio',
-        'outtmpl': output_path,
+        'outtmpl': os.path.join(output_dir, f"{video_id}.%(ext)s"),
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -26,8 +28,8 @@ def download_audio(url: str, video_id: str, output_dir: str = 'audio') -> str:
     ydl = yt_dlp.YoutubeDL(ydl_opts)
     ydl.download([url])
 
-    logging.info(f"Downloaded audio to {output_path}")
-    return output_path
+    logging.info(f"Downloaded audio to {final_path}")
+    return final_path
 
 
 log = setup_logging(__name__, 'logs/download_audio.log')

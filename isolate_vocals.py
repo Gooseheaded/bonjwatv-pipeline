@@ -8,7 +8,7 @@ from common import setup_logging
 
 def isolate_vocals(input_file: str,
                    output_dir: str = 'vocals',
-                   model: str = 'demucs',
+                   model: str = 'htdemucs',
                    two_stems: bool = False) -> str:
     if not os.path.exists(input_file):
         raise FileNotFoundError(f"Input audio not found: {input_file}")
@@ -22,9 +22,11 @@ def isolate_vocals(input_file: str,
         logging.info(f"{output_path} already exists, skipping isolation")
         return output_path
 
-    cmd = ['demucs', '--model', model]
+    cmd = ['demucs']
+    if model:
+        cmd += ['-n', model]
     if two_stems:
-        cmd.append('--two-stems')
+        cmd += ['--two-stems', 'vocals']
     cmd += ['--out', output_dir, input_file]
 
     subprocess.run(cmd, check=True)
@@ -39,7 +41,7 @@ def main():
     p = argparse.ArgumentParser(description='Isolate vocals from audio using Demucs')
     p.add_argument('--input-file', required=True, help='Path to input audio file')
     p.add_argument('--output-dir', default='vocals', help='Directory for isolated vocals')
-    p.add_argument('--model', default='demucs', help='Demucs model name')
+    p.add_argument('--model', default='htdemucs', help='Demucs model name (e.g., htdemucs)')
     p.add_argument('--two-stems', action='store_true', help='Enable two-stems separation')
     args = p.parse_args()
 

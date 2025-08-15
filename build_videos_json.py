@@ -19,7 +19,10 @@ def read_title_cache(cache_dir: str, vid: str) -> dict:
 
 
 def build_videos_json(video_list_file: str, metadata_dir: str, cache_dir: str, output: str = None) -> None:
-    output = output or video_list_file
+    # By default, write an enriched file separate from the source list
+    if output is None:
+        base_dir = os.path.dirname(os.path.abspath(video_list_file))
+        output = os.path.join(base_dir, 'videos_enriched.json')
     items = json.load(open(video_list_file, encoding='utf-8'))
     enriched = []
     for item in items:
@@ -56,4 +59,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
