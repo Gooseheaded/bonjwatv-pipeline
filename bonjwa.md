@@ -16,18 +16,19 @@ Key goals:
 
 ## 1. High-Level Architecture
 
-- Source curation: Google Sheets → exported to `videos.json`.
-- Orchestrator: `pipeline_orchestrator.py` reads config and coordinates steps.
+- Default source: URLs .txt (`read_youtube_urls.py`) → minimal per-run `videos.json` inside a derived run folder.
+- Title flow: `translate_title.py` caches English titles → `build_videos_json.py` writes `videos_enriched.json` (adds Creator + EN Title).
+- Orchestrator: `pipeline_orchestrator.py` reads config and coordinates ordered `steps`.
 - Steps per video:
   - Fetch metadata (`fetch_video_metadata.py`) → `metadata/{video_id}.json`.
-  - Download audio (`download_audio.py`) → `audio/{video_id}.mp3`.
-  - Isolate vocals (optional, `isolate_vocals.py`) → `vocals/{video_id}/vocals.wav`.
-  - Transcribe (`transcribe_audio.py`) → `subtitles/kr_{video_id}.srt`.
+  - Download audio (`download_audio.py`) → `<run>/audio/{video_id}.mp3`.
+  - Isolate vocals (`isolate_vocals.py`) → `<run>/vocals/{video_id}/vocals.wav`.
+  - Transcribe (`transcribe_audio.py`) → `<run>/subtitles/kr_{video_id}.srt` (prefers vocals if present).
 - Normalize (`normalize_srt.py`) → normalized Korean SRT.
-  - Translate (`translate_subtitles.py`) → `subtitles/en_{video_id}.srt`.
+  - Translate (`translate_subtitles.py`) → `<run>/subtitles/en_{video_id}.srt`.
   - Upload (`upload_subtitles.py`) → Pastebin raw URL (cached).
-  - Update sheet (`google_sheet_write.py`) with paste URL.
-- Manifest: `manifest_builder.py` → `website/subtitles.json` for bonjwa.tv.
+- Legacy source (optional): `google_sheet_read.py` / `google_sheet_write.py`.
+- Manifest: `manifest_builder.py` → `website/subtitles.json` (uses `videos_enriched.json` when present).
 
 ---
 
@@ -210,11 +211,11 @@ Testing: Implemented; see `tests/test_google_sheet_write.py`.
 
 - `pipeline_orchestrator.py` (Python CLI):
 - Reads `pipeline-config.json` and executes an ordered list of `steps`.
-- Global steps (run once): `google_sheet_read` (export sheet to JSON), `google_sheet_write` (write Pastebin URLs), `manifest_builder` (build website manifest).
-- Per-video steps (run for each `v` in `videos.json`): `fetch_video_metadata`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `normalize_srt`, `translate_subtitles`, `upload_subtitles`.
-- Validates `steps` presence and order (e.g., `google_sheet_read` before per-video steps; `manifest_builder` last).
+- Global steps (run once): `read_youtube_urls` (from URLs .txt), `build_videos_json` (write enriched list), `google_sheet_read`/`google_sheet_write` (legacy), `manifest_builder` (build website manifest).
+- Per-video steps (run for each `v`): `fetch_video_metadata`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `normalize_srt`, `translate_subtitles`, `upload_subtitles`.
+- Validates `steps` presence and order (e.g., source before per-video; `manifest_builder` last); sources are mutually exclusive (`read_youtube_urls` vs `google_sheet_read`).
+- Prefers isolated vocals for transcription when available; falls back to MP3.
 - Logs progress and errors; continues on per-video failures to process subsequent videos.
- - Sources are mutually exclusive: use exactly one of `read_youtube_urls` (URL workflow) or `google_sheet_read` (legacy Sheet export).
 
 ---
 
@@ -243,8 +244,8 @@ Testing: Implemented; see `tests/test_google_sheet_write.py`.
 ### A. Default: URL file → pipeline
 
 1) Create `metadata/urls.txt` with one YouTube URL per line.
-2) Use steps like: `read_youtube_urls`, `fetch_video_metadata`, `translate_title`, `build_videos_json`, …, `manifest_builder`.
-   The pipeline derives a per-run folder named after the URLs filename (e.g., `metadata/urls/`) and places `audio/`, `vocals/`, `subtitles/`, and `.cache/` inside it. Global paths like `website_dir`, `slang_file`, and Google Sheets configs remain unchanged.
+2) Use steps like: `read_youtube_urls`, `fetch_video_metadata`, `translate_title`, `build_videos_json`, then any processing steps (download → isolate → transcribe → normalize → translate). Use `manifest_builder` at the end if needed.
+   The pipeline derives a per-run folder named after the URLs filename (e.g., `metadata/urls/`) and places `audio/`, `vocals/`, `subtitles/`, and `.cache/` inside it. It writes a minimal `videos.json` and an enriched `videos_enriched.json` (adds Creator + EN Title). Global paths like `website_dir`, `slang_file`, and Google Sheets configs remain unchanged.
 3) Run:
 ```
 python pipeline_orchestrator.py --config pipeline-config.json

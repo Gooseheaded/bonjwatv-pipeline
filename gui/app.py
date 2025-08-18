@@ -107,8 +107,13 @@ class App(tk.Tk):
                         command=self.refresh_states).grid(row=1, column=0, sticky="w", padx=(8, 8))
 
         # Step 3
-        ttk.Checkbutton(pipe, text="Transcribe korean subtitles", variable=self.vars["do_transcribe"],
-                        command=self.refresh_states).grid(row=2, column=0, sticky="w", padx=(8, 8))
+        step3_frame = ttk.Frame(pipe)
+        step3_frame.grid(row=2, column=0, sticky="w")
+        ttk.Checkbutton(step3_frame, text="Transcribe korean subtitles", variable=self.vars["do_transcribe"],
+                        command=self.refresh_states).pack(side="left", padx=(8, 8))
+        self.transcribe_provider_combo = ttk.Combobox(step3_frame, textvariable=self.vars["transcription_provider"],
+                                                     values=["local", "openai"], width=10)
+        self.transcribe_provider_combo.pack(side="left")
 
         # Step 4
         ttk.Checkbutton(pipe, text="Normalize subtitles", variable=self.vars["do_normalize"],
@@ -153,6 +158,7 @@ class App(tk.Tk):
             "do_download": tk.BooleanVar(value=True),
             "do_isolate": tk.BooleanVar(value=True),
             "do_transcribe": tk.BooleanVar(value=True),
+            "transcription_provider": tk.StringVar(value="local"),
             "do_normalize": tk.BooleanVar(value=True),
             "do_translate": tk.BooleanVar(value=False),
         }
@@ -217,7 +223,7 @@ class App(tk.Tk):
         def set_state(widget, enabled: bool):
             widget.configure(state="normal" if enabled else "disabled")
 
-        # No per-step sub-frames to toggle (calculated directories only)
+        set_state(self.transcribe_provider_combo, self.vars["do_transcribe"].get())
 
     def on_run(self):
         run_dirs = compute_run_paths(self.vars["videos_path"].get())
@@ -255,6 +261,9 @@ class App(tk.Tk):
                 'website_dir': base.get('website_dir', 'website'),
                 'urls_file': self.vars['videos_path'].get(),
                 'steps': steps,
+                'transcription_provider': self.vars['transcription_provider'].get(),
+                # TODO: Make the API model configurable in the GUI
+                'transcription_api_model': 'whisper-1',
             }
             # carry optional Google keys to satisfy schema but GUI ignores them
             for k in ('service_account_file', 'spreadsheet', 'worksheet', 'sheet_column'):

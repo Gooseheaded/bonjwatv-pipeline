@@ -19,6 +19,11 @@ cp pipeline-config.example.json pipeline-config.json
 python pipeline_orchestrator.py --config pipeline-config.json
 ```
 
+### Optional GUI
+- Launch: `python -m gui.app`
+- The GUI writes a per-run orchestrator config to `<run_root>/gui-config.json` (derived from your selected `urls.txt`). It then runs `pipeline_orchestrator.py` with that config and streams logs to the UI.
+- Note: On Linux you may need Tkinter installed (e.g., `sudo apt-get install python3-tk`).
+
 ## Workflows
 
 This project supports two primary workflows for subtitle processing: a default URL-list pipeline and a simple ad-hoc folder translation.
@@ -162,6 +167,9 @@ translate_subtitles_folder.py # 2. Main script for ad-hoc folder translation
 
 # Pipeline Sub-scripts (Internal components)
 google_sheet_read.py      # Export Google Sheet rows to metadata/videos.json
+read_youtube_urls.py      # Parse URLs .txt into run/videos.json
+translate_title.py        # Translate video titles and cache results
+build_videos_json.py      # Enrich videos.json into videos_enriched.json
 fetch_video_metadata.py   # Fetch detailed video metadata from YouTube
 download_audio.py         # Download video audio using yt-dlp
 isolate_vocals.py         # Isolate vocals from audio using Demucs

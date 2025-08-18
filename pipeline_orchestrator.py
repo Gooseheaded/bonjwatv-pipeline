@@ -175,9 +175,20 @@ def main():
                 vocals_path = os.path.join(vocals_dir, vid, 'vocals.wav')
                 input_audio = vocals_path if os.path.exists(vocals_path) else os.path.join(audio_dir, f'{vid}.mp3')
                 kr_srt = os.path.join(subtitles_dir, f'kr_{vid}.srt')
-                if not run_step(['python', 'transcribe_audio.py',
-                                 '--input-file', input_audio,
-                                 '--output-file', kr_srt]):
+
+                provider = config.get('transcription_provider', 'local')
+                cmd = ['python', 'transcribe_audio.py',
+                       '--input-file', input_audio,
+                       '--output-file', kr_srt,
+                       '--provider', provider]
+                if provider == 'openai':
+                    api_model = config.get('transcription_api_model', 'whisper-1')
+                    cmd.extend(['--api-model', api_model])
+                else: # local
+                    model_size = config.get('transcription_model_size', 'large')
+                    cmd.extend(['--model-size', model_size])
+
+                if not run_step(cmd):
                     break
             elif s == 'normalize_srt':
                 kr_srt = os.path.join(subtitles_dir, f'kr_{vid}.srt')
