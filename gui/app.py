@@ -408,6 +408,7 @@ class App(tk.Tk):
                     text=True,
                     encoding="utf-8",
                     errors="replace",
+                    env=env,
                 )
             except Exception as e:
                 self.after(
