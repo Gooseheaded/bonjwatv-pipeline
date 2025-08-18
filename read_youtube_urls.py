@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
-import argparse
 import json
+import logging
 import os
 import re
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 
 def extract_video_id(url: str) -> str:
+    """Extract a YouTube video ID from a variety of URL formats."""
     try:
         p = urlparse(url.strip())
     except Exception:
@@ -15,9 +15,9 @@ def extract_video_id(url: str) -> str:
         return None
     host = p.netloc.lower()
     path = p.path
-    if 'youtube.com' in host:
-        if path == '/watch':
-            vid = parse_qs(p.query).get('v', [None])[0]
+    if "youtube.com" in host:
+        if path == "/watch":
+            vid = parse_qs(p.query).get("v", [None])[0]
             return vid
         # shorts or other /<type>/<id>
         m = re.match(r"^/(?:shorts|live)/([A-Za-z0-9_-]{6,})", path)
@@ -27,41 +27,38 @@ def extract_video_id(url: str) -> str:
         m = re.match(r"^/embed/([A-Za-z0-9_-]{6,})", path)
         if m:
             return m.group(1)
-    if 'youtu.be' in host:
+    if "youtu.be" in host:
         m = re.match(r"^/([A-Za-z0-9_-]{6,})", path)
         if m:
             return m.group(1)
     return None
 
 
-def read_youtube_urls(urls_file: str, output: str) -> None:
-    items = []
-    seen = set()
-    with open(urls_file, encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            vid = extract_video_id(line)
-            if not vid:
-                continue
-            if vid in seen:
-                continue
-            seen.add(vid)
-            items.append({'v': vid, 'youtube_url': line})
-    os.makedirs(os.path.dirname(output), exist_ok=True)
-    with open(output, 'w', encoding='utf-8') as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
-
-
-def main():
-    p = argparse.ArgumentParser(description='Parse a text file of YouTube URLs into videos.json')
-    p.add_argument('--urls-file', required=True)
-    p.add_argument('--output', required=True)
-    args = p.parse_args()
-    read_youtube_urls(args.urls_file, args.output)
-
-
-if __name__ == '__main__':
-    main()
-
+def run_read_youtube_urls(urls_file: str, output: str) -> bool:
+    """Parse a URLs .txt file and write a minimal videos.json with IDs and URLs."""
+    try:
+        items = []
+        seen = set()
+        with open(urls_file, encoding="utf-8") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                vid = extract_video_id(line)
+                if not vid:
+                    logging.warning(
+                        "Could not extract video ID from URL: %s", line
+                    )
+                    continue
+                if vid in seen:
+                    logging.warning("Duplicate video ID found: %s", vid)
+                    continue
+                seen.add(vid)
+                items.append({"v": vid, "youtube_url": line})
+        os.makedirs(os.path.dirname(output), exist_ok=True)
+        with open(output, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        logging.error("Error in read_youtube_urls: %s", e)
+        return False

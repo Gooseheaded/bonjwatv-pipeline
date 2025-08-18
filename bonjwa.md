@@ -308,6 +308,10 @@ python pipeline_orchestrator.py --config pipeline-config.json
 - Default: `action_resource` for steps and filenames (e.g., `fetch_video_metadata`, `translate_title`, `build_videos_json`).
 - Exception: Google Sheets helpers keep `google_sheet_read` / `google_sheet_write`.
 
+### API Entry Points
+- Each step module exposes a single public function named `run_*` (e.g., `run_download_audio`, `run_isolate_vocals`, `run_transcribe_audio`).
+- The orchestrator and tests call these `run_*` functions. Non-`run_*` functions are internal helpers and may change.
+
 ---
 
 ## 9. Open Questions & Next Steps

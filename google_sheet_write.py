@@ -1,168 +1,144 @@
-#!/usr/bin/env python3
-import os
 import json
-import argparse
 import logging
+import os
+import time
+from typing import Any, Callable, Optional
 
-import logging
 import gspread
 from dotenv import load_dotenv
-
-import time
 from gspread.exceptions import APIError
 
-load_dotenv()
+
+def _retry_gspread_call(
+    func: Callable, *args: Any, max_attempts: int = 5, **kwargs: Any
+) -> Any:
+    """Retry a gspread API call with exponential backoff."""
+    for attempt in range(max_attempts):
+        try:
+            return func(*args, **kwargs)
+        except APIError as e:
+            delay = 2**attempt
+            logging.warning(
+                f"Google Sheets APIError: {e}; retrying in {delay}s (attempt {attempt + 1}/{max_attempts})"
+            )
+            time.sleep(delay)
+    raise RuntimeError(f"Google Sheets API call failed after {max_attempts} attempts.")
 
 
-def google_sheet_write(video_list_file: str,
-                           cache_dir: str,
-                           spreadsheet: str,
-                           worksheet: str,
-                           column_name: str,
-                           service_account_file: str = None) -> None:
-    """
-    Update a Google Sheet by writing Pastebin URLs back into a specified column.
-    """
-    # Authenticate to Google Sheets
+def _authenticate(service_account_file: Optional[str]) -> gspread.client.Client:
+    """Authenticate to Google Sheets, optionally with a specific service account file."""
     if service_account_file:
-        gc = gspread.service_account(filename=service_account_file)
-    else:
-        gc = gspread.service_account()
+        return gspread.service_account(filename=service_account_file)
+    return gspread.service_account()
 
-    # Ensure cache directory exists for Google Sheet caching
-    os.makedirs(cache_dir, exist_ok=True)
-    sh = gc.open(spreadsheet)
-    ws = sh.worksheet(worksheet)
 
-    # Determine column index by scanning header row (row 1)
+def _get_column_index(ws: gspread.Worksheet, column_name: str) -> Optional[int]:
+    """Return 1-based index of the given header name, or None if not found."""
     headers = ws.row_values(1)
     try:
-        col_idx = headers.index(column_name) + 1
+        return headers.index(column_name) + 1
     except ValueError:
-        raise RuntimeError(f"Column '{column_name}' not found in header")
+        return None
 
-    # Load metadata and process each video
-    videos = json.load(open(video_list_file, encoding='utf-8'))
-    for v in videos:
-        vid = v['v']
-        cache_file = os.path.join(cache_dir, f'pastebin_{vid}.json')
-        if not os.path.exists(cache_file):
-            continue
 
-        data = json.load(open(cache_file, encoding='utf-8'))
-        url = data.get('url')
-        if not url:
-            continue
+def _load_pastebin_url(cache_dir: str, vid: str) -> Optional[str]:
+    """Load Pastebin URL for a given video ID from the cache directory."""
+    cache_file = os.path.join(cache_dir, f"pastebin_{vid}.json")
+    if not os.path.exists(cache_file):
+        return None
+    data = json.load(open(cache_file, encoding="utf-8"))
+    return data.get("url")
 
-        # Skip if we've already updated this video+URL before
-        sheet_cache = os.path.join(cache_dir, f'google_{vid}.json')
-        if os.path.exists(sheet_cache):
-            cached = json.load(open(sheet_cache, encoding='utf-8')).get('url')
-            if cached == url:
-                logging.info('Skipping update for %s (cached Google Sheet)', vid)
+
+def _is_cached_sheet_update(cache_dir: str, vid: str, url: str) -> bool:
+    """Return True if this video ID and URL appear to have been written already."""
+    sheet_cache = os.path.join(cache_dir, f"google_{vid}.json")
+    if os.path.exists(sheet_cache):
+        cached = json.load(open(sheet_cache, encoding="utf-8")).get("url")
+        if cached == url:
+            logging.info("Skipping update for %s (cached Google Sheet)", vid)
+            return True
+    return False
+
+
+def _find_video_cell(ws: gspread.Worksheet, vid: str):
+    """Find the cell containing the given video ID, handling not-found gracefully."""
+    try:
+        return ws.find(vid)
+    except Exception:  # Not found or other error
+        logging.warning("Video ID %s not found in sheet, skipping update", vid)
+        return None
+
+
+def _existing_value(ws: gspread.Worksheet, row: int, col: int) -> Optional[str]:
+    """Read an existing cell value with retry/backoff."""
+    try:
+        return _retry_gspread_call(ws.cell, row, col).value
+    except RuntimeError as e:
+        logging.warning("Error reading existing value at row=%s col=%s: %s", row, col, e)
+        return None
+
+
+def _write_url_and_cache(
+    ws: gspread.Worksheet, row: int, col: int, vid: str, url: str, cache_dir: str
+) -> None:
+    """Write URL to the sheet with retry/backoff and cache the update locally."""
+    _retry_gspread_call(ws.update_cell, row, col, url)
+    logging.info("Updated %s in row %d, col %d", vid, row, col)
+    sheet_cache = os.path.join(cache_dir, f"google_{vid}.json")
+    with open(sheet_cache, "w", encoding="utf-8") as f:
+        json.dump({"url": url}, f, ensure_ascii=False, indent=2)
+
+
+def run_google_sheet_write(
+    video_list_file: str,
+    cache_dir: str,
+    spreadsheet: str,
+    worksheet: str,
+    column_name: str,
+    service_account_file: Optional[str] = None,
+) -> bool:
+    """Update a Google Sheet by writing Pastebin URLs into the specified column."""
+    try:
+        load_dotenv()
+        os.makedirs(cache_dir, exist_ok=True)
+
+        gc = _authenticate(service_account_file)
+        ws = gc.open(spreadsheet).worksheet(worksheet)
+
+        col_idx = _get_column_index(ws, column_name)
+        if not col_idx:
+            logging.error("Column '%s' not found in header", column_name)
+            return False
+
+        videos = json.load(open(video_list_file, encoding="utf-8"))
+        for v in videos:
+            vid = v["v"]
+            url = _load_pastebin_url(cache_dir, vid)
+            if not url:
                 continue
 
-        # Find the video ID cell with retry/backoff (skip if not found)
-        try:
-            cell = None
-            for attempt in range(5):
-                try:
-                    cell = ws.find(vid)
-                    break
-                except APIError as e:
-                    delay = 2 ** attempt
-                    logging.warning(
-                        "Google Sheets APIError on find(%s): %s; retrying in %ds",
-                        vid, e, delay
-                    )
-                    time.sleep(delay)
+            if _is_cached_sheet_update(cache_dir, vid, url):
+                continue
+
+            cell = _find_video_cell(ws, vid)
             if not cell:
-                logging.warning("Video ID %s not found in sheet after retries, skipping update", vid)
                 continue
-        except Exception as e:
-            logging.warning("Video ID %s not found in sheet, skipping update (%s)", vid, e)
-            continue
 
-        # Check existing value in target column with retry/backoff
-        try:
-            existing = None
-            for attempt in range(5):
-                try:
-                    existing = ws.cell(cell.row, col_idx).value
-                    break
-                except APIError as e:
-                    delay = 2 ** attempt
-                    logging.warning(
-                        "Google Sheets APIError on cell(%d,%d): %s; retrying in %ds",
-                        cell.row, col_idx, e, delay
-                    )
-                    time.sleep(delay)
+            existing = _existing_value(ws, cell.row, col_idx)
             if existing:
                 logging.info("Skipping update for %s (already set)", vid)
-                # Cache this video so future runs skip without sheet calls
-                with open(sheet_cache, 'w', encoding='utf-8') as f:
-                    json.dump({'url': url}, f, ensure_ascii=False, indent=2)
+                # Cache to avoid future redundant sheet calls
+                with open(os.path.join(cache_dir, f"google_{vid}.json"), "w", encoding="utf-8") as f:
+                    json.dump({"url": url}, f, ensure_ascii=False, indent=2)
                 continue
-        except Exception as e:
-            logging.warning("Error reading existing value for %s: %s", vid, e)
-            continue
 
-        # Write the Pastebin URL with retry/backoff
-        for attempt in range(5):
             try:
-                ws.update_cell(cell.row, col_idx, url)
-                logging.info("Updated %s in row %d, col %d", vid, cell.row, col_idx)
-                # Cache sheet update to avoid future redundant writes
-                with open(sheet_cache, 'w', encoding='utf-8') as f:
-                    json.dump({'url': url}, f, ensure_ascii=False, indent=2)
-                break
-            except APIError as e:
-                delay = 2 ** attempt
-                logging.warning(
-                    "Google Sheets APIError on update_cell(%d,%d): %s; retrying in %ds",
-                    cell.row, col_idx, e, delay
-                )
-                time.sleep(delay)
-
-
-def setup_logging():
-    os.makedirs('logs', exist_ok=True)
-    handler = logging.FileHandler('logs/update_sheet.log', encoding='utf-8')
-    fmt = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    handler.setFormatter(fmt)
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    root.addHandler(handler)
-    console = logging.StreamHandler()
-    console.setFormatter(fmt)
-    root.addHandler(console)
-    return root
-
-
-def main():
-    log = setup_logging()
-    p = argparse.ArgumentParser(description='Update Google Sheet with Pastebin URLs')
-    p.add_argument('--video-list-file', required=True)
-    p.add_argument('--cache-dir', required=True)
-    p.add_argument('--spreadsheet', required=True)
-    p.add_argument('--worksheet', required=True)
-    p.add_argument('--column-name', required=True)
-    p.add_argument('--service-account-file', help='Path to service account JSON')
-    args = p.parse_args()
-
-    try:
-        google_sheet_write(
-            video_list_file=args.video_list_file,
-            cache_dir=args.cache_dir,
-            spreadsheet=args.spreadsheet,
-            worksheet=args.worksheet,
-            column_name=args.column_name,
-            service_account_file=args.service_account_file,
-        )
+                _write_url_and_cache(ws, cell.row, col_idx, vid, url, cache_dir)
+            except RuntimeError as e:
+                logging.error("Failed to update cell for %s: %s", vid, e)
+                continue
+        return True
     except Exception as e:
-        log.error('Update sheet failed: %s', e)
-        exit(1)
-
-
-if __name__ == '__main__':
-    main()
+        logging.error("Update sheet failed: %s", e)
+        return False

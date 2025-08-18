@@ -36,7 +36,8 @@
   - Readonly Text widget tailing `logs/pipeline_orchestrator.log`; Clear/Copy buttons.
 
 ### Integration Details
-- The GUI will orchestrate the URL workflow by calling your pipeline entry points from background threads.
+- Prefer invoking `pipeline_orchestrator.py` with a generated config; the GUI already monitors `PROGRESS:N/TOTAL` lines printed by the orchestrator.
+- If calling step functions directly, use the public `run_*` entry points exposed by each module (e.g., `run_download_audio`, `run_transcribe_audio`).
 - Keep all background work off the main thread; only touch widgets via `after()`.
 - Provide replaceable hooks for: download audio, transcribe, normalize, translate; wire these to your Python scripts or API functions.
 

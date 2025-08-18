@@ -3,62 +3,63 @@ import sys
 
 sys.path.insert(0, os.getcwd())
 
-import pytest
 
-from isolate_vocals import isolate_vocals
+from isolate_vocals import run_isolate_vocals
 
 
 def test_skip_existing(tmp_path, caplog):
     # Prepare dummy input and existing output
-    audio_dir = tmp_path / 'audio'
+    audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
-    input_file = audio_dir / 'vid.mp3'
-    input_file.write_text('', encoding='utf-8')
+    input_file = audio_dir / "vid.mp3"
+    input_file.write_text("", encoding="utf-8")
 
-    vocals_dir = tmp_path / 'vocals' / 'vid'
+    vocals_dir = tmp_path / "vocals" / "vid"
     vocals_dir.mkdir(parents=True)
-    existing = vocals_dir / 'vocals.wav'
-    existing.write_text('', encoding='utf-8')
+    existing = vocals_dir / "vocals.wav"
+    existing.write_text("", encoding="utf-8")
 
-    caplog.set_level('INFO')
-    out = isolate_vocals(
+    caplog.set_level("INFO")
+    ok = run_isolate_vocals(
         input_file=str(input_file),
-        output_dir=str(tmp_path / 'vocals'),
-        model='dummy',
+        output_dir=str(tmp_path / "vocals"),
+        model="dummy",
         two_stems=False,
     )
-    assert out == str(existing)
-    assert 'already exists' in caplog.text
+    assert ok is True
+    assert "already exists" in caplog.text
 
 
 def test_isolate_creates_file(tmp_path, monkeypatch):
     # Prepare dummy input
-    audio_dir = tmp_path / 'audio'
+    audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
-    input_file = audio_dir / 'vid.mp3'
-    input_file.write_text('', encoding='utf-8')
+    input_file = audio_dir / "vid.mp3"
+    input_file.write_text("", encoding="utf-8")
 
-    output_dir = tmp_path / 'vocals'
+    output_dir = tmp_path / "vocals"
 
     calls = {}
+
     def fake_run(cmd, check):
         # Simulate Demucs invocation and file creation
-        calls['cmd'] = cmd
-        vocals_path = output_dir / 'vid' / 'vocals.wav'
+        calls["cmd"] = cmd
+        vocals_path = output_dir / "vid" / "vocals.wav"
         vocals_path.parent.mkdir(parents=True, exist_ok=True)
-        vocals_path.write_text('dummy', encoding='utf-8')
+        vocals_path.write_text("dummy", encoding="utf-8")
 
-    monkeypatch.setattr('isolate_vocals.subprocess.run', fake_run)
+    monkeypatch.setattr("isolate_vocals.subprocess.run", fake_run)
 
-    out = isolate_vocals(
+    ok = run_isolate_vocals(
         input_file=str(input_file),
         output_dir=str(output_dir),
-        model='demucs-model',
+        model="demucs-model",
         two_stems=True,
     )
     # Verify subprocess command includes demucs and flags
-    assert calls['cmd'][0] == 'demucs'
-    assert '--two-stems' in calls['cmd']
+    assert calls["cmd"][0] == "demucs"
+    assert "--two-stems" in calls["cmd"]
     # Verify output path and return value
-    assert out.endswith(os.path.join('vocals', 'vid', 'vocals.wav'))
-    assert os.path.exists(out)
+    assert ok is True
+    out_path = output_dir / "vid" / "vocals.wav"
+    assert os.path.exists(out_path)

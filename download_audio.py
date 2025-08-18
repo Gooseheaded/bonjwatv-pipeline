@@ -1,53 +1,38 @@
-#!/usr/bin/env python3
+import logging  # Keep logging for internal use
 import os
-import argparse
-import logging
-from common import setup_logging
 
 import yt_dlp
 
 
-def download_audio(url: str, video_id: str, output_dir: str = 'audio') -> str:
+def run_download_audio(url: str, video_id: str, output_dir: str = "audio") -> bool:
+    """Download audio from a URL and save it to the output directory."""
     os.makedirs(output_dir, exist_ok=True)
     # Final expected path after extraction
     final_path = os.path.join(output_dir, f"{video_id}.mp3")
     if os.path.exists(final_path):
         logging.info(f"{final_path} already exists, skipping download")
-        return final_path
+        return True
 
     # Use a template without a fixed extension; the postprocessor will write .mp3
     ydl_opts = {
-        'format': 'bestaudio',
-        'outtmpl': os.path.join(output_dir, f"{video_id}.%(ext)s"),
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
+        "format": "bestaudio",
+        "outtmpl": os.path.join(output_dir, f"{video_id}.%(ext)s"),
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192",
+            }
+        ],
+        "quiet": True,  # Suppress console output from yt-dlp
+        "no_warnings": True,
     }
-    ydl = yt_dlp.YoutubeDL(ydl_opts)
-    ydl.download([url])
-
-    logging.info(f"Downloaded audio to {final_path}")
-    return final_path
-
-
-log = setup_logging(__name__, 'logs/download_audio.log')
-
-
-def main():
-    p = argparse.ArgumentParser(description='Download YouTube audio as MP3')
-    p.add_argument('--url', required=True, help='YouTube video URL')
-    p.add_argument('--video-id', required=True, help='Video identifier for output filename')
-    p.add_argument('--output-dir', default='audio', help='Directory to save audio files')
-    args = p.parse_args()
-
     try:
-        download_audio(args.url, args.video_id, args.output_dir)
+        ydl = yt_dlp.YoutubeDL(ydl_opts)
+        ydl.download([url])
+
+        logging.info(f"Downloaded audio to {final_path}")
+        return True
     except Exception as e:
-        log.error(f"Audio download failed: {e}")
-        exit(1)
-
-
-if __name__ == '__main__':
-    main()
+        logging.error(f"Error downloading audio for {video_id}: {e}")
+        return False

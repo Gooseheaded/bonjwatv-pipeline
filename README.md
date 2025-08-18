@@ -134,6 +134,25 @@ Smoke tests for the core Python steps are in `tests/`. To run all tests:
 pytest -q
 ```
 
+### Code Quality
+
+This project uses [Ruff](https://docs.astral.sh/ruff/) for linting and [Black](https://black.readthedocs.io/en/stable/) for code formatting.
+
+To run the formatter:
+```bash
+black .
+```
+
+To run the linter:
+```bash
+ruff check .
+```
+
+### API Conventions
+- Public Python entry points inside each step module are exposed as `run_*` functions (e.g., `run_download_audio`, `run_transcribe_audio`).
+- The orchestrator and tests call these `run_*` functions; any non-`run_*` helpers are internal implementation details.
+- Return values follow a simple pattern: boolean success for steps that produce files, and paths or caches are validated by callers when needed.
+
 ### Config Template
 - Copy and edit the example config (ordered steps):
   ```bash
@@ -189,6 +208,43 @@ bonjwa.md                 # Design & planning document
 tests/                    # Pytest smoke tests for each step
 README.md                 # This contributor guide
 ```
+
+## Build (PyInstaller)
+
+This repo ships two PyInstaller specs to publish the app as standalone binaries:
+
+- `Orchestrator.spec`: builds a CLI binary for `pipeline_orchestrator.py`.
+- `BWKTSubtitlePipeline.spec`: builds the GUI and bundles the Orchestrator binary.
+
+### Prerequisites
+- Python virtualenv active
+- Install runtime deps + dev tooling:
+  ```bash
+  pip install -r requirements.txt -r requirements-dev.txt
+  ```
+
+### Build
+- One command:
+  ```bash
+  bash build.sh
+  ```
+  This produces one-dir bundles in `dist/Orchestrator/` and `dist/BWKTSubtitlePipeline/`.
+
+- Or run specs individually:
+  ```bash
+  pyinstaller --noconfirm Orchestrator.spec
+  pyinstaller --noconfirm BWKTSubtitlePipeline.spec
+  ```
+
+### Run Built Apps
+- GUI: `./dist/BWKTSubtitlePipeline/BWKTSubtitlePipeline` (Windows: `BWKTSubtitlePipeline.exe`)
+- Orchestrator: `./dist/Orchestrator/Orchestrator --config <path/to/config.json>`
+
+Note: The GUI writes a per-run config under the derived run folder (`gui-config.json`) and invokes the bundled Orchestrator. Progress is streamed via `PROGRESS:N/TOTAL` lines.
+
+### Windows Notes
+- The GUI auto-detects `Orchestrator` vs `Orchestrator.exe` and also supports a nested `Orchestrator/Orchestrator(.exe)` layout inside the bundle.
+- If you switch to one-file builds, adjust the GUI data inclusion (spec) to include the single binary.
 
 ## Contributing
 

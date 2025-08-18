@@ -1,14 +1,13 @@
 import os
 import sys
+
 sys.path.insert(0, os.getcwd())
-import pytest
 
 from translate_subtitles import (
-    parse_srt_file,
     chunk_subtitles,
     merge_chunks,
-    translate_srt_file,
-    call_openai_api,
+    parse_srt_file,
+    run_translate_subtitles,
 )
 
 SRT_SAMPLE = """1
@@ -52,7 +51,7 @@ def test_translate_srt_file(tmp_path, monkeypatch):
     monkeypatch.setattr("translate_subtitles.call_openai_api", fake_call)
 
     output_file = tmp_path / "en_sample.srt"
-    translate_srt_file(
+    ok = run_translate_subtitles(
         input_file=str(srt_file),
         output_file=str(output_file),
         slang_file=str(slang_file),
@@ -61,6 +60,7 @@ def test_translate_srt_file(tmp_path, monkeypatch):
         cache_dir=str(tmp_path / "cache"),
         model="test-model",
     )
+    assert ok is True
 
     assert output_file.exists()
     text = output_file.read_text(encoding="utf-8")

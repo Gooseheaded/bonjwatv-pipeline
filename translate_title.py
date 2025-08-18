@@ -1,88 +1,102 @@
-#!/usr/bin/env python3
-import argparse
 import hashlib
 import json
+import logging  # Added for logging
 import os
 import time
+
+import openai
 from dotenv import load_dotenv
 from openai import OpenAI, RateLimitError
-import openai
-
-
-load_dotenv()
 
 
 def sha1(text: str) -> str:
-    return hashlib.sha1(text.encode('utf-8')).hexdigest()
+    """Return the SHA-1 hex digest of the given text (UTF-8)."""
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
 def ensure_client():
-    key = os.getenv('OPENAI_API_KEY')
+    """Ensure an OpenAI client is available using the OPENAI_API_KEY env var."""
+    load_dotenv()
+    key = os.getenv("OPENAI_API_KEY")
     if not key:
-        raise RuntimeError('OPENAI_API_KEY is not set')
+        raise RuntimeError("OPENAI_API_KEY is not set")
     return OpenAI(api_key=key)
 
 
 def call_openai_translate(title: str, model: str) -> str:
+    """Translate a video title to English using the Chat Completions API."""
     client = ensure_client()
-    for attempt in range(5):
+    for _attempt in range(5):
         try:
             resp = client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": "Translate a video title from Korean (or mixed) to concise, idiomatic English."},
-                    {"role": "user", "content": f"Title:\n{title}\n\nReturn only the translated title."}
+                    {
+                        "role": "system",
+                        "content": "Translate a video title from Korean (or mixed) to concise, idiomatic English.",
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Title:\n{title}\n\nReturn only the translated title.",
+                    },
                 ],
                 temperature=0.3,
                 max_tokens=200,
             )
-            return (resp.choices[0].message.content or '').strip()
+            return (resp.choices[0].message.content or "").strip()
         except RateLimitError:
+            logging.warning("Rate limit hit, retrying in 5s...")
             time.sleep(5)
         except openai.BadRequestError as e:
-            raise
-        except Exception:
-            time.sleep(3)
-    raise RuntimeError('OpenAI API failed after retries')
+            logging.warning(f"OpenAI API error: {e}, retrying in 5s...")
+            raise  # Re-raise to propagate specific errors if needed
+        except Exception as e:
+            logging.warning(f"OpenAI API error: {e}, retrying in 5s...")
+            time.sleep(5)
+    raise RuntimeError("OpenAI API failed after multiple retries")
 
 
-def translate_title(video_id: str, metadata_dir: str, cache_dir: str, model: str = 'gpt-4.1-mini') -> str:
-    os.makedirs(cache_dir, exist_ok=True)
-    meta_path = os.path.join(metadata_dir, f"{video_id}.json")
-    if not os.path.exists(meta_path):
-        raise FileNotFoundError(f"Metadata not found for {video_id}: {meta_path}")
-    details = json.load(open(meta_path, encoding='utf-8'))
-    source_title = details.get('title') or ''
-    if not source_title:
-        raise RuntimeError(f"No title in metadata for {video_id}")
+def run_translate_title(
+    video_id: str, metadata_dir: str, cache_dir: str, model: str = "gpt-4.1-mini"
+) -> bool:
+    """Translate and cache the English title for the given video ID."""
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        meta_path = os.path.join(metadata_dir, f"{video_id}.json")
+        if not os.path.exists(meta_path):
+            logging.error(f"Metadata not found for {video_id}: {meta_path}")
+            return False
+        details = json.load(open(meta_path, encoding="utf-8"))
+        source_title = details.get("title") or ""
+        if not source_title:
+            logging.error(f"No title in metadata for {video_id}")
+            return False
 
-    cache_path = os.path.join(cache_dir, f"title_{video_id}.json")
-    source_hash = sha1(source_title)
-    if os.path.exists(cache_path):
-        data = json.load(open(cache_path, encoding='utf-8'))
-        if data.get('source_hash') == source_hash and data.get('title_en'):
-            return data['title_en']
+        cache_path = os.path.join(cache_dir, f"title_{video_id}.json")
+        source_hash = sha1(source_title)
+        if os.path.exists(cache_path):
+            data = json.load(open(cache_path, encoding="utf-8"))
+            if data.get("source_hash") == source_hash and data.get("title_en"):
+                logging.info(f"Using cached title for {video_id}")
+                return True  # Title already translated and cached
 
-    translated = call_openai_translate(source_title, model=model)
-    with open(cache_path, 'w', encoding='utf-8') as f:
-        json.dump({
-            'video_id': video_id,
-            'title_en': translated,
-            'source_hash': source_hash,
-        }, f, ensure_ascii=False, indent=2)
-    return translated
+        translated = call_openai_translate(source_title, model=model)
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "video_id": video_id,
+                    "title_en": translated,
+                    "source_hash": source_hash,
+                },
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
+        logging.info(f"Successfully translated and cached title for {video_id}")
+        return True
+    except Exception as e:
+        logging.error(f"Title translation failed for {video_id}: {e}")
+        return False
 
 
-def main():
-    p = argparse.ArgumentParser(description='Translate video title and cache result')
-    p.add_argument('--video-id', required=True)
-    p.add_argument('--metadata-dir', required=True)
-    p.add_argument('--cache-dir', default='.cache')
-    p.add_argument('--model', default='gpt-4.1-mini')
-    args = p.parse_args()
-    translate_title(args.video_id, args.metadata_dir, args.cache_dir, model=args.model)
-
-
-if __name__ == '__main__':
-    main()
-
+# test wrapper removed; use run_translate_title directly
