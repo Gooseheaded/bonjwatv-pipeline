@@ -226,7 +226,21 @@ Testing: Implemented; see `tests/test_google_sheet_write.py`.
 
 ---
 
-## 5. Error Handling
+## 5. GUI
+
+An optional GUI (`gui/app.py`) is provided for a more interactive experience. It allows users to select the input file, set the API key, and choose which pipeline steps to run.
+
+### Progress Reporting
+
+To provide real-time feedback, the pipeline uses a specific progress reporting mechanism:
+
+1.  **Calculation**: The GUI first calculates the total number of operations, defined as `(number of videos) * (number of selected per-video steps)`.
+2.  **Orchestrator Output**: The `pipeline_orchestrator.py` script is modified to print a special formatted string to `stdout` after each operation is completed. The format is `PROGRESS:N/TOTAL`, where `N` is the current operation number and `TOTAL` is the total calculated in the first step.
+3.  **GUI Update**: The GUI continuously reads the orchestrator's `stdout`. When it detects a line starting with `PROGRESS:`, it parses the numbers and updates the progress bar's value accordingly.
+
+This design ensures the progress bar advances steadily and provides meaningful feedback, even during long-running jobs with many videos.
+
+## 6. Error Handling
 
 - All steps should:
   - Log errors (to file and stdout)

@@ -147,29 +147,41 @@ def main():
         logging.error('Failed to load video list file %s: %s', video_list_file, e)
         exit(1)
 
+    # Calculate total number of per-video operations for progress reporting
+    per_video_steps_in_run = [s for s in steps if s in allowed_per_video]
+    total_ops = len(videos) * len(per_video_steps_in_run)
+    current_op = 0
+
     # Process per-video steps in the specified order
     for v in videos:
         vid = v['v']
         for s in steps:
             if s not in allowed_per_video:
                 continue
+
+            # This is a placeholder for the actual step execution logic
+            step_executed = False
+
             if s == 'fetch_video_metadata':
                 if not run_step(['python', 'fetch_video_metadata.py',
                                  '--video-id', vid,
                                  '--output-dir', video_metadata_dir]):
                     break
+                step_executed = True
             elif s == 'download_audio':
                 if not run_step(['python', 'download_audio.py',
                                  '--url', v.get('youtube_url', f'https://www.youtube.com/watch?v={vid}'),
                                  '--video-id', vid,
                                  '--output-dir', audio_dir]):
                     break
+                step_executed = True
             elif s == 'isolate_vocals':
                 audio_path = os.path.join(audio_dir, f'{vid}.mp3')
                 if not run_step(['python', 'isolate_vocals.py',
                                  '--input-file', audio_path,
                                  '--output-dir', vocals_dir]):
                     break
+                step_executed = True
             elif s == 'transcribe_audio':
                 # Prefer isolated vocals if available; fall back to original audio
                 vocals_path = os.path.join(vocals_dir, vid, 'vocals.wav')
@@ -190,12 +202,14 @@ def main():
 
                 if not run_step(cmd):
                     break
+                step_executed = True
             elif s == 'normalize_srt':
                 kr_srt = os.path.join(subtitles_dir, f'kr_{vid}.srt')
                 if not run_step(['python', 'normalize_srt.py',
                                  '--input-file', kr_srt,
                                  '--output-file', kr_srt]):
                     break
+                step_executed = True
             elif s == 'translate_subtitles':
                 kr_srt = os.path.join(subtitles_dir, f'kr_{vid}.srt')
                 en_srt = os.path.join(subtitles_dir, f'en_{vid}.srt')
@@ -205,18 +219,26 @@ def main():
                                  '--slang-file', slang_file,
                                  '--cache-dir', cache_dir]):
                     break
+                step_executed = True
             elif s == 'translate_title':
                 if not run_step(['python', 'translate_title.py',
                                  '--video-id', vid,
                                  '--metadata-dir', video_metadata_dir,
                                  '--cache-dir', cache_dir]):
                     break
+                step_executed = True
             elif s == 'upload_subtitles':
                 en_srt = os.path.join(subtitles_dir, f'en_{vid}.srt')
                 if not run_step(['python', 'upload_subtitles.py',
                                  '--input-file', en_srt,
                                  '--cache-dir', cache_dir]):
                     break
+                step_executed = True
+            
+            if step_executed:
+                current_op += 1
+                # Use a print statement that is distinct from logging
+                print(f'PROGRESS:{current_op}/{total_ops}')
 
     # Prepare enriched videos path
     enriched_videos = os.path.join(os.path.dirname(os.path.abspath(video_list_file)), 'videos_enriched.json')

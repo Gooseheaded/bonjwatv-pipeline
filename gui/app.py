@@ -226,9 +226,29 @@ class App(tk.Tk):
         set_state(self.transcribe_provider_combo, self.vars["do_transcribe"].get())
 
     def on_run(self):
-        run_dirs = compute_run_paths(self.vars["videos_path"].get())
+        videos_file = self.vars["videos_path"].get()
+        if not os.path.exists(videos_file):
+            messagebox.showerror("Error", f"Videos file not found: {videos_file}")
+            return
 
-        # Build orchestrator config under run_root
+        run_dirs = compute_run_paths(videos_file)
+
+        # --- Calculate total operations for progress bar ---
+        num_videos = 0
+        with open(videos_file, 'r', encoding='utf-8') as f:
+            num_videos = len(f.readlines())
+
+        per_video_steps = []
+        if self.vars["do_download"].get(): per_video_steps.append('download_audio')
+        if self.vars["do_isolate"].get(): per_video_steps.append('isolate_vocals')
+        if self.vars["do_transcribe"].get(): per_video_steps.append('transcribe_audio')
+        if self.vars["do_normalize"].get(): per_video_steps.append('normalize_srt')
+        if self.vars["do_translate"].get(): per_video_steps.append('translate_subtitles')
+        # These are also per-video, but run before the main processing
+        per_video_steps.extend(['fetch_video_metadata', 'translate_title'])
+        total_ops = num_videos * len(per_video_steps)
+
+        # --- Build orchestrator config ---
         def build_cfg() -> str:
             base_path = os.path.join(os.getcwd(), 'pipeline-config.json')
             base = {}
@@ -238,17 +258,9 @@ class App(tk.Tk):
             except Exception:
                 base = {}
 
+            # Note: build_videos_json is a global step, not counted in per-video ops
             steps = ['read_youtube_urls', 'fetch_video_metadata', 'translate_title', 'build_videos_json']
-            if self.vars["do_download"].get():
-                steps.append('download_audio')
-            if self.vars["do_isolate"].get():
-                steps.append('isolate_vocals')
-            if self.vars["do_transcribe"].get():
-                steps.append('transcribe_audio')
-            if self.vars["do_normalize"].get():
-                steps.append('normalize_srt')
-            if self.vars["do_translate"].get():
-                steps.append('translate_subtitles')
+            steps.extend([s for s in ['download_audio', 'isolate_vocals', 'transcribe_audio', 'normalize_srt', 'translate_subtitles'] if s in per_video_steps])
 
             cfg = {
                 'video_list_file': run_dirs['video_list_file'],
@@ -259,13 +271,11 @@ class App(tk.Tk):
                 'cache_dir': run_dirs['cache_dir'],
                 'slang_file': base.get('slang_file', 'slang/KoreanSlang.txt'),
                 'website_dir': base.get('website_dir', 'website'),
-                'urls_file': self.vars['videos_path'].get(),
+                'urls_file': videos_file,
                 'steps': steps,
                 'transcription_provider': self.vars['transcription_provider'].get(),
-                # TODO: Make the API model configurable in the GUI
                 'transcription_api_model': 'whisper-1',
             }
-            # carry optional Google keys to satisfy schema but GUI ignores them
             for k in ('service_account_file', 'spreadsheet', 'worksheet', 'sheet_column'):
                 if k in base:
                     cfg[k] = base[k]
@@ -284,15 +294,25 @@ class App(tk.Tk):
                 env['OPENAI_API_KEY'] = api_key
             cmd = [sys.executable, 'pipeline_orchestrator.py', '--config', cfg_path]
             try:
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
             except Exception as e:
                 self.after(0, lambda: messagebox.showerror('Error', f'Failed to start orchestrator: {e}'))
                 return
             try:
                 assert proc.stdout is not None
                 for line in proc.stdout:
-                    if line:
-                        self.after(0, lambda l=line.rstrip(): self.log_line(l))
+                    line = line.rstrip()
+                    if not line:
+                        continue
+                    
+                    if line.startswith('PROGRESS:'):
+                        parts = line.split(':')[1].split('/')
+                        if len(parts) == 2:
+                            current, total = int(parts[0]), int(parts[1])
+                            self.after(0, lambda c=current: self.progress.configure(value=c))
+                    else:
+                        self.after(0, lambda l=line: self.log_line(l))
+
                     if self.controller.is_cancelled():
                         try:
                             proc.terminate()
@@ -301,19 +321,12 @@ class App(tk.Tk):
                         break
                 proc.wait()
             finally:
-                # no additional cleanup
                 pass
 
-        steps = [("Run orchestrator", run_orchestrator)]
-
-        # Lock UI (except Cancel)
+        # --- Controller Execution ---
         self.set_ui_running(True)
         self.run_btn.configure(text="Cancel", command=self.on_cancel)
-        self.progress.configure(maximum=len(steps), value=0)
-
-        def on_step(idx: int, total: int, name: str):
-            self.after(0, lambda: self.log_line(f"{timestamp()} step {idx}/{total}: {name}"))
-            self.after(0, lambda: self.progress.configure(value=idx - 1))
+        self.progress.configure(maximum=total_ops, value=0)
 
         def on_done(exc: Exception | None):
             if exc is None:
@@ -324,8 +337,7 @@ class App(tk.Tk):
             self.after(0, lambda: self.run_btn.configure(text="RUN", command=self.on_run))
             self.after(0, lambda: self.set_ui_running(False))
 
-        # Start background work
-        self.controller.run(steps, on_step=on_step, on_done=on_done)
+        self.controller.run([("Run orchestrator", run_orchestrator)], on_done=on_done)
 
     def on_cancel(self):
         # Cooperative cancel: current step finishes; pipeline stops before next step.
