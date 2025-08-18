@@ -21,7 +21,7 @@ class PipelineController:
     def is_cancelled(self) -> bool:
         return self._cancel.is_set()
 
-    def run(self, steps: List[Step], on_step: Callable[[int, int, str], None], on_done: Callable[[Exception | None], None]):
+    def run(self, steps: List[Step], on_done: Callable[[Exception | None], None], on_step: Callable[[int, int, str], None] | None = None):
         if self.is_running():
             return False
         self._cancel.clear()
@@ -34,7 +34,8 @@ class PipelineController:
                     if self._cancel.is_set():
                         exc = RuntimeError("Cancelled")
                         break
-                    on_step(idx, total, name)
+                    if on_step:
+                        on_step(idx, total, name)
                     fn()
             except Exception as e:  # noqa: BLE001
                 exc = e

@@ -41,11 +41,12 @@ def run_translate(run_dirs: dict, log):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Subtitle Pipeline")
+        self.title("BWKT Subtitle Pipeline")
         self.minsize(820, 560)
 
         self.controller = PipelineController()
         self.vars = self._make_vars()
+        self.run_root_var = tk.StringVar(value="")
         self._load_settings()
 
         main = ttk.Frame(self, padding=16)
@@ -72,26 +73,10 @@ class App(tk.Tk):
         self.api_entry.grid(row=2, column=1, sticky="ew")
         ttk.Button(inputs, text="show/hide", command=self.toggle_api).grid(row=2, column=2, padx=(8, 8))
 
-        # Derived (calculated) folders preview
-        derived = ttk.Labelframe(main, text="Calculated folders (read-only)")
-        derived.grid(sticky="ew", pady=(0, 12))
-        for i in range(2):
-            derived.columnconfigure(i, weight=1 if i == 1 else 0)
-        self.run_root_var = tk.StringVar(value="")
-        self.audio_dir_var = tk.StringVar(value="")
-        self.vocals_dir_var = tk.StringVar(value="")
-        self.subs_dir_var = tk.StringVar(value="")
-        self.cache_dir_var = tk.StringVar(value="")
-        ttk.Label(derived, text="Run root").grid(row=0, column=0, sticky="w", padx=(8, 8))
-        ttk.Label(derived, textvariable=self.run_root_var).grid(row=0, column=1, sticky="w")
-        ttk.Label(derived, text="Audio").grid(row=1, column=0, sticky="w", padx=(8, 8))
-        ttk.Label(derived, textvariable=self.audio_dir_var).grid(row=1, column=1, sticky="w")
-        ttk.Label(derived, text="Vocals").grid(row=2, column=0, sticky="w", padx=(8, 8))
-        ttk.Label(derived, textvariable=self.vocals_dir_var).grid(row=2, column=1, sticky="w")
-        ttk.Label(derived, text="Subtitles").grid(row=3, column=0, sticky="w", padx=(8, 8))
-        ttk.Label(derived, textvariable=self.subs_dir_var).grid(row=3, column=1, sticky="w")
-        ttk.Label(derived, text="Cache").grid(row=4, column=0, sticky="w", padx=(8, 8))
-        ttk.Label(derived, textvariable=self.cache_dir_var).grid(row=4, column=1, sticky="w")
+        # Derived path hint
+        self.derived_path_hint_var = tk.StringVar()
+        derived_hint = ttk.Label(main, textvariable=self.derived_path_hint_var, wraplength=700, justify="left")
+        derived_hint.grid(sticky="ew", pady=(0, 12), padx=4)
 
         # Pipeline
         pipe = ttk.Labelframe(main, text="Pipeline steps")
@@ -132,16 +117,20 @@ class App(tk.Tk):
         self.progress = ttk.Progressbar(runrow, mode="determinate")
         self.progress.grid(row=0, column=1, sticky="ew")
 
+        # Log
+        self.log = tk.Text(main, height=10, wrap="word", state="disabled")
+        self.log.grid(sticky="nsew")
+        main.rowconfigure(4, weight=1)
+
         # Log controls (copy/clear)
         logctl = ttk.Frame(main)
         logctl.grid(sticky="e", pady=(4, 4))
         ttk.Button(logctl, text="Copy log", command=self.copy_log).grid(row=0, column=0, padx=(0, 8))
         ttk.Button(logctl, text="Clear log", command=self.clear_log).grid(row=0, column=1)
 
-        # Log
-        self.log = tk.Text(main, height=10, wrap="word", state="disabled")
-        self.log.grid(sticky="nsew")
-        main.rowconfigure(4, weight=1)
+        # Attribution
+        attr_label = ttk.Label(main, text="BWKT Subtitle Pipeline v250818 by Gooseheaded", foreground="gray")
+        attr_label.grid(sticky="se", padx=4, pady=(8, 0))
 
         # Bind
         self.vars["videos_path"].trace_add("write", lambda *_: self.update_derived_paths())
@@ -188,17 +177,15 @@ class App(tk.Tk):
 
     def update_derived_paths(self):
         path = self.vars["videos_path"].get()
-        if not path:
+        if not path or not os.path.exists(os.path.dirname(path)):
+            self.derived_path_hint_var.set("")
             return
         try:
             run_dirs = compute_run_paths(path)
+            self.run_root_var.set(run_dirs['run_root'])
+            self.derived_path_hint_var.set(f"All subtitles (and any data files) are located at: {run_dirs['run_root']}")
         except Exception:
-            return
-        self.run_root_var.set(run_dirs['run_root'])
-        self.audio_dir_var.set(run_dirs['audio_dir'])
-        self.vocals_dir_var.set(run_dirs['vocals_dir'])
-        self.subs_dir_var.set(run_dirs['subtitles_dir'])
-        self.cache_dir_var.set(run_dirs['cache_dir'])
+            self.derived_path_hint_var.set("")
 
     def log_line(self, text: str):
         self.log.configure(state="normal")
@@ -336,6 +323,8 @@ class App(tk.Tk):
             self.after(0, lambda: self.progress.configure(value=self.progress["maximum"]))
             self.after(0, lambda: self.run_btn.configure(text="RUN", command=self.on_run))
             self.after(0, lambda: self.set_ui_running(False))
+            self.after(0, self.refresh_states)
+            self.after(0, self.refresh_states)
 
         self.controller.run([("Run orchestrator", run_orchestrator)], on_done=on_done)
 
