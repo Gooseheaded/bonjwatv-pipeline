@@ -105,18 +105,24 @@ Testing: Implemented; see `tests/test_download_audio.py`.
 Testing: Implemented; see `tests/test_isolate_vocals.py`.
 
 ### E. Whisper Transcription (`transcribe_audio.py`)
-**Purpose:** Transcribe audio files to raw Korean SRT using OpenAI Whisper (local model).
+**Purpose:** Transcribe audio files to raw Korean SRT using either a local Whisper model or the OpenAI API.
 
 **Inputs/Outputs:**
-- Input audio: `/audio/{video_id}.mp3`
+- Input audio: `/audio/{video_id}.mp3` or `/vocals/{video_id}/vocals.wav`
 - Output subtitle: `/subtitles/kr_{video_id}.srt`
 
 **Features:**
-- CLI with `--input-file`, `--output-file`, `--model-size`, `--language` parameters
-- Validate input path, handle errors with nonzero exit code
-- Load Whisper model via `importlib.import_module('whisper')` for lazy import
-- Format timestamps from floats to `HH:MM:SS,mmm`
-- Write segments to `.srt`
+- Dual provider support, selectable via `--provider` CLI flag or `transcription_provider` config key.
+- **Local Provider (`local`):**
+  - Uses the `whisper` library to run transcription locally.
+  - Requires a compatible hardware setup (GPU recommended for speed).
+  - Configurable with `--model-size`.
+- **OpenAI Provider (`openai`):**
+  - Uses the OpenAI API with a specified model (e.g., `whisper-1`).
+  - Requires an `OPENAI_API_KEY` environment variable.
+  - Fetches timed segments to generate a standard SRT file.
+- Formats timestamps from floats to `HH:MM:SS,mmm`.
+- Writes segments to `.srt`.
 
 Testing: Implemented; see `tests/test_transcribe_audio.py`.
 
@@ -211,6 +217,7 @@ Testing: Implemented; see `tests/test_google_sheet_write.py`.
 
 - `pipeline_orchestrator.py` (Python CLI):
 - Reads `pipeline-config.json` and executes an ordered list of `steps`.
+- Handles `transcription_provider` key to select between `local` and `openai` transcription.
 - Global steps (run once): `read_youtube_urls` (from URLs .txt), `build_videos_json` (write enriched list), `google_sheet_read`/`google_sheet_write` (legacy), `manifest_builder` (build website manifest).
 - Per-video steps (run for each `v`): `fetch_video_metadata`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `normalize_srt`, `translate_subtitles`, `upload_subtitles`.
 - Validates `steps` presence and order (e.g., source before per-video; `manifest_builder` last); sources are mutually exclusive (`read_youtube_urls` vs `google_sheet_read`).

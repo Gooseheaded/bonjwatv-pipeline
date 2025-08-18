@@ -22,6 +22,7 @@ python pipeline_orchestrator.py --config pipeline-config.json
 ### Optional GUI
 - Launch: `python -m gui.app`
 - The GUI writes a per-run orchestrator config to `<run_root>/gui-config.json` (derived from your selected `urls.txt`). It then runs `pipeline_orchestrator.py` with that config and streams logs to the UI.
+- The GUI allows selecting a transcription provider (`local` or `openai`).
 - Note: On Linux you may need Tkinter installed (e.g., `sudo apt-get install python3-tk`).
 
 ## Workflows
@@ -143,6 +144,7 @@ pytest -q
   - Global: `read_youtube_urls`, `build_videos_json`, `google_sheet_read`, `google_sheet_write`, `manifest_builder`
   - Per-video: `fetch_video_metadata`, `translate_title`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `normalize_srt`, `translate_subtitles`, `upload_subtitles`
   - Note: Use exactly one source step: either `read_youtube_urls` (URL workflow) or `google_sheet_read` (legacy), not both.
+  - The `transcription_provider` key can be set to `local` or `openai`.
   Then run the orchestrator:
   ```bash
   python pipeline_orchestrator.py --config pipeline-config.json
@@ -153,7 +155,8 @@ pytest -q
 - Model (translation): `gpt-4.1-mini` (`--model` to override)
 - Chunking: `--chunk-size 50`, `--overlap 5`
 - Directories: `audio/`, `subtitles/`, `metadata/`, `.cache/`, `website/`
-- Whisper transcription: `--model-size large`, `--language ko`
+- Transcription (local): `whisper` with `--model-size large`, `--language ko`
+- Transcription (remote): `openai` with `--api-model whisper-1`
 - Orchestrator config: see `pipeline-config.json` for `video_list_file`, dirs, and ordered `steps`
 
 ## Project Layout
@@ -173,7 +176,7 @@ build_videos_json.py      # Enrich videos.json into videos_enriched.json
 fetch_video_metadata.py   # Fetch detailed video metadata from YouTube
 download_audio.py         # Download video audio using yt-dlp
 isolate_vocals.py         # Isolate vocals from audio using Demucs
-transcribe_audio.py       # Transcribe audio to subtitles using Whisper
+transcribe_audio.py       # Transcribe audio via local Whisper or OpenAI API
 normalize_srt.py          # Normalize SRT timestamps and collapse duplicates
 translate_subtitles.py    # Translate subtitles using the OpenAI API
 upload_subtitles.py       # Upload translated SRTs to Pastebin
