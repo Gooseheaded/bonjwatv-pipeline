@@ -1,0 +1,10 @@
+{
+  "videos_path": "my_videos.txt",
+  "api_key": "",
+  "do_download": true,
+  "do_isolate": false,
+  "do_transcribe": false,
+  "transcription_provider": "local",
+  "do_normalize": true,
+  "do_translate": false
+}
