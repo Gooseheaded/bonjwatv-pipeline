@@ -39,7 +39,7 @@ $orchestratorExe = Join-Path -Path (Resolve-Path .).Path -ChildPath "dist/Orches
 Assert-Path -Path $orchestratorExe -Message "Expected '$orchestratorExe' after Orchestrator build. Did the build fail?"
 
 # 2) Build GUI (windowed) and bundle the orchestrator exe
-Invoke-Step -Name "Build GUI" -Command "pyinstaller --noconfirm --windowed BWKTSubtitlePipeline_win32.spec"
+Invoke-Step -Name "Build GUI" -Command "pyinstaller --noconfirm BWKTSubtitlePipeline_win32.spec"
 
 $guiExe = Join-Path -Path (Resolve-Path .).Path -ChildPath "dist/BWKTSubtitlePipeline/BWKTSubtitlePipeline.exe"
 Assert-Path -Path $guiExe -Message "Expected '$guiExe' after GUI build. Did the build fail?"
