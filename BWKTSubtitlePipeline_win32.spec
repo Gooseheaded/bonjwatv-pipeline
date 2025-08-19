@@ -25,7 +25,9 @@ a = Analysis(
         ('google_sheet_read.py', '.'),
         ('google_sheet_write.py', '.'),
         ('manifest_builder.py', '.'),
+        # Provide both root and nested locations for the orchestrator exe
         ('dist/Orchestrator.exe', 'Orchestrator.exe'),
+        ('dist/Orchestrator.exe', 'Orchestrator/Orchestrator.exe'),
     ],
     hiddenimports=['openai'],  # omit whisper if not installed on Windows build host
     hookspath=[],

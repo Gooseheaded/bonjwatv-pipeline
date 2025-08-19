@@ -397,6 +397,22 @@ class App(tk.Tk):
                     ])
                 orchestrator_exe_path = next((p for p in candidates if os.path.isfile(p)), None)
                 if orchestrator_exe_path is None:
+                    # Fallback: look relative to the executable directory (one-dir bundles)
+                    exe_dir = os.path.dirname(sys.executable)
+                    for b in (exe_dir, os.path.join(exe_dir, "_internal")):
+                        for rel in (
+                            "Orchestrator",
+                            "Orchestrator.exe",
+                            os.path.join("Orchestrator", "Orchestrator"),
+                            os.path.join("Orchestrator", "Orchestrator.exe"),
+                        ):
+                            cand = os.path.join(b, rel)
+                            if os.path.isfile(cand):
+                                orchestrator_exe_path = cand
+                                break
+                        if orchestrator_exe_path:
+                            break
+                if orchestrator_exe_path is None:
                     raise RuntimeError("Bundled Orchestrator binary not found in package.")
                 # Ensure executable bit on POSIX systems
                 try:
