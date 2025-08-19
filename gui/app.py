@@ -390,10 +390,14 @@ class App(tk.Tk):
                 candidates = []
                 for b in bases:
                     candidates.extend([
-                        os.path.join(b, "Orchestrator"),  # file at root
-                        os.path.join(b, "Orchestrator.exe"),  # file at root (Windows)
-                        os.path.join(b, "Orchestrator", "Orchestrator"),  # file inside folder
-                        os.path.join(b, "Orchestrator", "Orchestrator.exe"),  # file inside folder (Windows)
+                        # Preferred: packaged under bin/
+                        os.path.join(b, "bin", "Orchestrator"),
+                        os.path.join(b, "bin", "Orchestrator.exe"),
+                        # Fallbacks: historical layouts
+                        os.path.join(b, "Orchestrator"),
+                        os.path.join(b, "Orchestrator.exe"),
+                        os.path.join(b, "Orchestrator", "Orchestrator"),
+                        os.path.join(b, "Orchestrator", "Orchestrator.exe"),
                     ])
                 orchestrator_exe_path = next((p for p in candidates if os.path.isfile(p)), None)
                 if orchestrator_exe_path is None:
@@ -401,6 +405,8 @@ class App(tk.Tk):
                     exe_dir = os.path.dirname(sys.executable)
                     for b in (exe_dir, os.path.join(exe_dir, "_internal")):
                         for rel in (
+                            os.path.join("bin", "Orchestrator"),
+                            os.path.join("bin", "Orchestrator.exe"),
                             "Orchestrator",
                             "Orchestrator.exe",
                             os.path.join("Orchestrator", "Orchestrator"),

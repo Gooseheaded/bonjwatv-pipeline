@@ -26,7 +26,9 @@ a = Analysis(
         ('google_sheet_write.py', '.'),
         ('manifest_builder.py', '.'),
         # Bundle the orchestrator binary at a stable root path
-        ('dist/Orchestrator', 'Orchestrator'),
+        # Place backend binary under bin/ to avoid path ambiguities
+        # Copy backend file into bin/ (dest is a directory)
+        ('dist/Orchestrator', 'bin'),
     ],
     hiddenimports=['whisper', 'openai'],
     hookspath=[],

@@ -33,13 +33,13 @@ function Assert-Path {
 }
 
 # 1) Build Orchestrator (no console window)
-Invoke-Step -Name "Build Orchestrator" -Command "pyinstaller --noconfirm Orchestrator.spec"
+Invoke-Step -Name "Build Orchestrator" -Command "pyinstaller --clean --noconfirm Orchestrator.spec"
 
 $orchestratorExe = Join-Path -Path (Resolve-Path .).Path -ChildPath "dist/Orchestrator.exe"
 Assert-Path -Path $orchestratorExe -Message "Expected '$orchestratorExe' after Orchestrator build. Did the build fail?"
 
 # 2) Build GUI (windowed) and bundle the orchestrator exe
-Invoke-Step -Name "Build GUI" -Command "pyinstaller --noconfirm --distpath dist/release BWKTSubtitlePipeline_win32.spec"
+Invoke-Step -Name "Build GUI" -Command "pyinstaller --clean --noconfirm --distpath dist/release BWKTSubtitlePipeline_win32.spec"
 
 # Clean the top-level Orchestrator artifact to keep dist/ focused on the GUI
 if (Test-Path -LiteralPath "dist/Orchestrator.exe") {
