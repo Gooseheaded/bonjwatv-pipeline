@@ -5,6 +5,12 @@ set -euo pipefail
 pyinstaller --noconfirm Orchestrator.spec
 
 # Then build the GUI, which bundles the Orchestrator folder as data
-pyinstaller --noconfirm BWKTSubtitlePipeline.spec
+# Place the user-facing GUI under dist/release/
+pyinstaller --noconfirm --distpath dist/release BWKTSubtitlePipeline.spec
 
-echo "Build complete. Binaries in dist/"
+# Tidy up: remove the top-level Orchestrator artifact to avoid confusion
+if [ -d "dist/Orchestrator" ]; then
+  rm -rf dist/Orchestrator
+fi
+
+echo "Build complete. GUI in dist/release/BWKTSubtitlePipeline/"
