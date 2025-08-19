@@ -386,15 +386,26 @@ class App(tk.Tk):
                 # - a standalone file: Orchestrator or Orchestrator.exe
                 # - inside a folder: Orchestrator/Orchestrator(.exe)
                 base = sys._MEIPASS
-                candidates = [
-                    os.path.join(base, "Orchestrator"),
-                    os.path.join(base, "Orchestrator.exe"),
-                    os.path.join(base, "Orchestrator", "Orchestrator"),
-                    os.path.join(base, "Orchestrator", "Orchestrator.exe"),
-                ]
-                orchestrator_exe_path = next((p for p in candidates if os.path.exists(p)), None)
+                bases = [base, os.path.join(base, "_internal")]
+                candidates = []
+                for b in bases:
+                    candidates.extend([
+                        os.path.join(b, "Orchestrator"),  # file at root
+                        os.path.join(b, "Orchestrator.exe"),  # file at root (Windows)
+                        os.path.join(b, "Orchestrator", "Orchestrator"),  # file inside folder
+                        os.path.join(b, "Orchestrator", "Orchestrator.exe"),  # file inside folder (Windows)
+                    ])
+                orchestrator_exe_path = next((p for p in candidates if os.path.isfile(p)), None)
                 if orchestrator_exe_path is None:
                     raise RuntimeError("Bundled Orchestrator binary not found in package.")
+                # Ensure executable bit on POSIX systems
+                try:
+                    if os.name == "posix":
+                        mode = os.stat(orchestrator_exe_path).st_mode
+                        if (mode & 0o111) == 0:
+                            os.chmod(orchestrator_exe_path, mode | 0o755)
+                except Exception:
+                    pass
                 cmd = [orchestrator_exe_path, "--config", cfg_path]
             else:
                 # Running from source (during development)

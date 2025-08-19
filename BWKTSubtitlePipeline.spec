@@ -25,7 +25,7 @@ a = Analysis(
         ('google_sheet_read.py', '.'),
         ('google_sheet_write.py', '.'),
         ('manifest_builder.py', '.'),
-        # Bundle the orchestrator output folder under a stable name
+        # Bundle the orchestrator binary at a stable root path
         ('dist/Orchestrator', 'Orchestrator'),
     ],
     hiddenimports=['whisper', 'openai'],
