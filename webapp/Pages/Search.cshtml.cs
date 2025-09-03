@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using bwkt_webapp.Models;
@@ -10,16 +11,51 @@ namespace bwkt_webapp.Pages
         private readonly IVideoService _videoService;
         public string Query { get; private set; } = string.Empty;
         public IEnumerable<VideoInfo> Videos { get; private set; } = new List<VideoInfo>();
+        public string SelectedRace { get; private set; } = "all"; // all | z | t | p
 
         public SearchModel(IVideoService videoService)
         {
             _videoService = videoService;
         }
 
-        public void OnGet(string q)
+        public void OnGet(string q, string? race)
         {
             Query = q ?? string.Empty;
-            Videos = _videoService.Search(Query);
+            // Determine race preference: query param > cookie > default("all")
+            var cookieRace = Request.Cookies["race"];
+            SelectedRace = string.IsNullOrWhiteSpace(race) ? (string.IsNullOrWhiteSpace(cookieRace) ? "all" : cookieRace!) : race!;
+            SelectedRace = NormalizeRace(SelectedRace);
+
+            // Persist preference for future searches
+            Response.Cookies.Append("race", SelectedRace, new Microsoft.AspNetCore.Http.CookieOptions
+            {
+                HttpOnly = false,
+                IsEssential = true,
+                SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax,
+                Expires = DateTimeOffset.UtcNow.AddDays(180)
+            });
+
+            var results = _videoService.Search(Query);
+            Videos = FilterByRace(results, SelectedRace);
+        }
+
+        private static string NormalizeRace(string value)
+        {
+            return value?.Trim().ToLowerInvariant() switch
+            {
+                "z" or "zerg" => "z",
+                "t" or "terran" => "t",
+                "p" or "protoss" => "p",
+                _ => "all"
+            };
+        }
+
+        private static IEnumerable<VideoInfo> FilterByRace(IEnumerable<VideoInfo> source, string race)
+        {
+            if (race == "all") return source;
+            return source.Where(v => v.Tags != null && v.Tags.Any(tag =>
+                string.Equals(tag, race, StringComparison.OrdinalIgnoreCase)
+            ));
         }
     }
 }
