@@ -1,0 +1,28 @@
+{
+  "video_list_file": "metadata/videos.json",
+  "audio_dir": "audio",
+  "vocals_dir": "vocals",
+  "subtitles_dir": "subtitles",
+  "cache_dir": ".cache",
+  "slang_file": "slang/KoreanSlang.txt",
+  "website_dir": "website",
+  "service_account_file": "path/to/service-account.json",
+  "spreadsheet": "Translation Tracking",
+  "worksheet": "Translated Videos",
+  "sheet_column": "Pastebin URL",
+  "video_metadata_dir": "metadata",
+  "urls_file": "metadata/urls.txt",
+  "steps": [
+    "read_youtube_urls",
+    "fetch_video_metadata",
+    "translate_title",
+    "build_videos_json",
+    "download_audio",
+    "isolate_vocals",
+    "transcribe_audio",
+    "normalize_srt",
+    "translate_subtitles",
+    "upload_subtitles",
+    "manifest_builder"
+  ]
+}
