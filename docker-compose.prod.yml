@@ -1,0 +1,28 @@
+services:
+  webapp:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - DATA_CATALOG_URL=http://catalog-api:8080/api/videos
+    ports:
+      - "80:8080"
+    restart: unless-stopped
+    volumes:
+      - web-data:/app/data
+    build:
+      args:
+        BUILD_CONFIGURATION: Release
+
+  catalog-api:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://0.0.0.0:8080
+    # Hide API from external network in prod
+    ports: []
+    restart: unless-stopped
+    build:
+      args:
+        BUILD_CONFIGURATION: Release
+
+volumes:
+  web-data:
+
