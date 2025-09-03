@@ -16,9 +16,11 @@ pacman -Sy --noconfirm
 echo "[2/6] Installing packages: docker, docker-compose-plugin, fuse-overlayfs, docker-buildx"
 pacman -S --needed --noconfirm docker docker-compose-plugin fuse-overlayfs docker-buildx || true
 
-echo "[3/6] Configuring Docker to use fuse-overlayfs (works well in LXC)"
+echo "[3/6] Configuring Docker storage driver…"
 mkdir -p /etc/docker
-cat > /etc/docker/daemon.json <<'JSON'
+if [[ -e /dev/fuse ]]; then
+  echo "- /dev/fuse present → using overlay2 + fuse-overlayfs"
+  cat > /etc/docker/daemon.json <<'JSON'
 {
   "storage-driver": "overlay2",
   "storage-opts": [
@@ -26,6 +28,15 @@ cat > /etc/docker/daemon.json <<'JSON'
   ]
 }
 JSON
+else
+  echo "- /dev/fuse missing → falling back to vfs (slower)."
+  echo "  Hint: On Proxmox host enable CT features: pct set <CTID> -features nesting=1,keyctl=1,fuse=1; then restart the CT."
+  cat > /etc/docker/daemon.json <<'JSON'
+{
+  "storage-driver": "vfs"
+}
+JSON
+fi
 
 echo "[4/6] Enabling and starting services: containerd + docker"
 systemctl enable --now containerd docker
@@ -51,4 +62,3 @@ Done. Notes:
     cd /opt/bwkt/current && ./run.sh
 
 NOTE
-
