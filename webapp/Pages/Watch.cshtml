@@ -1,0 +1,71 @@
+@page
+@model bwkt_webapp.Pages.WatchModel
+@using System
+@using bwkt_webapp.Helpers
+@{
+    ViewData["Title"] = Model.Video?.Title ?? "Watch";
+}
+
+@if (Model.Video == null)
+{
+    <div class="alert alert-danger">Video not found.</div>
+}
+else
+{
+    <h1>@Model.Video.Title</h1>
+    <div class="mb-3">
+        @if (!string.IsNullOrEmpty(Model.Video.Creator))
+        {
+            <h6 class="text-muted mb-2">By @Model.Video.Creator</h6>
+        }
+        @foreach (var tag in Model.Video.Tags ?? Array.Empty<string>())
+        {
+            var (text, css) = TagBadge.Get(tag);
+            <span class="badge @css me-1">@text</span>
+        }
+    </div>
+    <div class="position-relative ratio ratio-16x9 mb-3 video-wrapper">
+        <iframe id="player"
+                src="https://www.youtube.com/embed/@Model.Video.VideoId?enablejsapi=1"
+                title="@Model.Video.Title"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
+        </iframe>
+        <div id="subtitle-container"
+             class="position-absolute start-50 translate-middle-x subtitle-overlay">
+        </div>
+    </div>
+    <div class="mb-3 d-flex align-items-center justify-content-center">
+        <label class="form-label me-2 mb-0">Subtitle Font Size:</label>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Subtitle font size">
+            <button id="dec-font" type="button" class="btn btn-outline-secondary">A-</button>
+            <button id="inc-font" type="button" class="btn btn-outline-secondary">A+</button>
+        </div>
+    </div>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="~/js/subtitles.js"></script>
+    <script>
+        // Initialize subtitles after the YouTube IFrame API has loaded
+        initSubtitles("@Model.Video.SubtitleUrl", "player", "subtitle-container");
+
+        // Load saved font size from localStorage, if any
+        const subtitleEl = document.getElementById('subtitle-container');
+        const savedSize = parseFloat(localStorage.getItem('subtitleFontSize'));
+        if (!isNaN(savedSize)) {
+            subtitleEl.style.fontSize = savedSize + 'px';
+        }
+
+        // Font size adjustment controls
+        const decBtn = document.getElementById('dec-font');
+        const incBtn = document.getElementById('inc-font');
+        decBtn.addEventListener('click', () => adjustFontSize(-2));
+        incBtn.addEventListener('click', () => adjustFontSize(2));
+
+        function adjustFontSize(deltaPx) {
+            const style = window.getComputedStyle(subtitleEl);
+            const current = parseFloat(style.fontSize) || 16;
+            const next = Math.max(6, current + deltaPx);
+            subtitleEl.style.fontSize = next + 'px';
+            localStorage.setItem('subtitleFontSize', next);
+        }
+    </script>
+}

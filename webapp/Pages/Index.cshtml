@@ -1,0 +1,48 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Home page";
+}
+
+@using System
+@using System.Linq
+@using bwkt_webapp.Helpers
+
+<div class="alert alert-info text-center" role="alert">
+    Welcome to bonjwa.tv, the subtitled Brood War video gallery. Consider supporting via
+    <a href="https://www.patreon.com/bwkt" class="alert-link" target="_blank" rel="noopener">Patreon</a>!
+</div>
+<h1>All Videos</h1>
+
+@if (!Model.Videos.Any())
+{
+    <p>No videos available.</p>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
+        @foreach (var v in Model.Videos)
+        {
+            <div class="col">
+                <div class="card h-100">
+                    <a asp-page="/Watch" asp-route-v="@v.VideoId">
+                        <img src="https://img.youtube.com/vi/@v.VideoId/hqdefault.jpg"
+                             class="card-img-top" alt="@v.Title" />
+                    </a>
+                    <div class="card-body">
+                        <h5 class="card-title">@v.Title</h5>
+                        @if (!string.IsNullOrEmpty(v.Creator))
+                        {
+                            <h6 class="card-subtitle mb-2 text-muted">By @v.Creator</h6>
+                        }
+                        @foreach (var tag in v.Tags ?? Array.Empty<string>())
+                        {
+                            var (text, css) = TagBadge.Get(tag);
+                            <span class="badge @css me-1">@text</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
