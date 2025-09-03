@@ -27,10 +27,26 @@
                     @{ var raceVal = (string)(Context.Request.Query["race"].FirstOrDefault() ?? Context.Request.Cookies["race"] ?? "all"); }
                     <form class="d-flex" method="get" asp-page="/Search">
                         <select class="form-select me-2" name="race" aria-label="Race filter">
-                            <option value="all" @(string.Equals(raceVal, "all", StringComparison.OrdinalIgnoreCase) ? "selected" : null)>All Races</option>
-                            <option value="z" @(string.Equals(raceVal, "z", StringComparison.OrdinalIgnoreCase) ? "selected" : null)>Zerg</option>
-                            <option value="t" @(string.Equals(raceVal, "t", StringComparison.OrdinalIgnoreCase) ? "selected" : null)>Terran</option>
-                            <option value="p" @(string.Equals(raceVal, "p", StringComparison.OrdinalIgnoreCase) ? "selected" : null)>Protoss</option>
+@if (string.Equals(raceVal, "all", StringComparison.OrdinalIgnoreCase)) {
+    <option value="all" selected>All Races</option>
+} else {
+    <option value="all">All Races</option>
+}
+@if (string.Equals(raceVal, "z", StringComparison.OrdinalIgnoreCase)) {
+    <option value="z" selected>Zerg</option>
+} else {
+    <option value="z">Zerg</option>
+}
+@if (string.Equals(raceVal, "t", StringComparison.OrdinalIgnoreCase)) {
+    <option value="t" selected>Terran</option>
+} else {
+    <option value="t">Terran</option>
+}
+@if (string.Equals(raceVal, "p", StringComparison.OrdinalIgnoreCase)) {
+    <option value="p" selected>Protoss</option>
+} else {
+    <option value="p">Protoss</option>
+}
                         </select>
                         <input class="form-control me-2" type="search" name="q" placeholder="Search" aria-label="Search" value="@Context.Request.Query["q"]" />
                         <button class="btn btn-outline-primary" type="submit">Search</button>
