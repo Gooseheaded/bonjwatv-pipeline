@@ -47,6 +47,19 @@ Alternative workflow: build elsewhere, deploy images
     - docker load -i api.tar
   - Then run the same compose up command above.
 
+Bundle-based deploy (no registry, scripted)
+- Package on your dev machine:
+  - scripts/package-docker.sh
+  - Output: dist/bwkt-docker-YYYYMMDD-HHMMSS.tar.gz containing images, compose files, and a run.sh
+- Upload and deploy to the server (example):
+  - scripts/deploy-to-server.sh root@172.16.4.104 /opt/bwkt dist/bwkt-docker-YYYYMMDD-HHMMSS.tar.gz
+  - The script uploads, extracts under /opt/bwkt/current, loads images, and runs: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+- Manual alternative:
+  - scp dist/bwkt-docker-*.tar.gz user@host:/path && ssh user@host 'mkdir -p /path/current && tar xzf /path/bwkt-docker-*.tar.gz -C /path/current && cd /path/current && ./run.sh'
+- Notes:
+  - Server still needs Docker + compose plugin installed.
+  - Webapp listens on port 80; catalog-api is internal-only.
+
 TLS and domain
 - Easiest: run a reverse proxy (Caddy/Nginx) on the LXC that terminates TLS and forwards to `webapp:8080`.
 - If exposing directly on port 80, ensure upstream firewall/NAT allows HTTP (and 443 if adding TLS later).
