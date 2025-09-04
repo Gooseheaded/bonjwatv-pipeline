@@ -32,6 +32,37 @@ set -euo pipefail
 cd "$REMOTE_DIR"
 echo "Remote dir content:"
 ls -alh
+
+echo "Preflight: ensuring Docker is installed and running…"
+if ! command -v docker >/dev/null 2>&1; then
+  if [ -f /etc/os-release ]; then . /etc/os-release; else ID=unknown; fi
+  case "$ID" in
+    arch)
+      echo "- Installing Docker on Arch…"
+      pacman -Sy --noconfirm docker docker-compose-plugin docker-buildx || true
+      ;;
+    debian|ubuntu)
+      echo "- Installing Docker on Debian/Ubuntu…"
+      apt-get update -y || true
+      apt-get install -y docker.io docker-compose-plugin || true
+      ;;
+    *)
+      echo "WARNING: Unknown distro ($ID). Please install Docker manually and rerun." >&2
+      ;;
+  esac
+fi
+
+# Start Docker if not running
+if ! docker info >/dev/null 2>&1; then
+  echo "- Starting Docker service…"
+  systemctl enable --now containerd docker || systemctl start docker || true
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  echo "ERROR: Docker daemon is not running or not accessible. Aborting." >&2
+  exit 1
+fi
+
 BUNDLE_FILE="$BASE_NAME"
 if [[ ! -f "$BUNDLE_FILE" ]]; then
   echo "Bundle not found as expected name; trying latest *.tar.gz"
