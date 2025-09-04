@@ -1,0 +1,14 @@
+# .NET build outputs
+**/bin/
+**/obj/
+
+# Local artifacts
+dist/
+test-results.txt
+
+# IDE/editor
+.vscode/
+.idea/
+*.suo
+*.user
+
