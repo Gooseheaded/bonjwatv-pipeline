@@ -8,5 +8,6 @@ namespace bwkt_webapp.Services
         IEnumerable<VideoInfo> GetAll();
         VideoInfo? GetById(string videoId);
         IEnumerable<VideoInfo> Search(string query);
+        IEnumerable<VideoInfo> Search(string query, string? race);
     }
 }

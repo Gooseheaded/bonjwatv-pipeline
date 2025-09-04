@@ -35,8 +35,8 @@ namespace bwkt_webapp.Pages
                 Expires = DateTimeOffset.UtcNow.AddDays(180)
             });
 
-            var results = _videoService.Search(Query);
-            Videos = FilterByRace(results, SelectedRace);
+            var raceParam = SelectedRace == "all" ? null : SelectedRace;
+            Videos = _videoService.Search(Query, raceParam);
         }
 
         private static string NormalizeRace(string value)
@@ -50,12 +50,6 @@ namespace bwkt_webapp.Pages
             };
         }
 
-        private static IEnumerable<VideoInfo> FilterByRace(IEnumerable<VideoInfo> source, string race)
-        {
-            if (race == "all") return source;
-            return source.Where(v => v.Tags != null && v.Tags.Any(tag =>
-                string.Equals(tag, race, StringComparison.OrdinalIgnoreCase)
-            ));
-        }
+        // Race filtering is applied in the service when using the Catalog API.
     }
 }

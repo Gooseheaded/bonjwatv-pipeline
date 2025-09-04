@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using bwkt_webapp.Models;
 using bwkt_webapp.Helpers;
@@ -14,12 +15,16 @@ namespace bwkt_webapp.Services
         private List<VideoInfo> _videos = new List<VideoInfo>();
         private readonly JsonSerializerOptions _jsonOptions;
         private readonly FileSystemWatcher? _watcher;
+        private readonly HttpClient _httpClient = new HttpClient();
+        private readonly string? _catalogUrl;
 
         public VideoService(IWebHostEnvironment env)
         {
             var dataPath = Path.Combine(env.ContentRootPath, "data", "videos.json");
             _jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             LoadData(dataPath);
+
+            _catalogUrl = Environment.GetEnvironmentVariable("DATA_CATALOG_URL");
 
             var dir = Path.GetDirectoryName(dataPath)!;
             if (Directory.Exists(dir))
@@ -69,20 +74,119 @@ namespace bwkt_webapp.Services
 
         public IEnumerable<VideoInfo> Search(string query)
         {
-            if (string.IsNullOrWhiteSpace(query))
-                return _videos;
+            return Search(query, null);
+        }
 
-            // Tokenize on whitespace and require all tokens to match title or tags
-            var tokens = query.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
-            return _videos.Where(v =>
-                tokens.All(token =>
-                    v.Title.Contains(token, StringComparison.OrdinalIgnoreCase)
-                    || (v.Tags?.Any(tag =>
-                        string.Equals(tag, token, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(TagBadge.Get(tag).Text, token, StringComparison.OrdinalIgnoreCase)
-                    ) ?? false)
-                )
-            );
+        public IEnumerable<VideoInfo> Search(string query, string? race)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(_catalogUrl))
+                {
+                    var url = BuildCatalogQuery(_catalogUrl!, query, race);
+                    var data = FetchCatalogAllPages(url);
+                    return data;
+                }
+            }
+            catch
+            {
+                // fall back to local search
+            }
+
+            // Local search fallback
+            IEnumerable<VideoInfo> baseQuery = _videos;
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var tokens = query.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+                baseQuery = baseQuery.Where(v =>
+                    tokens.All(token =>
+                        v.Title.Contains(token, StringComparison.OrdinalIgnoreCase)
+                        || (v.Tags?.Any(tag =>
+                            string.Equals(tag, token, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(TagBadge.Get(tag).Text, token, StringComparison.OrdinalIgnoreCase)
+                        ) ?? false)
+                    )
+                );
+            }
+            var r = NormalizeRace(race);
+            if (r != null)
+            {
+                baseQuery = baseQuery.Where(v => v.Tags != null && v.Tags.Any(t => string.Equals(t, r, StringComparison.OrdinalIgnoreCase)));
+            }
+            return baseQuery;
+        }
+
+        private static string? NormalizeRace(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            switch (value.Trim().ToLowerInvariant())
+            {
+                case "z": case "zerg": return "z";
+                case "t": case "terran": return "t";
+                case "p": case "protoss": return "p";
+                default: return null;
+            }
+        }
+
+        private static string BuildCatalogQuery(string baseUrl, string query, string? race)
+        {
+            var uri = new Uri(baseUrl);
+            var qb = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            if (!string.IsNullOrWhiteSpace(query)) qb.Set("q", query);
+            var r = NormalizeRace(race);
+            if (r != null) qb.Set("race", r);
+            qb.Set("pageSize", "100");
+            var builder = new UriBuilder(uri) { Query = qb.ToString() };
+            return builder.ToString();
+        }
+
+        private IEnumerable<VideoInfo> FetchCatalogAllPages(string url)
+        {
+            var list = new List<VideoInfo>();
+            int page = 1;
+            while (true)
+            {
+                var pageUrl = AddOrReplaceQuery(url, "page", page.ToString());
+                var json = _httpClient.GetStringAsync(pageUrl).GetAwaiter().GetResult();
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array)
+                {
+                    int count = 0;
+                    foreach (var el in itemsEl.EnumerateArray())
+                    {
+                        list.Add(new VideoInfo
+                        {
+                            VideoId = el.GetProperty("id").GetString() ?? string.Empty,
+                            Title = el.GetProperty("title").GetString() ?? string.Empty,
+                            Creator = el.TryGetProperty("creator", out var c) ? c.GetString() : null,
+                            Description = el.TryGetProperty("description", out var d) ? d.GetString() : null,
+                            Tags = el.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array
+                                ? tg.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray()
+                                : null,
+                            SubtitleUrl = string.Empty
+                        });
+                        count++;
+                    }
+                    if (count == 0) break;
+                }
+                else break;
+
+                var total = root.TryGetProperty("totalCount", out var tc) ? tc.GetInt32() : list.Count;
+                if (list.Count >= total) break;
+                page++;
+                if (page > 1000) break; // safety
+            }
+            return list;
+        }
+
+        private static string AddOrReplaceQuery(string url, string key, string value)
+        {
+            var uri = new Uri(url);
+            var qb = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            qb.Set(key, value);
+            var builder = new UriBuilder(uri) { Query = qb.ToString() };
+            return builder.ToString();
         }
 
         public void Dispose()
