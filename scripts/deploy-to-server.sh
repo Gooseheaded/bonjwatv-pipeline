@@ -27,7 +27,26 @@ scp "$BUNDLE" "$TARGET:$REMOTE_DIR/"
 BASE_NAME="$(basename "$BUNDLE")"
 
 echo "Extracting and running on remote…"
-ssh "$TARGET" bash -lc "cd '$REMOTE_DIR' && rm -rf current && mkdir -p current && tar xzf '$BASE_NAME' -C current && cd current && ./run.sh"
+ssh "$TARGET" "REMOTE_DIR='$REMOTE_DIR' BASE_NAME='$BASE_NAME' bash -s" <<'REMOTE'
+set -euo pipefail
+cd "$REMOTE_DIR"
+echo "Remote dir content:"
+ls -alh
+BUNDLE_FILE="$BASE_NAME"
+if [[ ! -f "$BUNDLE_FILE" ]]; then
+  echo "Bundle not found as expected name; trying latest *.tar.gz"
+  BUNDLE_FILE=$(ls -1t *.tar.gz 2>/dev/null | head -n1 || true)
+fi
+if [[ -z "${BUNDLE_FILE:-}" || ! -f "$BUNDLE_FILE" ]]; then
+  echo "ERROR: No bundle .tar.gz found in remote dir" >&2
+  exit 1
+fi
+echo "Using bundle: $BUNDLE_FILE"
+rm -rf current
+mkdir -p current
+tar xzf "$BUNDLE_FILE" -C current
+cd current
+./run.sh
+REMOTE
 
 echo "Deployment complete."
-
