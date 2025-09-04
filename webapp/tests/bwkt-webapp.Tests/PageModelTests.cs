@@ -22,6 +22,8 @@ namespace bwkt_webapp.Tests
             public IEnumerable<VideoInfo> Search(string query) => string.IsNullOrWhiteSpace(query)
                 ? _videos
                 : _videos.Where(v => v.Title.Contains(query, StringComparison.OrdinalIgnoreCase));
+            public IEnumerable<VideoInfo> Search(string query, string? race)
+                => Search(query);
         }
 
         private List<VideoInfo> SampleVideos => new List<VideoInfo>

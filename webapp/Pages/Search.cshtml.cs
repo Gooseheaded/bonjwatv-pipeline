@@ -18,7 +18,7 @@ namespace bwkt_webapp.Pages
             _videoService = videoService;
         }
 
-        public void OnGet(string q, string? race)
+        public void OnGet(string q, string? race = null)
         {
             Query = q ?? string.Empty;
             // Determine race preference: query param > cookie > default("all")
