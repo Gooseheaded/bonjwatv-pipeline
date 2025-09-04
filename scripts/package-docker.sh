@@ -14,8 +14,8 @@ mkdir -p "$OUT_DIR"
 echo "[1/4] Building images with prod overrides (Release)…"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml build
 
-WEBAPP_IMAGE="bwkt-webapp:dev"
-API_IMAGE="bwkt-catalog-api:dev"
+WEBAPP_IMAGE="bwkt-webapp:prod"
+API_IMAGE="bwkt-catalog-api:prod"
 
 echo "[2/4] Saving images to tar files…"
 docker save -o "$OUT_DIR/webapp-image.tar" "$WEBAPP_IMAGE"
@@ -48,4 +48,3 @@ echo "Contents:"
 ls -lh "$OUT_DIR"
 echo
 echo "Next: copy to server and run run.sh there, or use scripts/deploy-to-server.sh user@host /opt/bwkt $BUNDLE"
-
