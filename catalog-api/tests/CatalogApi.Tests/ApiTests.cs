@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -43,4 +44,3 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(1, res.GetProperty("pageSize").GetInt32());
     }
 }
-
