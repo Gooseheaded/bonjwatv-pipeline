@@ -27,14 +27,14 @@ public class VideoServiceApiFallbackTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         var app = builder.Build();
-        app.MapGet("/api/videos", () => Results.Json(new
+        app.MapGet("/api/videos", () => new
         {
             items = new[]
             {
                 new { id = "api1", title = "From API", tags = new [] { "z" } },
             },
             totalCount = 1, page = 1, pageSize = 100
-        }));
+        });
         await app.StartAsync();
         var baseUrl = app.Urls.First();
 
@@ -69,4 +69,3 @@ public class VideoServiceApiFallbackTests
         }
     }
 }
-

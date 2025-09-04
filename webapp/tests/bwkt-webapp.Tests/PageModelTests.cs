@@ -70,19 +70,7 @@ namespace bwkt_webapp.Tests
             Assert.IsType<NotFoundResult>(result);
         }
 
-        [Fact]
-        public void LoginModel_OnGet_DoesNotThrow()
-        {
-            var model = new LoginModel();
-            model.OnGet();
-        }
-
-        [Fact]
-        public void SignupModel_OnGet_DoesNotThrow()
-        {
-            var model = new SignupModel();
-            model.OnGet();
-        }
+        // Removed legacy Account page tests: Login/Signup pages are not present in current webapp.
 
         [Fact]
         public void SearchModel_OnGet_PassesRaceToService()
