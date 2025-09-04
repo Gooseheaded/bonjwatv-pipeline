@@ -1,10 +1,17 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Linq;
+using catalog_api.Services;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddSingleton<VideoRepository>();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+});
 
 var app = builder.Build();
 if (app.Environment.IsDevelopment())
@@ -13,43 +20,66 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseForwardedHeaders();
 app.MapGet("/", () => Results.Redirect("/swagger"));
 
-app.MapGet("/api/videos", () =>
+app.MapGet("/api/videos", (
+    [Microsoft.AspNetCore.Mvc.FromServices] VideoRepository repo,
+    string? q,
+    string? race,
+    int? page,
+    int? pageSize
+) =>
 {
-    // Phase 0: Read from webapp local JSON (dev) as a stopgap until DB is added.
-    // Monorepo layout assumption: ../webapp/data/videos.json relative to API project.
-    var root = Directory.GetCurrentDirectory();
-    var jsonPath = Path.GetFullPath(Path.Combine(root, "..", "webapp", "data", "videos.json"));
-    if (!File.Exists(jsonPath))
+    var all = repo.All();
+    IEnumerable<catalog_api.Services.VideoItem> query = all;
+
+    // Filter by search terms
+    if (!string.IsNullOrWhiteSpace(q))
     {
-        return Results.Json(new { items = Array.Empty<VideoDto>(), totalCount = 0 });
+        var tokens = q.Split((char[])null!, StringSplitOptions.RemoveEmptyEntries);
+        query = query.Where(v => tokens.All(t =>
+            (v.Title?.Contains(t, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (v.Tags != null && v.Tags.Any(tag => tag.Equals(t, StringComparison.OrdinalIgnoreCase)))
+        ));
     }
 
-    using var doc = JsonDocument.Parse(File.ReadAllText(jsonPath));
-    var items = new List<VideoDto>();
-    foreach (var el in doc.RootElement.EnumerateArray())
+    // Race filter: z|t|p
+    var r = NormalizeRace(race);
+    if (r != null)
     {
-        string youtubeId = el.TryGetProperty("v", out var vProp) ? (vProp.GetString() ?? "") : "";
-        string title = el.TryGetProperty("title", out var t) ? (t.GetString() ?? "") : "";
-        string? creator = el.TryGetProperty("creator", out var c) ? c.GetString() : null;
-        string? description = el.TryGetProperty("description", out var d) ? d.GetString() : null;
-        string? releaseDate = el.TryGetProperty("releaseDate", out var rd) ? rd.GetString() : null;
-        string[]? tags = null;
-        if (el.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array)
-        {
-            tags = tg.EnumerateArray()
-                     .Select(e => e.GetString() ?? "")
-                     .Where(s => !string.IsNullOrWhiteSpace(s))
-                     .ToArray();
-        }
-
-        items.Add(new VideoDto(youtubeId, title, creator, description, tags, releaseDate, youtubeId));
+        query = query.Where(v => v.Tags != null && v.Tags.Any(tag => tag.Equals(r, StringComparison.OrdinalIgnoreCase)));
     }
 
-    return Results.Json(new { items, totalCount = items.Count });
+    var total = query.Count();
+    int pg = Math.Max(1, page ?? 1);
+    int ps = Math.Clamp(pageSize ?? 24, 1, 100);
+    var items = query
+        .Skip((pg - 1) * ps)
+        .Take(ps)
+        .Select(v => new VideoDto(
+            v.Id,
+            v.Title,
+            v.Creator,
+            v.Description,
+            v.Tags,
+            v.ReleaseDate,
+            v.Id
+        ))
+        .ToList();
+
+    return Results.Json(new { items, totalCount = total, page = pg, pageSize = ps });
 })
-.WithName("GetVideos");
+.WithName("GetVideos")
+.WithOpenApi(o =>
+{
+    o.Summary = "List videos with optional search, race filter, and paging";
+    o.Parameters[0].Description = "Search terms (space separated)";
+    o.Parameters[1].Description = "Race code: z|t|p (omit for all)";
+    o.Parameters[2].Description = "Page number (1-based)";
+    o.Parameters[3].Description = "Page size (1-100, default 24)";
+    return o;
+});
 
 app.Run();
 
@@ -65,3 +95,15 @@ internal record VideoDto(
     string? ReleaseDate,
     string YoutubeId
 );
+
+static string? NormalizeRace(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return null;
+    return value.Trim().ToLowerInvariant() switch
+    {
+        "z" or "zerg" => "z",
+        "t" or "terran" => "t",
+        "p" or "protoss" => "p",
+        _ => null
+    };
+}
