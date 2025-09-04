@@ -22,7 +22,7 @@ namespace bwkt_webapp.Pages
         {
             Query = q ?? string.Empty;
             // Determine race preference: query param > cookie > default("all")
-            var cookieRace = Request.Cookies["race"];
+            var cookieRace = HttpContext != null ? Request.Cookies["race"] : null;
             SelectedRace = string.IsNullOrWhiteSpace(race) ? (string.IsNullOrWhiteSpace(cookieRace) ? "all" : cookieRace!) : race!;
             SelectedRace = NormalizeRace(SelectedRace);
 
