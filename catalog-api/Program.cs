@@ -83,19 +83,6 @@ app.MapGet("/api/videos", (
 
 app.Run();
 
-// Note: In a file that uses top-level statements, any
-// type declarations must appear after all statements.
-// Keeping this record at the end avoids CS8803.
-internal record VideoDto(
-    string Id,
-    string Title,
-    string? Creator,
-    string? Description,
-    string[]? Tags,
-    string? ReleaseDate,
-    string YoutubeId
-);
-
 static string? NormalizeRace(string? value)
 {
     if (string.IsNullOrWhiteSpace(value)) return null;
@@ -107,3 +94,18 @@ static string? NormalizeRace(string? value)
         _ => null
     };
 }
+
+// Note: In a file that uses top-level statements, any
+// type declarations must appear after all statements.
+// Keeping these at the end avoids CS8803.
+internal record VideoDto(
+    string Id,
+    string Title,
+    string? Creator,
+    string? Description,
+    string[]? Tags,
+    string? ReleaseDate,
+    string YoutubeId
+);
+
+public partial class Program { }

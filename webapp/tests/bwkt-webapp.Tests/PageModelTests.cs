@@ -83,5 +83,28 @@ namespace bwkt_webapp.Tests
             var model = new SignupModel();
             model.OnGet();
         }
+
+        [Fact]
+        public void SearchModel_OnGet_PassesRaceToService()
+        {
+            string? capturedRace = null;
+            var svc = new CapturingService(SampleVideos, r => capturedRace = r);
+            var model = new SearchModel(svc);
+            model.OnGet("", "Zerg");
+            Assert.Equal("z", capturedRace);
+        }
+
+        private class CapturingService : IVideoService
+        {
+            private readonly List<VideoInfo> _videos;
+            private readonly Action<string?> _onRace;
+            public CapturingService(IEnumerable<VideoInfo> videos, Action<string?> onRace)
+            { _videos = videos.ToList(); _onRace = onRace; }
+            public IEnumerable<VideoInfo> GetAll() => _videos;
+            public VideoInfo? GetById(string videoId) => _videos.FirstOrDefault(v => v.VideoId == videoId);
+            public IEnumerable<VideoInfo> Search(string query) => _videos;
+            public IEnumerable<VideoInfo> Search(string query, string? race)
+            { _onRace(race); return _videos; }
+        }
     }
 }

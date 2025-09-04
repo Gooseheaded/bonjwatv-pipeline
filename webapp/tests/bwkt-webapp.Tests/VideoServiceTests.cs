@@ -151,17 +151,16 @@ namespace bwkt_webapp.Tests
             Assert.Single(all);
             Assert.Equal("new", all.First().VideoId);
         }
-    }
-
-    [Fact]
-    public void GetAll_JsonIncludesCreator()
-    {
-        const string json =
-            "[{\"videoId\":\"id1\",\"title\":\"T\",\"description\":null,\"subtitleUrl\":\"u\",\"creator\":\"Alice\"}]";
-        var env = CreateEnvironmentWithJson(json);
-        var svc = new VideoService(env);
-        var v = svc.GetAll().FirstOrDefault();
-        Assert.NotNull(v);
-        Assert.Equal("Alice", v.Creator);
+        [Fact]
+        public void GetAll_JsonIncludesCreator()
+        {
+            const string json =
+                "[{\"videoId\":\"id1\",\"title\":\"T\",\"description\":null,\"subtitleUrl\":\"u\",\"creator\":\"Alice\"}]";
+            var env = CreateEnvironmentWithJson(json);
+            var svc = new VideoService(env);
+            var v = svc.GetAll().FirstOrDefault();
+            Assert.NotNull(v);
+            Assert.Equal("Alice", v.Creator);
+        }
     }
 }
