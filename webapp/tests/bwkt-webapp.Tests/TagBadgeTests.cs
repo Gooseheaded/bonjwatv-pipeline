@@ -25,8 +25,8 @@ public class TagBadgeTests : IClassFixture<TestWebAppFactory>
             var html = await response.Content.ReadAsStringAsync();
 
             // Assert: known tags for first video should render as badges
-            Assert.Contains("<span class=\"badge bg-danger\">Zerg</span>", html);
-            Assert.Contains("<span class=\"badge bg-warning\">Protoss</span>", html);
+            Assert.Contains("<span class=\"badge bg-danger me-1\">Zerg</span>", html);
+            Assert.Contains("<span class=\"badge bg-warning me-1\">Protoss</span>", html);
         }
     }
 }

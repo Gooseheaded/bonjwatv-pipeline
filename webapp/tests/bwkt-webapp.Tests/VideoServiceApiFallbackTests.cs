@@ -14,10 +14,10 @@ public class VideoServiceApiFallbackTests
     {
         public string EnvironmentName { get; set; } = "Development";
         public string ApplicationName { get; set; } = "Tests";
-        public string ContentRootPath { get; set; } = ".";
-        public IFileProvider ContentRootFileProvider { get; set; } = new PhysicalFileProvider(".");
-        public string WebRootPath { get; set; } = ".";
-        public IFileProvider WebRootFileProvider { get; set; } = new PhysicalFileProvider(".");
+        public string ContentRootPath { get; set; } = Path.GetFullPath(".");
+        public IFileProvider ContentRootFileProvider { get; set; } = new PhysicalFileProvider(Path.GetFullPath("."));
+        public string WebRootPath { get; set; } = Path.GetFullPath(".");
+        public IFileProvider WebRootFileProvider { get; set; } = new PhysicalFileProvider(Path.GetFullPath("."));
     }
 
     [Fact]
