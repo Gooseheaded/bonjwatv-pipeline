@@ -26,14 +26,17 @@ namespace bwkt_webapp.Pages
             SelectedRace = string.IsNullOrWhiteSpace(race) ? (string.IsNullOrWhiteSpace(cookieRace) ? "all" : cookieRace!) : race!;
             SelectedRace = NormalizeRace(SelectedRace);
 
-            // Persist preference for future searches
-            Response.Cookies.Append("race", SelectedRace, new Microsoft.AspNetCore.Http.CookieOptions
+            // Persist preference for future searches (when HTTP context is available)
+            if (HttpContext != null)
             {
-                HttpOnly = false,
-                IsEssential = true,
-                SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax,
-                Expires = DateTimeOffset.UtcNow.AddDays(180)
-            });
+                Response.Cookies.Append("race", SelectedRace, new Microsoft.AspNetCore.Http.CookieOptions
+                {
+                    HttpOnly = false,
+                    IsEssential = true,
+                    SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax,
+                    Expires = DateTimeOffset.UtcNow.AddDays(180)
+                });
+            }
 
             var raceParam = SelectedRace == "all" ? null : SelectedRace;
             Videos = _videoService.Search(Query, raceParam);
