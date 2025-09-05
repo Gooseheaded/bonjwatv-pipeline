@@ -45,6 +45,22 @@ app.MapGet("/account/callback", async (HttpContext ctx, DiscordOAuthService oaut
     var code = ctx.Request.Query["code"].ToString();
     if (string.IsNullOrWhiteSpace(code)) return Results.BadRequest("Missing code");
 
+    // Dev-friendly short-circuit: allow demo/mock code without Discord credentials
+    if (string.Equals(code, "demo", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(code, "mock", StringComparison.OrdinalIgnoreCase))
+    {
+        var demoClaims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.Name, "Demo User"),
+            new Claim("provider", "discord")
+        };
+        var demoIdentity = new ClaimsIdentity(demoClaims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var demoPrincipal = new ClaimsPrincipal(demoIdentity);
+        await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, demoPrincipal);
+        return Results.Redirect("/");
+    }
+
     var callback = Environment.GetEnvironmentVariable("OAUTH_CALLBACK_URL")
                    ?? ($"{ctx.Request.Scheme}://{ctx.Request.Host}/account/callback");
     var (okToken, accessToken, err1) = await oauth.ExchangeCodeAsync(code, callback);
