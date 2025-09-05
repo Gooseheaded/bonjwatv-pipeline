@@ -3,6 +3,23 @@
 @{
     ViewData["Title"] = "Home page";
 }
+@{
+    var __adminIds = Environment.GetEnvironmentVariable("ADMIN_USER_IDS") ?? string.Empty;
+    var __currentId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty;
+    var __isAdmin = !string.IsNullOrWhiteSpace(__adminIds) && !string.IsNullOrWhiteSpace(__currentId) && __adminIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(__currentId);
+    var __adminIdsJson = System.Text.Json.JsonSerializer.Serialize(__adminIds);
+    var __currentIdJson = System.Text.Json.JsonSerializer.Serialize(__currentId);
+}
+@section Scripts {
+<script>
+  console.log('ADMIN_USER_IDS:', @__adminIdsJson);
+  console.log('CurrentUserId:', @__currentIdJson);
+  console.log('IsAdmin:', @(__isAdmin.ToString().ToLower()));
+  if (!@(__isAdmin.ToString().ToLower())) {
+    console.log('Tip: Add your Discord user id to ADMIN_USER_IDS (comma-separated) and rebuild to enable Admin link.');
+  }
+</script>
+}
 
 @using System
 @using System.Linq
