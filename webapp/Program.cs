@@ -128,21 +128,53 @@ app.MapGet("/ratings/{id}", async (string id, int? version) =>
     return Results.Stream(stream, contentType);
 });
 
-app.MapPost("/ratings/{id}", async (string id, HttpRequest req) =>
+app.MapPost("/ratings/{id}", async (string id, HttpRequest req, HttpContext ctx) =>
 {
     if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
     using var sr = new StreamReader(req.Body);
     var body = await sr.ReadToEndAsync();
     var url = $"{apiBase}/videos/{id}/ratings";
     using var http = new HttpClient();
-    using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
-    var resp = await http.PostAsync(url, content);
+    using var message = new HttpRequestMessage(HttpMethod.Post, url)
+    {
+        Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json")
+    };
+    if (ctx.User?.Identity?.IsAuthenticated ?? false)
+    {
+        var userId = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var userName = ctx.User.Identity?.Name;
+        if (!string.IsNullOrWhiteSpace(userId)) message.Headers.Add("X-User-Id", userId);
+        if (!string.IsNullOrWhiteSpace(userName)) message.Headers.Add("X-User-Name", userName);
+    }
+    var resp = await http.SendAsync(message);
     if (!resp.IsSuccessStatusCode)
     {
         return Results.StatusCode((int)resp.StatusCode);
     }
     return Results.Ok(new { ok = true });
 }).RequireAuthorization();
+
+// Admin proxy: recent ratings (authorized by simple allowlist of admin user IDs)
+static bool IsAdmin(HttpContext ctx)
+{
+    var ids = Environment.GetEnvironmentVariable("ADMIN_USER_IDS");
+    if (string.IsNullOrWhiteSpace(ids)) return false;
+    var current = ctx.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    return !string.IsNullOrWhiteSpace(current) && ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(current);
+}
+
+app.MapGet("/admin/ratings/recent", async (int? limit, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    var url = $"{apiBase}/admin/ratings/recent?limit={Math.Max(1, limit ?? 50)}";
+    using var http = new HttpClient();
+    var resp = await http.GetAsync(url);
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    var contentType = resp.Content.Headers.ContentType?.ToString() ?? "application/json";
+    var stream = await resp.Content.ReadAsStreamAsync();
+    return Results.Stream(stream, contentType);
+});
 
 app.Run();
 

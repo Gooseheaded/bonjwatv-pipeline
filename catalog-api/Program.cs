@@ -94,13 +94,26 @@ app.MapGet("/api/videos/{id}/ratings", (string id, int? version, HttpContext ctx
 
 app.MapPost("/api/videos/{id}/ratings", (string id, RatingRequest body, HttpContext ctx, RatingsRepository repo) =>
 {
-    var user = ctx.User?.Identity?.IsAuthenticated == true ? ctx.User.Identity!.Name : "anon";
+    // Prefer forwarded identity headers from webapp; fallback to authenticated identity; then "anon"
+    var fwdUserId = ctx.Request.Headers["X-User-Id"].FirstOrDefault();
+    var fwdUserName = ctx.Request.Headers["X-User-Name"].FirstOrDefault();
+    var user = !string.IsNullOrWhiteSpace(fwdUserId)
+        ? fwdUserId
+        : (ctx.User?.Identity?.IsAuthenticated == true ? (ctx.User.Identity!.Name ?? "anon") : "anon");
     var version = Math.Max(1, body.Version);
-    repo.Submit(user!, id, version, body.Value);
+    repo.Submit(user!, id, version, body.Value, fwdUserName);
     return Results.Ok(new { ok = true });
 })
 .WithName("PostRating")
 .WithOpenApi(o => { o.Summary = "Submit rating (red|yellow|green) for a version"; return o; });
+
+// Admin endpoints (no auth yet; rely on private network; to be secured later)
+app.MapGet("/api/admin/ratings/recent", (int? limit, RatingsRepository repo) =>
+{
+    var items = repo.GetRecent(Math.Max(1, limit ?? 50));
+    return Results.Json(items);
+})
+.WithOpenApi(o => { o.Summary = "List recent rating events (descending)"; return o; });
 
 app.Run();
 

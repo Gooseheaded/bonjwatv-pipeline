@@ -26,6 +26,17 @@
                         <li class="nav-item">
                             <a class="nav-link" href="https://www.patreon.com/bwkt" target="_blank" rel="noopener">Patreon</a>
                         </li>
+                        @{
+                            var adminIds = Environment.GetEnvironmentVariable("ADMIN_USER_IDS");
+                            var currentId = User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                            var isAdmin = !string.IsNullOrWhiteSpace(adminIds) && !string.IsNullOrWhiteSpace(currentId) && adminIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(currentId);
+                        }
+                        @if (isAdmin)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link" asp-area="" asp-page="/Admin/Index">Admin</a>
+                            </li>
+                        }
                     </ul>
                     @{ var raceVal = (string)(Context.Request.Query["race"].FirstOrDefault() ?? Context.Request.Cookies["race"] ?? "all"); }
                     <form class="d-flex" method="get" asp-page="/Search">

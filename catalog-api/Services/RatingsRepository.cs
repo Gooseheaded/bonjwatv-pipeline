@@ -13,6 +13,15 @@ public record RatingSummaryDto(
     [property: JsonPropertyName("UserRating")] RatingValue? UserRating
 );
 
+public record RatingEvent(
+    [property: JsonPropertyName("VideoId")] string VideoId,
+    [property: JsonPropertyName("Version")] int Version,
+    [property: JsonPropertyName("UserId")] string UserId,
+    [property: JsonPropertyName("UserName")] string? UserName,
+    [property: JsonPropertyName("Value")] RatingValue Value,
+    [property: JsonPropertyName("CreatedAt")] DateTimeOffset CreatedAt
+);
+
 internal class RatingsRepository
 {
     private readonly string _path;
@@ -69,7 +78,7 @@ internal class RatingsRepository
         }
     }
 
-    public void Submit(string user, string videoId, int version, RatingValue value)
+    public void Submit(string user, string videoId, int version, RatingValue value, string? userName = null)
     {
         lock (_lock)
         {
@@ -89,7 +98,22 @@ internal class RatingsRepository
             }
             agg.UserRatings[user] = value;
             Increment(agg, value);
+            _store.Events.Add(new RatingEvent(videoId, version, user, userName, value, DateTimeOffset.UtcNow));
+            // keep only the last 1000 events to bound file size
+            if (_store.Events.Count > 1000)
+            {
+                _store.Events.RemoveRange(0, _store.Events.Count - 1000);
+            }
             Save();
+        }
+    }
+
+    public IReadOnlyList<RatingEvent> GetRecent(int limit)
+    {
+        lock (_lock)
+        {
+            var count = Math.Clamp(limit, 1, 200);
+            return _store.Events.OrderByDescending(e => e.CreatedAt).Take(count).ToList();
         }
     }
 
@@ -116,6 +140,7 @@ internal class RatingsRepository
     private class RatingsRoot
     {
         public Dictionary<string, VersionAggregates> Videos { get; set; } = new();
+        public List<RatingEvent> Events { get; set; } = new();
     }
 
     private class VersionAggregates
