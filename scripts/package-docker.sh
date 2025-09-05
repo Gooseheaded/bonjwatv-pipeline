@@ -27,14 +27,34 @@ cat > "$OUT_DIR/run.sh" <<'RUN'
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Optional: set SKIP_BACKUP=1 to skip volume backups
+TS="$(date +%F-%H%M%S)"
+mkdir -p backups
+
+backup_volume() {
+  local vol="$1"
+  if docker volume inspect "$vol" >/dev/null 2>&1; then
+    echo "Backing up volume: $vol → backups/${vol}-${TS}.tgz"
+    docker run --rm -v "$vol":/data -v "$(pwd)/backups":/backup alpine sh -c \
+      "cd /data && tar czf /backup/${vol}-${TS}.tgz . || true"
+  else
+    echo "Volume not found (skipping backup): $vol"
+  fi
+}
+
+if [ "${SKIP_BACKUP:-0}" != "1" ]; then
+  backup_volume web-data || true
+  backup_volume api-data || true
+fi
+
 echo "Loading images…"
 docker load -i webapp-image.tar
 docker load -i catalog-api-image.tar
 
-echo "Starting stack (without building)…"
+echo "Starting (or updating) stack…"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-echo "Done. Webapp should be on port 80."
+echo "Done. Webapp should be on port 80. Volumes preserved."
 RUN
 chmod +x "$OUT_DIR/run.sh"
 

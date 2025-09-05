@@ -61,6 +61,7 @@ Bundle-based deploy (no registry, scripted)
   - scp dist/bwkt-docker-*.tar.gz user@host:/path && ssh user@host 'mkdir -p /path/current && tar xzf /path/bwkt-docker-*.tar.gz -C /path/current && cd /path/current && ./run.sh'
 - Notes:
   - Server still needs Docker + compose plugin installed.
+  - Safety: run.sh will back up named volumes `web-data` and `api-data` to `backups/` before updating (set `SKIP_BACKUP=1` to skip).
   - Webapp listens on port 80; catalog-api is internal-only.
 
 TLS and domain
