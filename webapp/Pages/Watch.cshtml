@@ -24,6 +24,18 @@ else
             <span class="badge @css me-1">@text</span>
         }
     </div>
+    <div class="mb-3 d-flex align-items-center justify-content-center">
+        <div class="me-2">Rate subtitles:</div>
+        <div class="btn-group" role="group" aria-label="Rate subtitles">
+            <button type="button" class="btn btn-outline-danger" title="Red: missing or unintelligible" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🔴 <span class="badge bg-light text-dark ms-1">0</span></button>
+            <button type="button" class="btn btn-outline-warning" title="Yellow: sometimes understandable" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🟡 <span class="badge bg-light text-dark ms-1">0</span></button>
+            <button type="button" class="btn btn-outline-success" title="Green: understandable all around" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🟢 <span class="badge bg-light text-dark ms-1">0</span></button>
+        </div>
+        @if (!(User?.Identity?.IsAuthenticated ?? false))
+        {
+            <span class="text-muted ms-2">Login to rate</span>
+        }
+    </div>
     <div class="position-relative ratio ratio-16x9 mb-3 video-wrapper">
         <iframe id="player"
                 src="https://www.youtube.com/embed/@Model.Video.VideoId?enablejsapi=1"

@@ -23,6 +23,9 @@
                         <li class="nav-item">
                             <a class="nav-link" asp-area="" asp-page="/Index">Home</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="https://www.patreon.com/bwkt" target="_blank" rel="noopener">Patreon</a>
+                        </li>
                     </ul>
                     @{ var raceVal = (string)(Context.Request.Query["race"].FirstOrDefault() ?? Context.Request.Cookies["race"] ?? "all"); }
                     <form class="d-flex" method="get" asp-page="/Search">
@@ -51,7 +54,7 @@
                         <input class="form-control me-2" type="search" name="q" placeholder="Search" aria-label="Search" value="@Context.Request.Query["q"]" />
                         <button class="btn btn-outline-primary" type="submit">Search</button>
                     </form>
-                    <a class="btn btn-warning ms-2" href="https://www.patreon.com/bwkt" target="_blank" rel="noopener">Patreon</a>
+                    <a class="btn btn-primary ms-2" asp-area="" asp-page="/Account/Login">Login</a>
                     <button id="theme-toggle" type="button" class="btn btn-outline-secondary ms-2" aria-label="Toggle light/dark theme">
                         <span id="theme-icon">🌙</span>
                     </button>
