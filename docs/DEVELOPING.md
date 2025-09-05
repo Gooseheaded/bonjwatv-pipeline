@@ -9,6 +9,9 @@ Prerequisites
 Quick Start (containerized)
 - Build and run both services:
   - docker compose up --build
+- Live code reload (Compose Watch):
+  - docker compose watch
+  - Rebuilds on source changes; syncs `webapp/data/` directly into the container for instant `videos.json` reloads.
 - Open the apps:
   - Webapp: http://localhost:5001
   - Catalog API (Swagger): http://localhost:5002/swagger
@@ -66,4 +69,3 @@ Troubleshooting
 - Docker not starting: run scripts/docker-diagnose.sh and review docker-output.txt
 - Port conflicts: change published ports in docker-compose.yml
 - Static assets missing: ensure images were built via dotnet publish (compose does this)
-

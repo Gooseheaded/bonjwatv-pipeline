@@ -9,8 +9,27 @@ services:
     ports:
       - "5001:8080"
     restart: unless-stopped
+    # Mount dev data for hot reload of videos.json without rebuild
+    volumes:
+      - ./webapp/data:/app/data:ro
     depends_on:
       - catalog-api
+    develop:
+      watch:
+        # Rebuild image when source changes (C#, csproj, views, wwwroot)
+        - action: rebuild
+          path: ./webapp
+          ignore:
+            - "webapp/bin/**"
+            - "webapp/obj/**"
+            - "webapp/tests/**"
+            - "webapp/.git/**"
+        # Sync only data/ into container for immediate JSON reloads
+        - action: sync
+          path: ./webapp/data
+          target: /app/data
+          ignore:
+            - "**/*.tmp"
 
   catalog-api:
     build:
@@ -25,6 +44,14 @@ services:
     volumes:
       # Allow API to read the dev videos.json from webapp
       - ./webapp/data:/app/../webapp/data:ro
+    develop:
+      watch:
+        - action: rebuild
+          path: ./catalog-api
+          ignore:
+            - "catalog-api/bin/**"
+            - "catalog-api/obj/**"
+            - "catalog-api/.git/**"
 
   # Optional databases and object storage will be added in Phase 1
   # postgres:

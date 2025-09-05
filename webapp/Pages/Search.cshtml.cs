@@ -13,14 +13,21 @@ namespace bwkt_webapp.Pages
         public IEnumerable<VideoInfo> Videos { get; private set; } = new List<VideoInfo>();
         public string SelectedRace { get; private set; } = "all"; // all | z | t | p
 
+        public int CurrentPage { get; private set; } = 1;
+        public int PageSize { get; private set; } = 24;
+        public int TotalCount { get; private set; } = 0;
+        public int TotalPages { get; private set; } = 1;
+
         public SearchModel(IVideoService videoService)
         {
             _videoService = videoService;
         }
 
-        public void OnGet(string q, string? race = null)
+        public void OnGet(string q, string? race = null, int pageNum = 1, int pageSize = 24)
         {
             Query = q ?? string.Empty;
+            CurrentPage = pageNum < 1 ? 1 : pageNum;
+            PageSize = pageSize < 1 ? 1 : (pageSize > 100 ? 100 : pageSize);
             // Determine race preference: query param > cookie > default("all")
             var cookieRace = HttpContext != null ? Request.Cookies["race"] : null;
             SelectedRace = string.IsNullOrWhiteSpace(race) ? (string.IsNullOrWhiteSpace(cookieRace) ? "all" : cookieRace!) : race!;
@@ -39,7 +46,11 @@ namespace bwkt_webapp.Pages
             }
 
             var raceParam = SelectedRace == "all" ? null : SelectedRace;
-            Videos = _videoService.Search(Query, raceParam);
+            var all = _videoService.Search(Query, raceParam).ToList();
+            TotalCount = all.Count;
+            TotalPages = Math.Max(1, (int)Math.Ceiling(TotalCount / (double)PageSize));
+            if (CurrentPage > TotalPages) CurrentPage = TotalPages;
+            Videos = all.Skip((CurrentPage - 1) * PageSize).Take(PageSize);
         }
 
         private static string NormalizeRace(string value)
