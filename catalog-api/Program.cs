@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<VideoRepository>();
+builder.Services.AddSingleton<RatingsRepository>();
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -81,41 +82,21 @@ app.MapGet("/api/videos", (
     return o;
 });
 
-// Ratings models (simple in-memory scaffold)
-var ratingsStore = new Dictionary<(string videoId, int version), RatingAggregate>();
-
-app.MapGet("/api/videos/{id}/ratings", (string id, int? version, HttpContext ctx) =>
+app.MapGet("/api/videos/{id}/ratings", (string id, int? version, HttpContext ctx, RatingsRepository repo) =>
 {
     int v = Math.Max(1, version ?? 1);
-    ratingsStore.TryGetValue((id, v), out var agg);
-    agg ??= new RatingAggregate();
     var user = ctx.User?.Identity?.IsAuthenticated == true ? ctx.User.Identity!.Name : null;
-    RatingValue? userRating = null;
-    if (user != null && agg.UserRatings.TryGetValue(user, out var val))
-    {
-        userRating = val;
-    }
-    return Results.Json(new RatingSummary(agg.Red, agg.Yellow, agg.Green, v, userRating));
+    var summary = repo.GetSummary(id, v, user);
+    return Results.Json(summary);
 })
 .WithName("GetRatings")
 .WithOpenApi(o => { o.Summary = "Get rating summary (and user rating if authenticated)"; return o; });
 
-app.MapPost("/api/videos/{id}/ratings", (string id, RatingRequest body, HttpContext ctx) =>
+app.MapPost("/api/videos/{id}/ratings", (string id, RatingRequest body, HttpContext ctx, RatingsRepository repo) =>
 {
     var user = ctx.User?.Identity?.IsAuthenticated == true ? ctx.User.Identity!.Name : "anon";
-    var key = (id, Math.Max(1, body.Version));
-    if (!ratingsStore.TryGetValue(key, out var agg))
-    {
-        agg = new RatingAggregate();
-        ratingsStore[key] = agg;
-    }
-    // If user previously rated, decrement that bucket
-    if (agg.UserRatings.TryGetValue(user!, out var previous))
-    {
-        agg.Add(previous, -1);
-    }
-    agg.UserRatings[user!] = body.Value;
-    agg.Add(body.Value, +1);
+    var version = Math.Max(1, body.Version);
+    repo.Submit(user!, id, version, body.Value);
     return Results.Ok(new { ok = true });
 })
 .WithName("PostRating")
@@ -149,24 +130,5 @@ internal record VideoDto(
 );
 
 internal record RatingRequest([property: JsonConverter(typeof(JsonStringEnumConverter))] RatingValue Value, int Version);
-internal record RatingSummary(int Red, int Yellow, int Green, int Version, RatingValue? UserRating);
-internal enum RatingValue { red, yellow, green }
-internal class RatingAggregate
-{
-    public Dictionary<string, RatingValue> UserRatings { get; } = new();
-    public int Red { get; private set; }
-    public int Yellow { get; private set; }
-    public int Green { get; private set; }
-    public void Add(RatingValue v, int delta)
-    {
-        switch (v)
-        {
-            case RatingValue.red: Red += delta; break;
-            case RatingValue.yellow: Yellow += delta; break;
-            case RatingValue.green: Green += delta; break;
-        }
-        Red = Math.Max(0, Red); Yellow = Math.Max(0, Yellow); Green = Math.Max(0, Green);
-    }
-}
 
 public partial class Program { }

@@ -26,9 +26,11 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
                 var dir = Directory.CreateTempSubdirectory();
                 var path = Path.Combine(dir.FullName, "videos.json");
                 File.WriteAllText(path, "[ {\"v\":\"a\",\"title\":\"Alpha Z\",\"tags\":[\"z\"]}, {\"v\":\"b\",\"title\":\"Beta T\",\"tags\":[\"t\"]} ]");
+                var ratingsPath = Path.Combine(dir.FullName, "ratings.json");
                 var dict = new Dictionary<string, string?>
                 {
-                    ["Data:JsonPath"] = path
+                    ["Data:JsonPath"] = path,
+                    ["Data:RatingsPath"] = ratingsPath
                 };
                 cfg.AddInMemoryCollection(dict!);
             });
