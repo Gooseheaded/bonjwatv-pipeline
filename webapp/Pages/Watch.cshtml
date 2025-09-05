@@ -27,9 +27,9 @@ else
     <div class="mb-3 d-flex align-items-center justify-content-center">
         <div class="me-2">Rate subtitles:</div>
         <div class="btn-group" role="group" aria-label="Rate subtitles">
-            <button type="button" class="btn btn-outline-danger" title="Red: missing or unintelligible" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🔴 <span class="badge bg-light text-dark ms-1">0</span></button>
-            <button type="button" class="btn btn-outline-warning" title="Yellow: sometimes understandable" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🟡 <span class="badge bg-light text-dark ms-1">0</span></button>
-            <button type="button" class="btn btn-outline-success" title="Green: understandable all around" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🟢 <span class="badge bg-light text-dark ms-1">0</span></button>
+            <button type="button" class="btn btn-outline-danger" data-rating="red" title="Red: missing or unintelligible" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🔴 <span class="badge bg-light text-dark ms-1 rating-count">0</span></button>
+            <button type="button" class="btn btn-outline-warning" data-rating="yellow" title="Yellow: sometimes understandable" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🟡 <span class="badge bg-light text-dark ms-1 rating-count">0</span></button>
+            <button type="button" class="btn btn-outline-success" data-rating="green" title="Green: understandable all around" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🟢 <span class="badge bg-light text-dark ms-1 rating-count">0</span></button>
         </div>
         @if (!(User?.Identity?.IsAuthenticated ?? false))
         {
@@ -79,5 +79,45 @@ else
             subtitleEl.style.fontSize = next + 'px';
             localStorage.setItem('subtitleFontSize', next);
         }
+
+        // Ratings wiring
+        const videoId = "@Model.Video.VideoId";
+        async function loadRatings() {
+            try {
+                const res = await fetch(`/ratings/${videoId}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                // Expect properties Red, Yellow, Green
+                const counts = { red: data.Red ?? 0, yellow: data.Yellow ?? 0, green: data.Green ?? 0 };
+                const btns = document.querySelectorAll('[data-rating]');
+                btns.forEach(b => {
+                    const val = b.getAttribute('data-rating');
+                    const badge = b.querySelector('.rating-count');
+                    if (badge) badge.textContent = counts[val] ?? 0;
+                });
+            } catch {}
+        }
+
+        async function postRating(value) {
+            try {
+                const res = await fetch(`/ratings/${videoId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value, version: 1 })
+                });
+                if (res.ok) {
+                    await loadRatings();
+                }
+            } catch {}
+        }
+
+        // Attach click handlers (enabled buttons only)
+        document.querySelectorAll('[data-rating]')
+            .forEach(btn => btn.addEventListener('click', () => {
+                if (btn.hasAttribute('disabled')) return;
+                postRating(btn.getAttribute('data-rating'));
+            }));
+
+        loadRatings();
     </script>
 }
