@@ -48,4 +48,17 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(1, res.GetProperty("page").GetInt32());
         Assert.Equal(1, res.GetProperty("pageSize").GetInt32());
     }
+
+    [Fact]
+    public async Task Ratings_Endpoint_Allows_Post_And_Summarizes()
+    {
+        var client = _factory.CreateClient();
+        var vid = "a";
+        var post1 = await client.PostAsJsonAsync($"/api/videos/{vid}/ratings", new { value = "red", version = 1 });
+        post1.EnsureSuccessStatusCode();
+        var post2 = await client.PostAsJsonAsync($"/api/videos/{vid}/ratings", new { value = "green", version = 1 });
+        post2.EnsureSuccessStatusCode();
+        var sum = await client.GetFromJsonAsync<JsonElement>($"/api/videos/{vid}/ratings?version=1");
+        Assert.Equal(1, sum.GetProperty("Red").GetInt32() + sum.GetProperty("Green").GetInt32() + sum.GetProperty("Yellow").GetInt32());
+    }
 }

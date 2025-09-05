@@ -5,7 +5,14 @@
 }
 
 <h1>Login</h1>
-<p>This will sign you in with Discord. Wiring is coming soon.</p>
+<p>Sign in with Discord to enable ratings and future contributions.</p>
 
-<a class="btn btn-primary" href="#" role="button" aria-disabled="true" tabindex="-1">Login with Discord</a>
+@{
+    var clientId = Environment.GetEnvironmentVariable("DISCORD_CLIENT_ID");
+    var callback = Environment.GetEnvironmentVariable("OAUTH_CALLBACK_URL") ?? (Request.Scheme + "://" + Request.Host + "/account/callback");
+    var authorizeUrl = string.IsNullOrEmpty(clientId)
+        ? "/account/callback?code=demo" // skeleton fallback
+        : $"https://discord.com/oauth2/authorize?response_type=code&client_id={clientId}&scope=identify&redirect_uri={Uri.EscapeDataString(callback)}";
+}
 
+<a class="btn btn-primary" href="@authorizeUrl">Login with Discord</a>
