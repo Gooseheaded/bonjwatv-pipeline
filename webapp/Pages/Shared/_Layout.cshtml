@@ -56,7 +56,7 @@
                     </form>
                     @if (User?.Identity?.IsAuthenticated ?? false)
                     {
-                        <span class="navbar-text ms-2">Hello, @User.Identity!.Name</span>
+                        <!-- <span class="navbar-text ms-2">Hello, @User.Identity!.Name</span> -->
                         <form class="d-inline ms-2" method="post" action="/account/logout">
                             <button class="btn btn-outline-primary" type="submit">Logout</button>
                         </form>
