@@ -33,6 +33,14 @@ Environment and Ports
   - DATA_CATALOG_URL=http://catalog-api:8080/api/videos
   (This is set in docker-compose.yml.)
 
+Secrets (.env + Compose)
+- Create a local `.env` (git-ignored) next to `docker-compose.yml` or copy `.env.example`:
+  - DISCORD_CLIENT_ID=your-discord-client-id
+  - DISCORD_CLIENT_SECRET=your-discord-client-secret
+  - OAUTH_CALLBACK_URL=http://localhost:5001/account/callback
+- Compose auto-loads `.env` and injects these into the `webapp` container via `${VAR}` expansion.
+- Rebuild/run: `docker compose up -d --build` (or use `docker compose watch`).
+
 Static Assets and Razor Pages
 - Images are built with dotnet publish to include static web assets.
 - During dev, publish uses Debug configuration by default (fast, no trimming).

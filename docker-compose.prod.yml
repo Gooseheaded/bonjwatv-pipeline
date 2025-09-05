@@ -4,6 +4,9 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - DATA_CATALOG_URL=http://catalog-api:8080/api/videos
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+      - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
+      - OAUTH_CALLBACK_URL=${OAUTH_CALLBACK_URL}
     ports:
       - "80:8080"
     restart: unless-stopped
