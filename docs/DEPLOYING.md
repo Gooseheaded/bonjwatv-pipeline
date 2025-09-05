@@ -22,7 +22,9 @@ Build and run (production)
   - Builds images in Release mode (via build args) and starts both services.
   - Webapp is published on host port 80 → container 8080.
   - catalog-api is internal only (no host port).
-  - A named volume `web-data` persists the webapp data at `/app/data`.
+  - Named volumes persist data:
+    - `web-data` → webapp `/app/data` (e.g., app data/cache)
+    - `api-data` → catalog-api `/app/data` (videos/ratings JSON)
 
 Verify
 - Check containers: docker ps
@@ -34,6 +36,7 @@ Updating to a new version
   - git pull
   - docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 - Compose recreates only what changed; containers are restarted after images are ready.
+ - Data is preserved because named volumes (`web-data`, `api-data`) are not removed.
 
 Stopping services
 - docker compose -f docker-compose.yml -f docker-compose.prod.yml down
@@ -68,3 +71,10 @@ Health, logs, troubleshooting
 - Health: docker ps, docker inspect <container>
 - Logs: docker compose logs -f webapp | catalog-api
 - If Docker fails to start, run scripts/docker-diagnose.sh and review docker-output.txt
+
+Persisted data paths (production)
+- Webapp: `/app/data` mounted from `web-data` (already configured).
+- Catalog API: `/app/data` mounted from `api-data` with:
+  - `DATA_JSON_PATH=/app/data/videos.json`
+  - `DATA_RATINGS_PATH=/app/data/ratings.json`
+  Ensure the files exist or the service will create them as needed.
