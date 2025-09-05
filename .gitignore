@@ -6,9 +6,11 @@
 dist/
 test-results.txt
 
+# Local environment
+.env
+
 # IDE/editor
 .vscode/
 .idea/
 *.suo
 *.user
-
