@@ -27,9 +27,9 @@ else
     <div class="mb-3 d-flex align-items-center justify-content-center">
         <div class="me-2">Rate subtitles:</div>
         <div class="btn-group" role="group" aria-label="Rate subtitles">
-            <button type="button" class="btn btn-outline-danger" data-rating="red" title="Red: missing or unintelligible" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🔴 <span class="badge bg-light text-dark ms-1 rating-count">0</span></button>
-            <button type="button" class="btn btn-outline-warning" data-rating="yellow" title="Yellow: sometimes understandable" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🟡 <span class="badge bg-light text-dark ms-1 rating-count">0</span></button>
-            <button type="button" class="btn btn-outline-success" data-rating="green" title="Green: understandable all around" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🟢 <span class="badge bg-light text-dark ms-1 rating-count">0</span></button>
+            <button type="button" class="btn btn-outline-danger" data-rating="red" title="Red: missing or unintelligible" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🔴 <span class="badge bg-light text-dark ms-1 rating-count">@Model.RedCount</span></button>
+            <button type="button" class="btn btn-outline-warning" data-rating="yellow" title="Yellow: sometimes understandable" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🟡 <span class="badge bg-light text-dark ms-1 rating-count">@Model.YellowCount</span></button>
+            <button type="button" class="btn btn-outline-success" data-rating="green" title="Green: understandable all around" disabled="@(!User?.Identity?.IsAuthenticated ?? true)">🟢 <span class="badge bg-light text-dark ms-1 rating-count">@Model.GreenCount</span></button>
         </div>
         @if (!(User?.Identity?.IsAuthenticated ?? false))
         {
