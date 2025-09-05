@@ -1,23 +1,18 @@
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System.Net.Http;
 using System.Text.Json;
 
 namespace bwkt_webapp.Pages.Admin
 {
-    public class IndexModel : PageModel
+    public class SubmissionsModel : PageModel
     {
         public bool IsAdmin { get; private set; }
-        public List<RatingEvent> Events { get; private set; } = new();
-        public List<SubmissionItem> Pending { get; private set; } = new();
-        public List<HiddenItem> Hidden { get; private set; } = new();
+        public List<SubmissionItem> Items { get; private set; } = new();
 
         public void OnGet()
         {
             IsAdmin = CheckIsAdmin();
             if (!IsAdmin) return;
-            TryLoadRecent();
-            TryLoadPending();
-            TryLoadHidden();
+            LoadPending();
         }
 
         private bool CheckIsAdmin()
@@ -28,38 +23,23 @@ namespace bwkt_webapp.Pages.Admin
             return !string.IsNullOrWhiteSpace(current) && ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(current);
         }
 
-        private void TryLoadRecent()
+        private void LoadPending()
         {
             try
             {
                 var apiBase = DeriveApiBase();
                 if (string.IsNullOrWhiteSpace(apiBase)) return;
-                var url = $"{apiBase}/admin/ratings/recent?limit=100";
                 using var http = new HttpClient();
+                var url = $"{apiBase}/admin/submissions?status=pending&page=1&pageSize=100";
                 var json = http.GetStringAsync(url).GetAwaiter().GetResult();
                 var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var items = JsonSerializer.Deserialize<List<RatingEvent>>(json, opts) ?? new();
-                Events = items;
-            }
-            catch { }
-        }
-
-        private void TryLoadPending()
-        {
-            try
-            {
-                var apiBase = DeriveApiBase();
-                if (string.IsNullOrWhiteSpace(apiBase)) return;
-                using var http = new HttpClient();
-                var url = $"{apiBase}/admin/submissions?status=pending&page=1&pageSize=50";
-                var json = http.GetStringAsync(url).GetAwaiter().GetResult();
-                using var doc = JsonDocument.Parse(json);
+                var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
                 if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var el in items.EnumerateArray())
                     {
-                        Pending.Add(ParseSubmission(el));
+                        Items.Add(ParseSubmission(el));
                     }
                 }
             }
@@ -79,30 +59,6 @@ namespace bwkt_webapp.Pages.Admin
             }
             submittedBy = el.TryGetProperty("submitted_by", out var sb) ? sb.GetString() : null;
             return new SubmissionItem(id, status, submittedAt, submittedBy, youtubeId, title);
-        }
-
-        private void TryLoadHidden()
-        {
-            try
-            {
-                var apiBase = DeriveApiBase();
-                if (string.IsNullOrWhiteSpace(apiBase)) return;
-                using var http = new HttpClient();
-                var json = http.GetStringAsync($"{apiBase}/admin/videos/hidden").GetAwaiter().GetResult();
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var el in doc.RootElement.EnumerateArray())
-                    {
-                        var id = el.GetProperty("id").GetString() ?? string.Empty;
-                        var title = el.TryGetProperty("title", out var t) ? t.GetString() ?? string.Empty : string.Empty;
-                        var reason = el.TryGetProperty("hiddenReason", out var r) ? r.GetString() : null;
-                        var at = el.TryGetProperty("hiddenAt", out var ha) ? ha.GetString() : null;
-                        Hidden.Add(new HiddenItem(id, title, reason, at));
-                    }
-                }
-            }
-            catch { }
         }
 
         private static string? DeriveApiBase()
@@ -125,8 +81,6 @@ namespace bwkt_webapp.Pages.Admin
             catch { return null; }
         }
 
-        public record RatingEvent(string VideoId, int Version, string UserId, string? UserName, string Value, DateTimeOffset CreatedAt);
         public record SubmissionItem(string Id, string Status, DateTimeOffset SubmittedAt, string? SubmittedBy, string? YoutubeId, string? Title);
-        public record HiddenItem(string Id, string Title, string? Reason, string? HiddenAt);
     }
 }

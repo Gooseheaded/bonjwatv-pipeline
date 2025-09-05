@@ -32,17 +32,38 @@ This document defines how external contributors (e.g., the translator app) submi
   - `GET /api/admin/submissions?status=pending&type=video&page=&pageSize=`
   - `GET /api/admin/submissions/{id}`
   - `PATCH /api/admin/submissions/{id}` with `{ action: "approve" | "reject", reason? }`
-    - approve: appends to `videos.json`; if `subtitle_url` present and no `subtitle_storage_key`, mirror to storage first (see Subtitles Storage doc) then write `subtitleUrl` to internal API URL.
+    - approve: appends/updates entry in `videos.json`. If `subtitle_storage_key` is absent and `subtitle_url` is provided, the API mirrors the SRT into first‑party storage, then writes `subtitleUrl` as `/api/subtitles/{videoId}/1.srt`.
 
 ## Approval → videos.json
 - Write to `DATA_JSON_PATH` (default `/app/data/videos.json`).
-- Merge unique by `videoId` (YouTube ID); update title/creator/etc. if necessary.
-- `subtitleUrl` should be first‑party: `/api/subtitles/{videoId}/{version}.srt`.
+- Merge unique by YouTube ID (`v` field); update title/creator/etc. if necessary.
+- `subtitleUrl` is first‑party: `/api/subtitles/{videoId}/{version}.srt` (version `1` currently).
 
 ## Security
 - Ingest: token allowlist; size limits; basic payload validation; rate limit per token.
 - Admin: no public port; webapp proxies and enforces `ADMIN_USER_IDS`.
 - Logging/audit: store reviewer, timestamps, optional reason.
+
+## API Usage (Examples)
+
+- Submit a video (ingest token required):
+  - `curl -H "X-Api-Key: TOKEN1" -H "Content-Type: application/json" -d '{"youtube_id":"abc123","title":"My Video","tags":["z"],"subtitle_storage_key":"subtitles/abc123/v1.srt"}' http://localhost:5002/api/submissions/videos`
+  - Response: `{ "submission_id": "...", "status": "pending" }`
+
+- List submissions (admin):
+  - `curl http://localhost:5002/api/admin/submissions?status=pending&page=1&pageSize=20`
+
+- Get submission detail (admin):
+  - `curl http://localhost:5002/api/admin/submissions/<id>`
+
+- Approve or reject (admin):
+  - `curl -X PATCH -H "Content-Type: application/json" -d '{"action":"approve"}' http://localhost:5002/api/admin/submissions/<id>`
+  - `curl -X PATCH -H "Content-Type: application/json" -d '{"action":"reject","reason":"Needs fixes"}' http://localhost:5002/api/admin/submissions/<id>`
+
+## Configuration
+
+- `DATA_SUBMISSIONS_PATH`: Path to submissions JSON (default `/app/data/submissions.json`).
+- `API_INGEST_TOKENS`: Comma-separated list of allowed ingest tokens (match header `X-Api-Key`).
 
 ## Migration to DB (later)
 - Tables: `submissions`, `videos`, `subtitles`, `users`.
@@ -52,4 +73,3 @@ This document defines how external contributors (e.g., the translator app) submi
 - Ingest success/failure (bad token, invalid payload).
 - Admin list/filter; approve writes videos.json; reject sets status and reason.
 - Mirror external `subtitle_url` on approve; GET subtitle serves internal URL.
-

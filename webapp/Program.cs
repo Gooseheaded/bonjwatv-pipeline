@@ -176,6 +176,128 @@ app.MapGet("/admin/ratings/recent", async (int? limit, HttpContext ctx) =>
     return Results.Stream(stream, contentType);
 });
 
+// Admin proxy: submissions list and approve/reject
+app.MapGet("/admin/submissions", async (string? status, int? page, int? pageSize, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    var url = $"{apiBase}/admin/submissions?status={Uri.EscapeDataString(status ?? "pending")}&page={Math.Max(1, page ?? 1)}&pageSize={Math.Clamp(pageSize ?? 50, 1, 100)}";
+    using var http = new HttpClient();
+    var resp = await http.GetAsync(url);
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    var contentType = resp.Content.Headers.ContentType?.ToString() ?? "application/json";
+    var stream = await resp.Content.ReadAsStreamAsync();
+    return Results.Stream(stream, contentType);
+});
+
+// Admin proxy: videos hide/show/delete and list hidden
+app.MapGet("/admin/videos/hidden", async (HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    using var http = new HttpClient();
+    var resp = await http.GetAsync($"{apiBase}/admin/videos/hidden");
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    var ct = resp.Content.Headers.ContentType?.ToString() ?? "application/json";
+    var stream = await resp.Content.ReadAsStreamAsync();
+    return Results.Stream(stream, ct);
+});
+
+app.MapGet("/admin/videos/{id}", async (string id, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    using var http = new HttpClient();
+    var resp = await http.GetAsync($"{apiBase}/admin/videos/{id}");
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    var ct = resp.Content.Headers.ContentType?.ToString() ?? "application/json";
+    var stream = await resp.Content.ReadAsStreamAsync();
+    return Results.Stream(stream, ct);
+});
+
+app.MapPost("/admin/videos/{id}/hide", async (string id, HttpRequest req, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    var form = await req.ReadFormAsync();
+    var reason = form["reason"].FirstOrDefault() ?? "Hidden via UI";
+    using var http = new HttpClient();
+    using var msg = new HttpRequestMessage(HttpMethod.Patch, $"{apiBase}/admin/videos/{id}/hide")
+    {
+        Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { reason }), System.Text.Encoding.UTF8, "application/json")
+    };
+    var resp = await http.SendAsync(msg);
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    return Results.Redirect("/Admin?ok=1&status=hidden");
+});
+
+app.MapPost("/admin/videos/{id}/show", async (string id, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    using var http = new HttpClient();
+    var resp = await http.PatchAsync($"{apiBase}/admin/videos/{id}/show", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    return Results.Redirect("/Admin?ok=1&status=shown");
+});
+
+app.MapPost("/admin/videos/{id}/delete", async (string id, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    using var http = new HttpClient();
+    var resp = await http.DeleteAsync($"{apiBase}/admin/videos/{id}");
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    return Results.Redirect("/Admin?ok=1&status=deleted");
+});
+
+app.MapGet("/admin/submissions/{id}", async (string id, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    using var http = new HttpClient();
+    var url = $"{apiBase}/admin/submissions/{id}";
+    var resp = await http.GetAsync(url);
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    var contentType = resp.Content.Headers.ContentType?.ToString() ?? "application/json";
+    var stream = await resp.Content.ReadAsStreamAsync();
+    return Results.Stream(stream, contentType);
+});
+
+app.MapPost("/admin/submissions/{id}/approve", async (string id, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    using var http = new HttpClient();
+    var url = $"{apiBase}/admin/submissions/{id}";
+    using var msg = new HttpRequestMessage(HttpMethod.Patch, url)
+    {
+        Content = new StringContent("{\"action\":\"approve\"}", System.Text.Encoding.UTF8, "application/json")
+    };
+    var resp = await http.SendAsync(msg);
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    // Always redirect back to Admin page (broad UI) with banner params
+    return Results.Redirect("/Admin?ok=1&status=approved");
+});
+
+app.MapPost("/admin/submissions/{id}/reject", async (string id, HttpRequest req, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    var form = await req.ReadFormAsync();
+    var reason = form["reason"].FirstOrDefault() ?? "Rejected";
+    using var http = new HttpClient();
+    var url = $"{apiBase}/admin/submissions/{id}";
+    var body = System.Text.Json.JsonSerializer.Serialize(new { action = "reject", reason });
+    using var msg = new HttpRequestMessage(HttpMethod.Patch, url)
+    {
+        Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json")
+    };
+    var resp = await http.SendAsync(msg);
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    return Results.Redirect("/Admin?ok=1&status=rejected");
+});
+
 app.Run();
 
 public partial class Program { }

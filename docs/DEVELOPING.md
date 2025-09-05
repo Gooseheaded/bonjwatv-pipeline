@@ -32,6 +32,12 @@ Environment and Ports
 - Webapp reads its data from the Catalog API via:
   - DATA_CATALOG_URL=http://catalog-api:8080/api/videos
   (This is set in docker-compose.yml.)
+- Catalog API (uploads/submissions):
+  - Optional env vars for dev:
+    - `API_INGEST_TOKENS=TOKEN1` (allowlist token for `X-Api-Key`)
+    - `DATA_SUBTITLES_ROOT=/app/data/subtitles` (default)
+    - `DATA_SUBMISSIONS_PATH=/app/data/submissions.json` (default)
+ - Dev note: The `catalog-api` service mounts `./webapp/data` writable so approvals and admin actions update `videos.json` on the host; the webapp file-watcher picks up changes immediately.
 
 Secrets (.env + Compose)
 - Create a local `.env` (git-ignored) next to `docker-compose.yml` or copy `.env.example`:
@@ -40,6 +46,24 @@ Secrets (.env + Compose)
   - OAUTH_CALLBACK_URL=http://localhost:5001/account/callback
 - Compose auto-loads `.env` and injects these into the `webapp` container via `${VAR}` expansion.
 - Rebuild/run: `docker compose up -d --build` (or use `docker compose watch`).
+
+Catalog API test endpoints
+- Subtitles:
+  - Upload: `curl -F "videoId=abc123" -F "version=1" -F "file=@subs.srt;type=text/plain" http://localhost:5002/api/uploads/subtitles`
+  - Serve: `curl http://localhost:5002/api/subtitles/abc123/1.srt`
+- Submissions:
+  - Submit (requires token): `curl -H "X-Api-Key: TOKEN1" -H "Content-Type: application/json" -d '{"youtube_id":"abc123","title":"My Video","tags":["z"],"subtitle_storage_key":"subtitles/abc123/v1.srt"}' http://localhost:5002/api/submissions/videos`
+  - List: `curl http://localhost:5002/api/admin/submissions?status=pending`
+
+Admin Tools
+- Admin access: set `ADMIN_USER_IDS` (comma-separated Discord user IDs) in `.env` for the webapp.
+- Submissions (broad/narrow UI):
+  - `/Admin` shows Recent Ratings and Pending Submissions (Open → detail). Detail page has Approve/Reject.
+  - Watch page displays “Submitted by … [on …]”.
+- Hidden videos:
+  - Admin can hide a video from the Watch page (“Hide…” prompts for a reason).
+  - `/Admin` shows a “Hidden Videos” list (Open → detail) with Show/Delete actions.
+  - Hidden videos are excluded from search results.
 
 Static Assets and Razor Pages
 - Images are built with dotnet publish to include static web assets.

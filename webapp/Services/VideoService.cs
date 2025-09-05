@@ -53,6 +53,11 @@ namespace bwkt_webapp.Services
                     var json = File.ReadAllText(dataPath);
                     var list = JsonSerializer.Deserialize<List<VideoInfo>>(json, _jsonOptions)
                                ?? new List<VideoInfo>();
+                    // Backfill defaults for legacy entries
+                    foreach (var v in list)
+                    {
+                        if (string.IsNullOrWhiteSpace(v.Submitter)) v.Submitter = "Gooseheaded";
+                    }
                     _videos = list;
                 }
                 else

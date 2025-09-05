@@ -21,5 +21,11 @@ namespace bwkt_webapp.Models
 
         [JsonPropertyName("tags")]
         public string[]? Tags { get; set; }
+
+        [JsonPropertyName("submitter")]
+        public string? Submitter { get; set; }
+
+        [JsonPropertyName("submissionDate")]
+        public string? SubmissionDate { get; set; }
     }
 }

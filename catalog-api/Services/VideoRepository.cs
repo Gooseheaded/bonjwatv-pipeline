@@ -22,6 +22,15 @@ public class VideoItem
 
     [JsonPropertyName("releaseDate")]
     public string? ReleaseDate { get; set; }
+
+    [JsonPropertyName("hidden")]
+    public bool? Hidden { get; set; }
+
+    [JsonPropertyName("hiddenReason")]
+    public string? HiddenReason { get; set; }
+
+    [JsonPropertyName("hiddenAt")]
+    public string? HiddenAt { get; set; }
 }
 
 public class VideoRepository : IDisposable
@@ -78,4 +87,3 @@ public class VideoRepository : IDisposable
 
     public void Dispose() => _watcher?.Dispose();
 }
-

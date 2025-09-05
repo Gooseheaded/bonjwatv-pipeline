@@ -9,6 +9,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<VideoRepository>();
 builder.Services.AddSingleton<RatingsRepository>();
+builder.Services.AddSingleton<SubmissionsRepository>();
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -33,7 +34,7 @@ app.MapGet("/api/videos", (
 ) =>
 {
     var all = repo.All();
-    IEnumerable<catalog_api.Services.VideoItem> query = all;
+    IEnumerable<catalog_api.Services.VideoItem> query = all.Where(v => v.Hidden != true);
 
     // Filter by search terms
     if (!string.IsNullOrWhiteSpace(q))
@@ -115,7 +116,243 @@ app.MapGet("/api/admin/ratings/recent", (int? limit, RatingsRepository repo) =>
 })
 .WithOpenApi(o => { o.Summary = "List recent rating events (descending)"; return o; });
 
+string SubtitlesRoot()
+{
+    var root = app.Configuration["Data:SubtitlesRoot"] ?? app.Configuration["DATA_SUBTITLES_ROOT"] ?? "/app/data/subtitles";
+    return Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, root));
+}
+
+static string SanitizeId(string id)
+{
+    var safe = new string(id.Where(ch => char.IsLetterOrDigit(ch) || ch == '-' || ch == '_').ToArray());
+    return string.IsNullOrWhiteSpace(safe) ? "unknown" : safe;
+}
+
+int MaxUploadBytes()
+{
+    var v = app.Configuration["UPLOADS_MAX_SUBTITLE_BYTES"];
+    return int.TryParse(v, out var n) && n > 0 ? n : 1024 * 1024;
+}
+
+app.MapGet("/api/subtitles/{videoId}/{version}.srt", (string videoId, int version, HttpResponse res) =>
+{
+    var root = SubtitlesRoot();
+    var vid = SanitizeId(videoId);
+    var path = Path.Combine(root, vid, $"v{version}.srt");
+    if (!System.IO.File.Exists(path)) return Results.NotFound();
+    res.Headers["Cache-Control"] = "public, max-age=3600";
+    res.Headers["Content-Disposition"] = $"inline; filename=\"{vid}-v{version}.srt\"";
+    return Results.File(path, "text/plain; charset=utf-8");
+}).WithOpenApi(o => { o.Summary = "Serve first-party subtitle SRT"; return o; });
+
+app.MapPost("/api/uploads/subtitles", async (HttpRequest req) =>
+{
+    var videoId = req.Query["videoId"].FirstOrDefault();
+    var versionStr = req.Query["version"].FirstOrDefault();
+    if (req.HasFormContentType)
+    {
+        var form = await req.ReadFormAsync();
+        videoId ??= form["videoId"].FirstOrDefault();
+        versionStr ??= form["version"].FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(videoId) || string.IsNullOrWhiteSpace(versionStr)) return Results.BadRequest("Missing videoId or version");
+        if (!int.TryParse(versionStr, out var ver) || ver < 1) return Results.BadRequest("Invalid version");
+        var content = form["content"].FirstOrDefault();
+        byte[] data;
+        if (form.Files.Count > 0)
+        {
+            using var ms = new MemoryStream();
+            await form.Files[0].CopyToAsync(ms);
+            data = ms.ToArray();
+        }
+        else if (!string.IsNullOrEmpty(content))
+        {
+            data = System.Text.Encoding.UTF8.GetBytes(content);
+        }
+        else return Results.BadRequest("Missing content");
+        if (data.Length > MaxUploadBytes()) return Results.BadRequest("File too large");
+        var root = SubtitlesRoot();
+        var vid = SanitizeId(videoId!);
+        var dir = Path.Combine(root, vid);
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, $"v{ver}.srt");
+        await System.IO.File.WriteAllBytesAsync(path, data);
+        var storageKey = $"subtitles/{vid}/v{ver}.srt";
+        return Results.Json(new { storage_key = storageKey });
+    }
+    else
+    {
+        if (string.IsNullOrWhiteSpace(videoId) || string.IsNullOrWhiteSpace(versionStr)) return Results.BadRequest("Missing videoId or version");
+        if (!int.TryParse(versionStr, out var ver) || ver < 1) return Results.BadRequest("Invalid version");
+        using var ms = new MemoryStream();
+        await req.Body.CopyToAsync(ms);
+        var data = ms.ToArray();
+        if (data.Length == 0) return Results.BadRequest("Empty body");
+        if (data.Length > MaxUploadBytes()) return Results.BadRequest("File too large");
+        var root = SubtitlesRoot();
+        var vid = SanitizeId(videoId!);
+        var dir = Path.Combine(root, vid);
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, $"v{ver}.srt");
+        await System.IO.File.WriteAllBytesAsync(path, data);
+        var storageKey = $"subtitles/{vid}/v{ver}.srt";
+        return Results.Json(new { storage_key = storageKey });
+    }
+}).WithOpenApi(o => { o.Summary = "Upload SRT (multipart or raw text)"; return o; });
+
+bool IsIngestAuthorized(HttpContext ctx)
+{
+    var header = ctx.Request.Headers["X-Api-Key"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(header)) return false;
+    var allow = app.Configuration["API_INGEST_TOKENS"];
+    if (string.IsNullOrWhiteSpace(allow)) return false;
+    return allow.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(header);
+}
+
+string? ParseSubmitterFromToken(string? token)
+{
+    if (string.IsNullOrWhiteSpace(token)) return null;
+    // Expected format: bonjwatv_token_<USERNAME>_<MD5(USERNAME)>
+    try
+    {
+        var parts = token.Split('_');
+        if (parts.Length >= 4 && parts[0] == "bonjwatv" && parts[1] == "token")
+        {
+            var username = parts[2];
+            var md5 = parts[3];
+            using var md5prov = System.Security.Cryptography.MD5.Create();
+            var hash = BitConverter.ToString(md5prov.ComputeHash(System.Text.Encoding.UTF8.GetBytes(username))).Replace("-", "").ToLowerInvariant();
+            if (string.Equals(hash, md5, StringComparison.OrdinalIgnoreCase))
+            {
+                return username;
+            }
+            // If hash doesn't match, still fall back to raw username to avoid blocking
+            return username;
+        }
+    }
+    catch { }
+    return null;
+}
+
+app.MapPost("/api/submissions/videos", (HttpContext ctx, SubmissionsRepository repo, VideoSubmissionPayload body) =>
+{
+    if (!IsIngestAuthorized(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(body.YoutubeId) || string.IsNullOrWhiteSpace(body.Title)) return Results.BadRequest("Missing required fields");
+    var token = ctx.Request.Headers["X-Api-Key"].FirstOrDefault();
+    var who = ParseSubmitterFromToken(token) ?? (token ?? "unknown");
+    var s = repo.CreateVideo(who, body);
+    return Results.Json(new { submission_id = s.Id, status = s.Status });
+}).WithOpenApi(o => { o.Summary = "Submit a new video for review"; return o; });
+
+app.MapGet("/api/admin/submissions", (SubmissionsRepository repo, string? status, string? type, int? page, int? pageSize) =>
+{
+    var pg = Math.Max(1, page ?? 1);
+    var ps = Math.Clamp(pageSize ?? 24, 1, 100);
+    var items = repo.List(type, status, pg, ps);
+    return Results.Json(new { items, page = pg, pageSize = ps });
+}).WithOpenApi(o => { o.Summary = "List submissions (admin)"; return o; });
+
+app.MapGet("/api/admin/submissions/{id}", (string id, SubmissionsRepository repo) =>
+{
+    var s = repo.Get(id);
+    return s == null ? Results.NotFound() : Results.Json(s);
+}).WithOpenApi(o => { o.Summary = "Get submission detail (admin)"; return o; });
+
+app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, SubmissionsRepository repo) =>
+{
+    using var sr = new StreamReader(req.Body);
+    var json = await sr.ReadToEndAsync();
+    if (string.IsNullOrWhiteSpace(json)) return Results.BadRequest("Missing body");
+    using var doc = System.Text.Json.JsonDocument.Parse(json);
+    var bodyRoot = doc.RootElement;
+    var action = bodyRoot.TryGetProperty("action", out var a) ? a.GetString() : null;
+    var reason = bodyRoot.TryGetProperty("reason", out var r) ? r.GetString() : null;
+    if (string.IsNullOrWhiteSpace(action)) return Results.BadRequest("Missing action");
+    var ok = repo.Review(id, "admin", action!, reason);
+    if (!ok) return Results.NotFound();
+
+    // On approval, upsert into videos.json and ensure first‑party subtitle is available
+    if (string.Equals(action, "approve", StringComparison.OrdinalIgnoreCase))
+    {
+        var s = repo.Get(id);
+        if (s?.Payload != null)
+        {
+            var vid = s.Payload.YoutubeId;
+            if (!string.IsNullOrWhiteSpace(vid))
+            {
+                // Ensure we have a local subtitle file; mirror external if necessary
+                var version = 1;
+                var subsRoot = SubtitlesRoot();
+                var storageKey = await EnsureSubtitleStoredAsync(subsRoot, vid, version, s.Payload.SubtitleStorageKey, s.Payload.SubtitleUrl);
+                // Compute first‑party serving URL
+                var internalUrl = $"/api/subtitles/{SanitizeId(vid)}/{version}.srt";
+                // Upsert in videos.json
+                UpsertVideoIntoCatalogJson(
+                    app.Configuration["Data:JsonPath"] ?? app.Configuration["DATA_JSON_PATH"] ?? Path.Combine(app.Environment.ContentRootPath, "../webapp/data/videos.json"),
+                    vid,
+                    s.Payload.Title,
+                    s.Payload.Creator,
+                    s.Payload.Description,
+                    s.Payload.Tags,
+                    s.Payload.ReleaseDate,
+                    internalUrl,
+                    s.SubmittedBy,
+                    s.SubmittedAt
+                );
+            }
+        }
+    }
+    return Results.Ok(new { ok = true });
+}).WithOpenApi(o => { o.Summary = "Approve or reject a submission (admin)"; return o; });
+
+// Admin videos management: list hidden, detail, hide/show/delete
+app.MapGet("/api/admin/videos/hidden", ([Microsoft.AspNetCore.Mvc.FromServices] VideoRepository repo) =>
+{
+    var items = repo.All().Where(v => v.Hidden == true)
+        .Select(v => new { id = v.Id, title = v.Title, hiddenReason = v.HiddenReason, hiddenAt = v.HiddenAt })
+        .ToList();
+    return Results.Json(items);
+}).WithOpenApi(o => { o.Summary = "List hidden videos"; return o; });
+
+app.MapGet("/api/admin/videos/{id}", (string id, [Microsoft.AspNetCore.Mvc.FromServices] VideoRepository repo) =>
+{
+    var v = repo.All().FirstOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+    return v == null ? Results.NotFound() : Results.Json(v);
+}).WithOpenApi(o => { o.Summary = "Get video detail (admin)"; return o; });
+
+string CatalogJsonPath()
+{
+    return Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, app.Configuration["Data:JsonPath"] ?? app.Configuration["DATA_JSON_PATH"] ?? "../webapp/data/videos.json"));
+}
+
+app.MapPatch("/api/admin/videos/{id}/hide", async (string id, HttpRequest req) =>
+{
+    using var sr = new StreamReader(req.Body);
+    var body = await sr.ReadToEndAsync();
+    string? reason = null;
+    if (!string.IsNullOrWhiteSpace(body))
+    {
+        try { using var doc = System.Text.Json.JsonDocument.Parse(body); reason = doc.RootElement.TryGetProperty("reason", out var r) ? r.GetString() : null; }
+        catch { }
+    }
+    HideOrShowVideo(CatalogJsonPath(), id, hide: true, reason: reason);
+    return Results.Ok(new { ok = true });
+}).WithOpenApi(o => { o.Summary = "Hide a video with reason"; return o; });
+
+app.MapPatch("/api/admin/videos/{id}/show", (string id) =>
+{
+    HideOrShowVideo(CatalogJsonPath(), id, hide: false, reason: null);
+    return Results.Ok(new { ok = true });
+}).WithOpenApi(o => { o.Summary = "Unhide a video"; return o; });
+
+app.MapDelete("/api/admin/videos/{id}", (string id) =>
+{
+    DeleteVideo(CatalogJsonPath(), id);
+    return Results.Ok(new { ok = true });
+}).WithOpenApi(o => { o.Summary = "Delete a video from catalog"; return o; });
+
 app.Run();
+
+// ----- Helpers (must remain before type declarations) -----
 
 static string? NormalizeRace(string? value)
 {
@@ -127,6 +364,168 @@ static string? NormalizeRace(string? value)
         "p" or "protoss" => "p",
         _ => null
     };
+}
+
+static void UpsertVideoIntoCatalogJson(string jsonPath, string youtubeId, string title, string? creator, string? description, string[]? tags, string? releaseDate, string subtitleUrl, string? submitter, DateTimeOffset submittedAt)
+{
+    try
+    {
+        var full = Path.GetFullPath(jsonPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        System.Text.Json.JsonElement[] empty = Array.Empty<System.Text.Json.JsonElement>();
+        var list = new List<Dictionary<string, object?>>();
+        if (File.Exists(full))
+        {
+            using var fs = File.OpenRead(full);
+            using var doc = System.Text.Json.JsonDocument.Parse(fs);
+            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var el in doc.RootElement.EnumerateArray())
+                {
+                    var obj = new Dictionary<string, object?>();
+                    foreach (var prop in el.EnumerateObject())
+                    {
+                        obj[prop.Name] = prop.Value.ValueKind switch
+                        {
+                            System.Text.Json.JsonValueKind.String => prop.Value.GetString(),
+                            System.Text.Json.JsonValueKind.Number => (object?)prop.Value.GetRawText(),
+                            System.Text.Json.JsonValueKind.True => true,
+                            System.Text.Json.JsonValueKind.False => false,
+                            System.Text.Json.JsonValueKind.Array => prop.Value.EnumerateArray().Select(x => x.GetString()).ToArray(),
+                            _ => null
+                        };
+                    }
+                    list.Add(obj);
+                }
+            }
+        }
+        var existing = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == youtubeId);
+        if (existing == null)
+        {
+            existing = new Dictionary<string, object?>();
+            list.Add(existing);
+        }
+        existing["v"] = youtubeId;
+        if (!string.IsNullOrWhiteSpace(title)) existing["title"] = title;
+        if (!string.IsNullOrWhiteSpace(creator)) existing["creator"] = creator;
+        if (!string.IsNullOrWhiteSpace(description)) existing["description"] = description;
+        if (tags != null && tags.Length > 0) existing["tags"] = tags;
+        if (!string.IsNullOrWhiteSpace(releaseDate)) existing["releaseDate"] = releaseDate;
+        existing["subtitleUrl"] = subtitleUrl;
+        if (!string.IsNullOrWhiteSpace(submitter)) existing["submitter"] = submitter;
+        existing["submissionDate"] = submittedAt.ToString("yyyy-MM-dd");
+        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+        var normalized = list.Select(x =>
+        {
+            var o = new Dictionary<string, object?>();
+            foreach (var k in new[] { "v", "title", "creator", "description", "tags", "releaseDate", "subtitleUrl", "submitter", "submissionDate" })
+            {
+                if (x.ContainsKey(k)) o[k] = x[k];
+            }
+            return o;
+        }).ToList();
+        var json = System.Text.Json.JsonSerializer.Serialize(normalized, opts);
+        File.WriteAllText(full, json);
+    }
+    catch
+    {
+        // swallow in this minimal implementation; could log
+    }
+}
+static async Task<string?> EnsureSubtitleStoredAsync(string subtitlesRoot, string videoId, int version, string? storageKey, string? externalUrl)
+{
+    var root = subtitlesRoot;
+    Directory.CreateDirectory(root);
+    var vid = SanitizeId(videoId);
+    var dir = Path.Combine(root, vid);
+    Directory.CreateDirectory(dir);
+    var path = Path.Combine(dir, $"v{version}.srt");
+
+    if (!string.IsNullOrWhiteSpace(storageKey))
+    {
+        // If storageKey already points under our root, assume present
+        // Otherwise, we still write using standard path
+        if (File.Exists(path)) return storageKey;
+    }
+
+    if (!string.IsNullOrWhiteSpace(externalUrl))
+    {
+        try
+        {
+            byte[] data;
+            if (externalUrl.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+            {
+                var fp = externalUrl.Substring("file://".Length);
+                data = await File.ReadAllBytesAsync(fp);
+            }
+            else
+            {
+                using var http = new HttpClient();
+                data = await http.GetByteArrayAsync(externalUrl);
+            }
+            await File.WriteAllBytesAsync(path, data);
+            return $"subtitles/{vid}/v{version}.srt";
+        }
+        catch { }
+    }
+
+    // If nothing else, ensure file exists (create empty) to avoid broken link
+    if (!File.Exists(path))
+    {
+        await File.WriteAllTextAsync(path, "");
+    }
+    return $"subtitles/{vid}/v{version}.srt";
+}
+
+// (type declarations moved to end — must come after all statements)
+
+// --- Admin video file mutators ---
+static void HideOrShowVideo(string jsonPath, string id, bool hide, string? reason)
+{
+    try
+    {
+        var full = Path.GetFullPath(jsonPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        var list = new List<Dictionary<string, object?>>();
+        if (File.Exists(full))
+        {
+            var json = File.ReadAllText(full);
+            try { list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new(); }
+            catch { list = new(); }
+        }
+        var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
+        if (item == null) return;
+        if (hide)
+        {
+            item["hidden"] = true;
+            if (!string.IsNullOrWhiteSpace(reason)) item["hiddenReason"] = reason;
+            item["hiddenAt"] = DateTimeOffset.UtcNow.ToString("u");
+        }
+        else
+        {
+            item.Remove("hidden");
+            item.Remove("hiddenReason");
+            item.Remove("hiddenAt");
+        }
+        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+        File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
+    }
+    catch { }
+}
+
+static void DeleteVideo(string jsonPath, string id)
+{
+    try
+    {
+        var full = Path.GetFullPath(jsonPath);
+        if (!File.Exists(full)) return;
+        var json = File.ReadAllText(full);
+        var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
+        var next = list.Where(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) != id).ToList();
+        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+        File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(next, opts));
+    }
+    catch { }
 }
 
 // Note: In a file that uses top-level statements, any

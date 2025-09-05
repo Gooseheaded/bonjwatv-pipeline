@@ -103,6 +103,26 @@ class App(tk.Tk):
         )
         derived_hint.grid(sticky="ew", pady=(0, 12), padx=4)
 
+        # Catalog integration (optional)
+        catalog = ttk.Labelframe(main, text="Catalog integration (optional)")
+        catalog.grid(sticky="ew", pady=(0, 12))
+        for i in range(3):
+            catalog.columnconfigure(i, weight=1 if i == 1 else 0)
+
+        ttk.Checkbutton(
+            catalog,
+            text="Submit results to Catalog after run",
+            variable=self.vars["submit_to_catalog"],
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=(8, 8), pady=(6, 4))
+
+        ttk.Label(catalog, text="Catalog API base").grid(row=1, column=0, sticky="w", padx=(8, 8))
+        ttk.Entry(catalog, textvariable=self.vars["catalog_base"]).grid(row=1, column=1, sticky="ew", pady=2)
+
+        ttk.Label(catalog, text="Ingest token").grid(row=2, column=0, sticky="w", padx=(8, 8))
+        self.catalog_token_entry = ttk.Entry(catalog, textvariable=self.vars["catalog_api_token"], show="•")
+        self.catalog_token_entry.grid(row=2, column=1, sticky="ew", pady=2)
+        ttk.Button(catalog, text="show/hide", command=self.toggle_catalog_token).grid(row=2, column=2, padx=(8, 8))
+
         # Pipeline
         pipe = ttk.Labelframe(main, text="Pipeline steps")
         pipe.grid(sticky="ew", pady=(0, 12))
@@ -210,6 +230,10 @@ class App(tk.Tk):
             "transcription_provider": tk.StringVar(value="local"),
             "do_normalize": tk.BooleanVar(value=True),
             "do_translate": tk.BooleanVar(value=False),
+            # Catalog integration
+            "submit_to_catalog": tk.BooleanVar(value=False),
+            "catalog_base": tk.StringVar(value="http://localhost:5002"),
+            "catalog_api_token": tk.StringVar(value=""),
         }
         return v
 
@@ -229,6 +253,12 @@ class App(tk.Tk):
     def toggle_api(self):
         """Toggle showing/hiding the API key field."""
         self.api_entry.configure(show="" if self.api_entry.cget("show") else "•")
+
+    def toggle_catalog_token(self):
+        """Toggle showing/hiding the Catalog token field."""
+        self.catalog_token_entry.configure(
+            show="" if self.catalog_token_entry.cget("show") else "•"
+        )
 
     def pick_videos_file(self):
         """Open a file picker for selecting a URLs list file."""
@@ -500,7 +530,39 @@ class App(tk.Tk):
             self.after(0, self.refresh_states)
             self.after(0, self.refresh_states)
 
-        self.controller.run([("Run orchestrator", run_orchestrator)], on_done=on_done)
+        # Optional submit step
+        steps = [("Run orchestrator", run_orchestrator)]
+        if self.vars["submit_to_catalog"].get():
+            def run_submit():
+                try:
+                    catalog_base = self.vars["catalog_base"].get().strip()
+                    token = self.vars["catalog_api_token"].get().strip()
+                    if not catalog_base or not token:
+                        self.after(0, lambda: self.log_line("Catalog base or token missing; skipping submit."))
+                        return
+                    # Prefer enriched videos JSON (built alongside the input .txt)
+                    enriched_videos = os.path.join(os.path.dirname(os.path.abspath(videos_file)), "videos_enriched.json")
+                    videos_json = enriched_videos if os.path.exists(enriched_videos) else run_dirs["video_list_file"]
+                    cmd = [
+                        sys.executable,
+                        os.path.join(os.getcwd(), "submit_to_catalog.py"),
+                        "--catalog-base", catalog_base,
+                        "--api-key", token,
+                        "--videos-json", videos_json,
+                        "--subtitles-dir", run_dirs["subtitles_dir"],
+                    ]
+                    proc = subprocess.run(cmd, capture_output=True, text=True)
+                    if proc.stdout:
+                        for line in proc.stdout.splitlines():
+                            self.after(0, lambda msg=line: self.log_line(msg))
+                    if proc.returncode != 0:
+                        self.after(0, lambda: self.log_line(f"Submit script failed (code {proc.returncode})."))
+                except Exception as e:
+                    self.after(0, lambda err=e: self.log_line(f"Error running submit_to_catalog: {err}"))
+
+            steps.append(("Submit to Catalog", run_submit))
+
+        self.controller.run(steps, on_done=on_done)
 
     def on_cancel(self):
         """Request cooperative cancellation of the running pipeline."""

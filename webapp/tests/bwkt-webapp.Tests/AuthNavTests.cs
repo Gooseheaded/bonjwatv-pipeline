@@ -23,7 +23,8 @@ public class AuthNavTests : IClassFixture<TestWebAppFactory>
         // follow redirect
         var home = await client.GetAsync("/");
         var html = await home.Content.ReadAsStringAsync();
-        Assert.Contains("Hello, DiscordUser", html);
+        // We intentionally do not show a greeting in the navbar, only a Logout button
+        Assert.DoesNotContain("Hello, DiscordUser", html);
         Assert.Contains("Logout", html);
     }
 }

@@ -1,0 +1,64 @@
+@page
+@model bwkt_webapp.Pages.Admin.VideoModel
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Admin — Video";
+}
+
+<h1>Video</h1>
+
+@if (!Model.IsAdmin)
+{
+    <div class="alert alert-warning">You do not have access to this page.</div>
+}
+else if (Model.Video.ValueKind == JsonValueKind.Undefined || Model.Video.ValueKind == JsonValueKind.Null)
+{
+    <div class="alert alert-danger">Video not found or failed to load.</div>
+}
+else
+{
+    var v = Model.Video;
+    var id = v.TryGetProperty("id", out var idEl) ? idEl.GetString() : (v.TryGetProperty("v", out var vEl) ? vEl.GetString() : null);
+    var title = v.TryGetProperty("title", out var t) ? t.GetString() : null;
+    var hidden = v.TryGetProperty("hidden", out var h) && h.ValueKind == JsonValueKind.True;
+    var reason = v.TryGetProperty("hiddenReason", out var r) ? r.GetString() : null;
+    var at = v.TryGetProperty("hiddenAt", out var ha) ? ha.GetString() : null;
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">@title (@id)</h5>
+            @if (hidden)
+            {
+                <p class="text-muted">Hidden: @reason (@at)</p>
+            }
+            <div class="mt-2">
+                @if (hidden)
+                {
+                    <form class="d-inline" method="post" action="/admin/videos/@id/show">
+                        <button type="submit" class="btn btn-success">Show</button>
+                    </form>
+                }
+                else
+                {
+                    <form class="d-inline" method="post" action="/admin/videos/@id/hide" onsubmit="return askReason(this)">
+                        <input type="hidden" name="reason" value="" />
+                        <button type="submit" class="btn btn-outline-warning">Hide…</button>
+                    </form>
+                }
+                <form class="d-inline" method="post" action="/admin/videos/@id/delete" onsubmit="return confirm('Permanently delete this video? This cannot be undone.')">
+                    <button type="submit" class="btn btn-outline-danger">Delete</button>
+                </form>
+                <a class="btn btn-link" asp-page="/Admin/Index">Back to Admin</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function askReason(form) {
+            const reason = prompt('Reason for hiding this video?');
+            if (reason === null) return false;
+            form.querySelector('input[name="reason"]').value = reason || 'Hidden via UI';
+            return true;
+        }
+    </script>
+}

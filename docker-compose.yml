@@ -42,12 +42,15 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://0.0.0.0:8080
+      - API_INGEST_TOKENS=${API_INGEST_TOKENS}
+      - DATA_SUBTITLES_ROOT=/app/data/subtitles
+      - DATA_SUBMISSIONS_PATH=/app/data/submissions.json
     ports:
       - "5002:8080"
     restart: unless-stopped
     volumes:
       # Allow API to read the dev videos.json from webapp
-      - ./webapp/data:/app/../webapp/data:ro
+      - ./webapp/data:/app/../webapp/data
     develop:
       watch:
         - action: rebuild

@@ -1,0 +1,23 @@
+{
+  "video_list_file": "/home/gctrindade/programming/bwkt-webapp/metadata/urls/videos.json",
+  "video_metadata_dir": "metadata",
+  "audio_dir": "/home/gctrindade/programming/bwkt-webapp/metadata/urls/audio",
+  "vocals_dir": "/home/gctrindade/programming/bwkt-webapp/metadata/urls/vocals",
+  "subtitles_dir": "/home/gctrindade/programming/bwkt-webapp/metadata/urls/subtitles",
+  "cache_dir": "/home/gctrindade/programming/bwkt-webapp/metadata/urls/.cache",
+  "slang_file": "slang/KoreanSlang.txt",
+  "website_dir": "website",
+  "urls_file": "/home/gctrindade/programming/bwkt-webapp/metadata/urls.txt",
+  "steps": [
+    "read_youtube_urls",
+    "fetch_video_metadata",
+    "translate_title",
+    "build_videos_json"
+  ],
+  "transcription_provider": "local",
+  "transcription_api_model": "whisper-1",
+  "service_account_file": "path/to/service-account.json",
+  "spreadsheet": "Translation Tracking",
+  "worksheet": "Translated Videos",
+  "sheet_column": "Pastebin URL"
+}

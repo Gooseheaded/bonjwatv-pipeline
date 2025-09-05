@@ -1,0 +1,66 @@
+@page
+@model bwkt_webapp.Pages.Admin.SubmissionModel
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Admin — Submission";
+}
+
+<h1>Submission Detail</h1>
+
+@if (!Model.IsAdmin)
+{
+    <div class="alert alert-warning">You do not have access to this page.</div>
+}
+else if (Model.Submission.ValueKind == JsonValueKind.Undefined || Model.Submission.ValueKind == JsonValueKind.Null)
+{
+    <div class="alert alert-danger">Submission not found or failed to load.</div>
+}
+else
+{
+    var s = Model.Submission;
+    var id = s.GetProperty("id").GetString();
+    var status = s.GetProperty("status").GetString();
+    var submittedAt = s.GetProperty("submitted_at").GetDateTimeOffset();
+    var submittedBy = s.TryGetProperty("submitted_by", out var sb) ? sb.GetString() : null;
+    var payload = s.TryGetProperty("payload", out var p) ? p : default(JsonElement);
+    var youtubeId = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("youtube_id", out var y) ? y.GetString() : null;
+    var title = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("title", out var t) ? t.GetString() : null;
+    var creator = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("creator", out var c) ? c.GetString() : null;
+    var description = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("description", out var d) ? d.GetString() : null;
+    var tags = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array ? string.Join(", ", tg.EnumerateArray().Select(x => x.GetString())) : "";
+    var storageKey = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("subtitle_storage_key", out var sk) ? sk.GetString() : null;
+    var subtitleUrl = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("subtitle_url", out var su) ? su.GetString() : null;
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">@title (@youtubeId)</h5>
+            @if (!string.IsNullOrEmpty(creator)) { <h6 class="card-subtitle mb-2 text-muted">By @creator</h6> }
+            @if (!string.IsNullOrEmpty(description)) { <p class="card-text">@description</p> }
+            <dl class="row">
+                <dt class="col-sm-3">Submitted At</dt>
+                <dd class="col-sm-9">@submittedAt.ToString("u")</dd>
+                <dt class="col-sm-3">Submitted By</dt>
+                <dd class="col-sm-9">@submittedBy</dd>
+                <dt class="col-sm-3">Tags</dt>
+                <dd class="col-sm-9">@tags</dd>
+                <dt class="col-sm-3">Subtitle</dt>
+                <dd class="col-sm-9">
+                    @if (!string.IsNullOrEmpty(storageKey)) { <span>Storage: @storageKey</span> }
+                    else if (!string.IsNullOrEmpty(subtitleUrl)) { <a href="@subtitleUrl" target="_blank" rel="noopener">External URL</a> }
+                    else { <span class="text-muted">(none)</span> }
+                </dd>
+            </dl>
+            <div>
+                <form class="d-inline" method="post" action="/admin/submissions/@id/approve">
+                    <button type="submit" class="btn btn-success">Approve</button>
+                </form>
+                <form class="d-inline" method="post" action="/admin/submissions/@id/reject">
+                    <input type="hidden" name="reason" value="Rejected via detail page" />
+                    <button type="submit" class="btn btn-outline-danger">Reject</button>
+                </form>
+                <a class="btn btn-link" asp-page="/Admin/Index">Back to Admin</a>
+            </div>
+        </div>
+    </div>
+}
+
