@@ -19,7 +19,7 @@ else
         @foreach (var v in Model.Videos)
         {
             <div class="col">
-                <div class="card h-100">
+                <div class="card h-100 position-relative">
                     <a asp-page="/Watch" asp-route-v="@v.VideoId">
                         <img src="https://img.youtube.com/vi/@v.VideoId/hqdefault.jpg" class="card-img-top" alt="@v.Title" />
                     </a>
@@ -34,6 +34,13 @@ else
                             var (text, css) = TagBadge.Get(tag);
                             <span class="badge @css me-1">@text</span>
                         }
+                        <div class="d-flex justify-content-end align-items-center mt-2">
+                            <small class="text-muted rating-summary" data-video-id="@v.VideoId">
+                                🔴 <span class="rs-red">0</span>
+                                &nbsp;🟡 <span class="rs-yellow">0</span>
+                                &nbsp;🟢 <span class="rs-green">0</span>
+                            </small>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -58,4 +65,23 @@ else
             </ul>
         </nav>
     }
+}
+
+@section Scripts {
+<script>
+  (function() {
+    async function loadSummary(el) {
+      const vid = el.getAttribute('data-video-id');
+      try {
+        const res = await fetch(`/ratings/${vid}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        el.querySelector('.rs-red').textContent = data.Red ?? 0;
+        el.querySelector('.rs-yellow').textContent = data.Yellow ?? 0;
+        el.querySelector('.rs-green').textContent = data.Green ?? 0;
+      } catch {}
+    }
+    document.querySelectorAll('.rating-summary').forEach(loadSummary);
+  })();
+</script>
 }
