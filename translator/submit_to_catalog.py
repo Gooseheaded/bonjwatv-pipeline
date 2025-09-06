@@ -110,7 +110,12 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
                 ok_all = False
                 continue
         except urllib.error.HTTPError as he:
-            _print(f"ERROR: upload failed for {vid}: {he}")
+            if he.code == 403:
+                _print(
+                    "ERROR: upload rejected with 403 Forbidden. This endpoint usually does not require a token; verify bonjwa.tv URL and server availability."
+                )
+            else:
+                _print(f"ERROR: upload failed for {vid}: {he}")
             ok_all = False
             continue
 
@@ -136,7 +141,13 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
             status = resp.get("status")
             _print(f"Submitted {vid}: submission_id={sid} status={status}")
         except urllib.error.HTTPError as he:
-            _print(f"ERROR: submission failed for {vid}: {he}")
+            if he.code == 403:
+                _print(
+                    "ERROR: submission rejected with 403 Forbidden — your ingest token was not accepted by bonjwa.tv.\n"
+                    "Please check the Ingest token and bonjwa.tv URL in the GUI settings and try again."
+                )
+            else:
+                _print(f"ERROR: submission failed for {vid}: {he}")
             ok_all = False
             continue
 
