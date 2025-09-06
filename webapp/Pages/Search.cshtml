@@ -29,12 +29,14 @@ else
                         {
                             <h6 class="card-subtitle mb-2 text-muted">By @v.Creator</h6>
                         }
-                        @foreach (var tag in v.Tags ?? Array.Empty<string>())
-                        {
-                            var (text, css) = TagBadge.Get(tag);
-                            <span class="badge @css me-1">@text</span>
-                        }
-                        <div class="d-flex justify-content-end align-items-center mt-2">
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <div class="d-flex flex-wrap" style="gap: .25rem;">
+                                @foreach (var tag in v.Tags ?? Array.Empty<string>())
+                                {
+                                    var (text, css) = TagBadge.Get(tag);
+                                    <span class="badge @css">@text</span>
+                                }
+                            </div>
                             <small class="text-muted rating-summary" data-video-id="@v.VideoId">
                                 🔴 <span class="rs-red">0</span>
                                 &nbsp;🟡 <span class="rs-yellow">0</span>
