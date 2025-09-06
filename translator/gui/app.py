@@ -165,17 +165,20 @@ class App(tk.Tk):
 
         ttk.Checkbutton(
             catalog,
-            text="Submit results to Catalog after run",
+            text="Submit results to bonjwa.tv",
             variable=self.vars["submit_to_catalog"],
+            command=self.refresh_states,
         ).grid(row=0, column=0, columnspan=3, sticky="w", padx=(8, 8), pady=(6, 4))
 
         ttk.Label(catalog, text="bonjwa.tv URL").grid(row=1, column=0, sticky="w", padx=(8, 8))
-        ttk.Entry(catalog, textvariable=self.vars["catalog_base"]).grid(row=1, column=1, sticky="ew", pady=2)
+        self.catalog_base_entry = ttk.Entry(catalog, textvariable=self.vars["catalog_base"])
+        self.catalog_base_entry.grid(row=1, column=1, sticky="ew", pady=2)
 
         ttk.Label(catalog, text="Ingest token").grid(row=2, column=0, sticky="w", padx=(8, 8))
         self.catalog_token_entry = ttk.Entry(catalog, textvariable=self.vars["catalog_api_token"], show="•")
         self.catalog_token_entry.grid(row=2, column=1, sticky="ew", pady=2)
-        ttk.Button(catalog, text="show/hide", command=self.toggle_catalog_token).grid(row=2, column=2, padx=(8, 8))
+        self.catalog_token_btn = ttk.Button(catalog, text="show/hide", command=self.toggle_catalog_token)
+        self.catalog_token_btn.grid(row=2, column=2, padx=(8, 8))
 
         # Run + progress
         runrow = ttk.Frame(main)
@@ -204,7 +207,7 @@ class App(tk.Tk):
         # Attribution
         attr_label = ttk.Label(
             main,
-            text="BWKT Subtitle Pipeline v250818 by Gooseheaded",
+            text="BWKT Subtitle Pipeline v250905 by Gooseheaded",
             foreground="gray",
         )
         attr_label.grid(sticky="se", padx=4, pady=(8, 0))
@@ -312,6 +315,14 @@ class App(tk.Tk):
             widget.configure(state="normal" if enabled else "disabled")
 
         set_state(self.transcribe_provider_combo, self.vars["do_transcribe"].get())
+        # Enable/disable bonjwa.tv inputs based on checkbox
+        submit_enabled = self.vars["submit_to_catalog"].get()
+        if hasattr(self, "catalog_base_entry"):
+            set_state(self.catalog_base_entry, submit_enabled)
+        if hasattr(self, "catalog_token_entry"):
+            set_state(self.catalog_token_entry, submit_enabled)
+        if hasattr(self, "catalog_token_btn"):
+            set_state(self.catalog_token_btn, submit_enabled)
 
     def on_run(self):  # noqa: C901
         """Build a run config and launch the orchestrator subprocess."""
