@@ -71,6 +71,42 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Ratings_Remove_Clears_User_And_Counts()
+    {
+        var client = _factory.CreateClient();
+        var vid = "rmt1";
+        // Submit rating as forwarded user
+        using (var req = new HttpRequestMessage(HttpMethod.Post, $"/api/videos/{vid}/ratings"))
+        {
+            req.Content = JsonContent.Create(new { value = "green", version = 1 });
+            req.Headers.Add("X-User-Id", "user123");
+            req.Headers.Add("X-User-Name", "User 123");
+            var post = await client.SendAsync(req);
+            post.EnsureSuccessStatusCode();
+        }
+
+        // GET summary with forwarded user should show UserRating
+        var getWithUser = new HttpRequestMessage(HttpMethod.Get, $"/api/videos/{vid}/ratings?version=1");
+        getWithUser.Headers.Add("X-User-Id", "user123");
+        var sum1 = await (await client.SendAsync(getWithUser)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("green", (sum1.GetProperty("UserRating").GetString() ?? string.Empty).ToLowerInvariant());
+        Assert.True(sum1.GetProperty("Green").GetInt32() >= 1);
+
+        // DELETE rating for that user
+        var delReq = new HttpRequestMessage(HttpMethod.Delete, $"/api/videos/{vid}/ratings?version=1");
+        delReq.Headers.Add("X-User-Id", "user123");
+        var del = await client.SendAsync(delReq);
+        del.EnsureSuccessStatusCode();
+
+        // Counts should drop back to 0; user rating should be null
+        var getWithUser2 = new HttpRequestMessage(HttpMethod.Get, $"/api/videos/{vid}/ratings?version=1");
+        getWithUser2.Headers.Add("X-User-Id", "user123");
+        var sum2 = await (await client.SendAsync(getWithUser2)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, sum2.GetProperty("Red").GetInt32() + sum2.GetProperty("Yellow").GetInt32() + sum2.GetProperty("Green").GetInt32());
+        Assert.True(sum2.GetProperty("UserRating").ValueKind == JsonValueKind.Null || string.IsNullOrEmpty(sum2.GetProperty("UserRating").GetString()));
+    }
+
+    [Fact]
     public async Task Subtitles_Upload_And_Serve_Works()
     {
         var client = _factory.CreateClient();

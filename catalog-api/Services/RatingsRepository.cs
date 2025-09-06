@@ -10,7 +10,7 @@ public record RatingSummaryDto(
     [property: JsonPropertyName("Yellow")] int Yellow,
     [property: JsonPropertyName("Green")] int Green,
     [property: JsonPropertyName("Version")] int Version,
-    [property: JsonPropertyName("UserRating")] RatingValue? UserRating
+    [property: JsonPropertyName("UserRating")] string? UserRating
 );
 
 public record RatingEvent(
@@ -72,7 +72,12 @@ internal class RatingsRepository
         {
             if (_store.Videos.TryGetValue(videoId, out var vAgg) && vAgg.Versions.TryGetValue(version, out var agg))
             {
-                return new RatingSummaryDto(agg.Red, agg.Yellow, agg.Green, version, user != null && agg.UserRatings.TryGetValue(user, out var ur) ? ur : null);
+                string? urStr = null;
+                if (user != null && agg.UserRatings.TryGetValue(user, out var ur))
+                {
+                    urStr = ur.ToString();
+                }
+                return new RatingSummaryDto(agg.Red, agg.Yellow, agg.Green, version, urStr);
             }
             return new RatingSummaryDto(0, 0, 0, version, null);
         }

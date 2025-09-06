@@ -86,7 +86,11 @@ app.MapGet("/api/videos", (
 app.MapGet("/api/videos/{id}/ratings", (string id, int? version, HttpContext ctx, RatingsRepository repo) =>
 {
     int v = Math.Max(1, version ?? 1);
-    var user = ctx.User?.Identity?.IsAuthenticated == true ? ctx.User.Identity!.Name : null;
+    // Prefer forwarded identity header from webapp; fallback to authenticated identity
+    var fwdUserId = ctx.Request.Headers["X-User-Id"].FirstOrDefault();
+    string? user = !string.IsNullOrWhiteSpace(fwdUserId)
+        ? fwdUserId
+        : (ctx.User?.Identity?.IsAuthenticated == true ? ctx.User.Identity!.Name : null);
     var summary = repo.GetSummary(id, v, user);
     return Results.Json(summary);
 })

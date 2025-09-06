@@ -116,13 +116,21 @@ string? DeriveApiBase()
 
 var apiBase = DeriveApiBase();
 
-app.MapGet("/ratings/{id}", async (string id, int? version) =>
+app.MapGet("/ratings/{id}", async (string id, int? version, HttpContext ctx) =>
 {
     if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
     var v = Math.Max(1, version ?? 1);
     var url = $"{apiBase}/videos/{id}/ratings?version={v}";
     using var http = new HttpClient();
-    var resp = await http.GetAsync(url);
+    using var message = new HttpRequestMessage(HttpMethod.Get, url);
+    if (ctx.User?.Identity?.IsAuthenticated ?? false)
+    {
+        var userId = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var userName = ctx.User.Identity?.Name;
+        if (!string.IsNullOrWhiteSpace(userId)) message.Headers.Add("X-User-Id", userId);
+        if (!string.IsNullOrWhiteSpace(userName)) message.Headers.Add("X-User-Name", userName);
+    }
+    var resp = await http.SendAsync(message);
     var contentType = resp.Content.Headers.ContentType?.ToString() ?? "application/json";
     var stream = await resp.Content.ReadAsStreamAsync();
     return Results.Stream(stream, contentType);
