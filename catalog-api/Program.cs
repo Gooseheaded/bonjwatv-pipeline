@@ -287,7 +287,8 @@ app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, S
                 var internalUrl = $"/api/subtitles/{SanitizeId(vid)}/{version}.srt";
                 // Upsert in videos.json
                 UpsertVideoIntoCatalogJson(
-                    app.Configuration["Data:JsonPath"] ?? app.Configuration["DATA_JSON_PATH"] ?? Path.Combine(app.Environment.ContentRootPath, "../webapp/data/videos.json"),
+                    // Prefer env var path in prod, fall back to appsettings/dev default
+                    app.Configuration["DATA_JSON_PATH"] ?? app.Configuration["Data:JsonPath"] ?? Path.Combine(app.Environment.ContentRootPath, "../webapp/data/videos.json"),
                     vid,
                     s.Payload.Title,
                     s.Payload.Creator,
@@ -298,6 +299,29 @@ app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, S
                     s.SubmittedBy,
                     s.SubmittedAt
                 );
+            }
+        }
+    }
+    else if (string.Equals(action, "reject", StringComparison.OrdinalIgnoreCase))
+    {
+        // On rejection, delete any uploaded first‑party subtitle file referenced by the submission
+        var s = repo.Get(id);
+        var storageKey = s?.Payload?.SubtitleStorageKey;
+        if (!string.IsNullOrWhiteSpace(storageKey))
+        {
+            // Only delete if not referenced by catalog videos.json
+            if (TryParseStorageKey(storageKey!, out var vid, out var ver))
+            {
+                var inUse = IsSubtitleReferencedInCatalog(CatalogJsonPath(), vid!, ver);
+                if (!inUse)
+                {
+                    var full = MapStorageKeyToPath(SubtitlesRoot(), storageKey!);
+                    if (full != null)
+                    {
+                        try { if (System.IO.File.Exists(full)) System.IO.File.Delete(full); }
+                        catch { /* swallow IO errors */ }
+                    }
+                }
             }
         }
     }
@@ -321,7 +345,8 @@ app.MapGet("/api/admin/videos/{id}", (string id, [Microsoft.AspNetCore.Mvc.FromS
 
 string CatalogJsonPath()
 {
-    return Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, app.Configuration["Data:JsonPath"] ?? app.Configuration["DATA_JSON_PATH"] ?? "../webapp/data/videos.json"));
+    // Prefer env var in prod; fallback to appsettings/dev default
+    return Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, app.Configuration["DATA_JSON_PATH"] ?? app.Configuration["Data:JsonPath"] ?? "../webapp/data/videos.json"));
 }
 
 app.MapPatch("/api/admin/videos/{id}/hide", async (string id, HttpRequest req) =>
@@ -475,6 +500,78 @@ static async Task<string?> EnsureSubtitleStoredAsync(string subtitlesRoot, strin
         await File.WriteAllTextAsync(path, "");
     }
     return $"subtitles/{vid}/v{version}.srt";
+}
+
+static string? MapStorageKeyToPath(string subtitlesRoot, string storageKey)
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(storageKey)) return null;
+        var key = storageKey.Replace('\\', '/');
+        if (!key.StartsWith("subtitles/", StringComparison.OrdinalIgnoreCase)) return null;
+        var rel = key.Substring("subtitles/".Length);
+        var parts = rel.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2) return null;
+        var vid = SanitizeId(parts[0]);
+        var verPart = parts[1];
+        // Accept both "v1" and "v1.srt"
+        var verNoExt = verPart.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)
+            ? verPart.Substring(0, verPart.Length - 4)
+            : verPart;
+        if (!verNoExt.StartsWith("v") || verNoExt.Length < 2 || !int.TryParse(verNoExt.Substring(1), out var _)) return null;
+        var path = Path.Combine(subtitlesRoot, vid, verNoExt + ".srt");
+        return Path.GetFullPath(path);
+    }
+    catch { return null; }
+}
+
+static bool TryParseStorageKey(string storageKey, out string videoId, out int version)
+{
+    videoId = string.Empty; version = 0;
+    try
+    {
+        if (string.IsNullOrWhiteSpace(storageKey)) return false;
+        var key = storageKey.Replace('\\', '/');
+        if (!key.StartsWith("subtitles/", StringComparison.OrdinalIgnoreCase)) return false;
+        var rel = key.Substring("subtitles/".Length);
+        var parts = rel.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2) return false;
+        var vid = SanitizeId(parts[0]);
+        var verPart = parts[1];
+        var verNoExt = verPart.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)
+            ? verPart.Substring(0, verPart.Length - 4)
+            : verPart;
+        if (!verNoExt.StartsWith("v") || verNoExt.Length < 2 || !int.TryParse(verNoExt.Substring(1), out var vnum)) return false;
+        videoId = vid; version = vnum; return true;
+    }
+    catch { return false; }
+}
+
+static bool IsSubtitleReferencedInCatalog(string catalogJsonPath, string videoId, int version)
+{
+    try
+    {
+        var full = Path.GetFullPath(catalogJsonPath);
+        if (!System.IO.File.Exists(full)) return false;
+        using var fs = System.IO.File.OpenRead(full);
+        using var doc = System.Text.Json.JsonDocument.Parse(fs);
+        if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array) return false;
+        var expected = $"/api/subtitles/{SanitizeId(videoId)}/{version}.srt";
+        foreach (var el in doc.RootElement.EnumerateArray())
+        {
+            if (el.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+            if (el.TryGetProperty("subtitleUrl", out var su) && su.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var val = su.GetString();
+                if (!string.IsNullOrWhiteSpace(val) && string.Equals(val, expected, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    catch { return false; }
 }
 
 // (type declarations moved to end — must come after all statements)

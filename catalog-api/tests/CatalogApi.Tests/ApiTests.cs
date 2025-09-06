@@ -200,4 +200,122 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         var has = videos.GetProperty("items").EnumerateArray().Any(el => el.GetProperty("id").GetString() == "file001");
         Assert.True(has);
     }
+
+    [Fact]
+    public async Task Reject_Deletes_Unreferenced_Subtitle()
+    {
+        // Use a dedicated factory with known temp paths we can inspect
+        var tmpRoot = Directory.CreateTempSubdirectory();
+        var vidsPath = Path.Combine(tmpRoot.FullName, "videos.json");
+        await File.WriteAllTextAsync(vidsPath, "[]");
+        var ratingsPath = Path.Combine(tmpRoot.FullName, "ratings.json");
+        var subsRoot = Path.Combine(tmpRoot.FullName, "subtitles");
+        var submissionsPath = Path.Combine(tmpRoot.FullName, "submissions.json");
+
+        var factory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((ctx, cfg) =>
+            {
+                var dict = new Dictionary<string, string?>
+                {
+                    ["Data:JsonPath"] = vidsPath,
+                    ["Data:RatingsPath"] = ratingsPath,
+                    ["Data:SubtitlesRoot"] = subsRoot,
+                    ["Data:SubmissionsPath"] = submissionsPath,
+                    ["API_INGEST_TOKENS"] = "TOKEN1"
+                };
+                cfg.AddInMemoryCollection(dict!);
+            });
+        });
+
+        var client = factory.CreateClient();
+
+        // Upload an SRT to produce a storage_key and create the file on disk
+        var up = new MultipartFormDataContent();
+        up.Add(new StringContent("rej001"), "videoId");
+        up.Add(new StringContent("1"), "version");
+        up.Add(new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nDEL\n")), "file", "d.srt");
+        var respUp = await client.PostAsync("/api/uploads/subtitles", up);
+        respUp.EnsureSuccessStatusCode();
+        var storageKey = (await respUp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("storage_key").GetString();
+
+        // Create a submission referencing the stored subtitle
+        using var submitReq = new HttpRequestMessage(HttpMethod.Post, "/api/submissions/videos");
+        submitReq.Headers.Add("X-Api-Key", "TOKEN1");
+        submitReq.Content = JsonContent.Create(new { youtube_id = "rej001", title = "DeleteMe", subtitle_storage_key = storageKey });
+        var submit = await client.SendAsync(submitReq);
+        submit.EnsureSuccessStatusCode();
+        var sid = (await submit.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("submission_id").GetString();
+
+        // Reject the submission — file should be deleted because videos.json does not reference it
+        var reject = await client.PatchAsync($"/api/admin/submissions/{sid}", JsonContent.Create(new { action = "reject" }));
+        reject.EnsureSuccessStatusCode();
+
+        // Subtitle should now be gone
+        var get = await client.GetAsync("/api/subtitles/rej001/1.srt");
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, get.StatusCode);
+    }
+
+    [Fact]
+    public async Task Reject_DoesNot_Delete_When_Referenced_In_Videos()
+    {
+        // Set up known paths
+        var tmpRoot = Directory.CreateTempSubdirectory();
+        var vidsPath = Path.Combine(tmpRoot.FullName, "videos.json");
+        await File.WriteAllTextAsync(vidsPath, "[]");
+        var ratingsPath = Path.Combine(tmpRoot.FullName, "ratings.json");
+        var subsRoot = Path.Combine(tmpRoot.FullName, "subtitles");
+        var submissionsPath = Path.Combine(tmpRoot.FullName, "submissions.json");
+
+        var factory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((ctx, cfg) =>
+            {
+                var dict = new Dictionary<string, string?>
+                {
+                    ["Data:JsonPath"] = vidsPath,
+                    ["Data:RatingsPath"] = ratingsPath,
+                    ["Data:SubtitlesRoot"] = subsRoot,
+                    ["Data:SubmissionsPath"] = submissionsPath,
+                    ["API_INGEST_TOKENS"] = "TOKEN1"
+                };
+                cfg.AddInMemoryCollection(dict!);
+            });
+        });
+
+        var client = factory.CreateClient();
+
+        // Upload and store subtitle
+        var up = new MultipartFormDataContent();
+        up.Add(new StringContent("keep001"), "videoId");
+        up.Add(new StringContent("1"), "version");
+        up.Add(new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nKEEP\n")), "file", "k.srt");
+        var respUp = await client.PostAsync("/api/uploads/subtitles", up);
+        respUp.EnsureSuccessStatusCode();
+        var storageKey = (await respUp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("storage_key").GetString();
+
+        // Manually add an entry in videos.json that references this subtitle URL
+        var internalUrl = "/api/subtitles/keep001/1.srt";
+        var json = System.Text.Json.JsonSerializer.Serialize(new [] {
+            new Dictionary<string, object?> { ["v"] = "keep001", ["title"] = "Gamma", ["subtitleUrl"] = internalUrl }
+        }, new System.Text.Json.JsonSerializerOptions{ WriteIndented = true });
+        await File.WriteAllTextAsync(vidsPath, json);
+
+        // Submit a video referencing the same stored subtitle
+        using var submitReq = new HttpRequestMessage(HttpMethod.Post, "/api/submissions/videos");
+        submitReq.Headers.Add("X-Api-Key", "TOKEN1");
+        submitReq.Content = JsonContent.Create(new { youtube_id = "keep001", title = "Keep", subtitle_storage_key = storageKey });
+        var submit = await client.SendAsync(submitReq);
+        submit.EnsureSuccessStatusCode();
+        var sid = (await submit.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("submission_id").GetString();
+
+        // Reject — since videos.json references the subtitle, the file should not be deleted
+        var reject = await client.PatchAsync($"/api/admin/submissions/{sid}", JsonContent.Create(new { action = "reject" }));
+        reject.EnsureSuccessStatusCode();
+
+        var get = await client.GetAsync("/api/subtitles/keep001/1.srt");
+        get.EnsureSuccessStatusCode();
+        var text = await get.Content.ReadAsStringAsync();
+        Assert.Contains("KEEP", text);
+    }
 }

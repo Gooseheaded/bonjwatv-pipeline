@@ -73,9 +73,23 @@ if [[ -z "${BUNDLE_FILE:-}" || ! -f "$BUNDLE_FILE" ]]; then
   exit 1
 fi
 echo "Using bundle: $BUNDLE_FILE"
+# Preserve existing .env before replacing current bundle dir
+if [[ -f current/.env ]]; then
+  echo "Preserving existing .env"
+  cp current/.env .env.preserved
+fi
 rm -rf current
 mkdir -p current
 tar xzf "$BUNDLE_FILE" -C current
+# Restore preserved .env if present
+if [[ -f .env.preserved ]]; then
+  if [[ -f current/.env ]]; then
+    echo ".env exists in new bundle; keeping preserved version as .env.preserved"
+  else
+    echo "Restoring preserved .env into current/.env"
+    cp .env.preserved current/.env
+  fi
+fi
 cd current
 ./run.sh
 REMOTE

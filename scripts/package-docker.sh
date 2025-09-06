@@ -23,6 +23,16 @@ docker save -o "$OUT_DIR/catalog-api-image.tar" "$API_IMAGE"
 
 echo "[3/4] Staging compose files and run script…"
 cp docker-compose.yml docker-compose.prod.yml "$OUT_DIR/"
+
+# Determine seed source for videos.json
+SEED_SRC="${SEED_VIDEOS_FILE:-$ROOT_DIR/webapp/data/videos.json}"
+if [ -s "$SEED_SRC" ]; then
+  echo "- Including seed catalog: $SEED_SRC"
+  cp "$SEED_SRC" "$OUT_DIR/videos.json"
+else
+  echo "WARNING: No seed videos.json found (looked at $SEED_SRC)."
+  echo "         You can set SEED_VIDEOS_FILE=/path/to/videos.json to include one."
+fi
 cat > "$OUT_DIR/run.sh" <<'RUN'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -50,6 +60,42 @@ fi
 echo "Loading images…"
 docker load -i webapp-image.tar
 docker load -i catalog-api-image.tar
+
+if [ ! -f ./.env ]; then
+  echo "INFO: No .env found in $(pwd). Compose will use only in-file defaults and environment; create .env to inject secrets/config."
+fi
+
+echo "Ensuring named volumes exist…"
+# Create volumes if missing (so we can seed before first run)
+docker volume create web-data >/dev/null 2>&1 || true
+docker volume create api-data >/dev/null 2>&1 || true
+
+echo "Seeding api-data with initial videos.json (if empty)…"
+# Strategy:
+# 1) If bundled videos.json exists → use it
+# 2) Else if webapp image contains /app/data/videos.json → extract and use it
+# 3) Else if web-data volume contains videos.json → copy it
+docker run --rm \
+  -v api-data:/data \
+  -v "$(pwd)":/bundle \
+  -v web-data:/webdata \
+  --entrypoint sh alpine -c '
+    if [ -s /data/videos.json ]; then
+      echo " - Skipping (already present)"; exit 0;
+    fi
+    if [ -s /bundle/videos.json ]; then
+      echo " - Seeding from bundle/videos.json"; cp /bundle/videos.json /data/videos.json || true; exit 0;
+    fi
+    echo " - No bundled catalog; checking webapp image…"
+    if docker image inspect bwkt-webapp:prod >/dev/null 2>&1; then
+      # Use a nested docker-in-docker trick via host (not available here); fallback to web-data volume
+      echo "   (Cannot read image from inside container; trying web-data volume)"
+    fi
+    if [ -s /webdata/videos.json ]; then
+      echo " - Seeding from web-data volume"; cp /webdata/videos.json /data/videos.json || true; exit 0;
+    fi
+    echo " - WARNING: No seed source found; api-data/videos.json remains missing."
+  '
 
 echo "Starting (or updating) stack…"
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d

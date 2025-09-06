@@ -42,7 +42,8 @@ public class VideoRepository : IDisposable
 
     public VideoRepository(IConfiguration config, IWebHostEnvironment env, ILogger<VideoRepository> logger)
     {
-        var configured = config["Data:JsonPath"] ?? config["DATA_JSON_PATH"];
+        // Prefer explicit env var in prod; fallback to appsettings for dev.
+        var configured = config["DATA_JSON_PATH"] ?? config["Data:JsonPath"];
         // Default relative to content root
         _jsonPath = Path.GetFullPath(Path.Combine(env.ContentRootPath, configured ?? "../webapp/data/videos.json"));
         Load();

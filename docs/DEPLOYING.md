@@ -25,6 +25,7 @@ Build and run (production)
   - Named volumes persist data:
     - `web-data` → webapp `/app/data` (e.g., app data/cache)
     - `api-data` → catalog-api `/app/data` (videos/ratings JSON)
+  - When using the bundled run.sh, the script pre-creates volumes and seeds `api-data/videos.json` on first deploy so search works immediately.
 
 Verify
 - Check containers: docker ps
@@ -61,8 +62,10 @@ Bundle-based deploy (no registry, scripted)
   - scp dist/bwkt-docker-*.tar.gz user@host:/path && ssh user@host 'mkdir -p /path/current && tar xzf /path/bwkt-docker-*.tar.gz -C /path/current && cd /path/current && ./run.sh'
 - Notes:
   - Server still needs Docker + compose plugin installed.
-  - Safety: run.sh will back up named volumes `web-data` and `api-data` to `backups/` before updating (set `SKIP_BACKUP=1` to skip).
+  - Safety: run.sh backs up named volumes `web-data` and `api-data` to `backups/` before updating (set `SKIP_BACKUP=1` to skip).
+  - Seeding: run.sh seeds `api-data/videos.json` from the bundle if missing. You can override the seed source at package time with `SEED_VIDEOS_FILE=/path/to/videos.json scripts/package-docker.sh`.
   - Webapp listens on port 80; catalog-api is internal-only.
+  - .env preservation: deploy-to-server.sh preserves an existing `.env` in the target directory and restores it into the new `current/` bundle so your secrets/config aren’t overwritten.
 
 TLS and domain
 - Easiest: run a reverse proxy (Caddy/Nginx) on the LXC that terminates TLS and forwards to `webapp:8080`.
@@ -78,4 +81,4 @@ Persisted data paths (production)
 - Catalog API: `/app/data` mounted from `api-data` with:
   - `DATA_JSON_PATH=/app/data/videos.json`
   - `DATA_RATINGS_PATH=/app/data/ratings.json`
-  Ensure the files exist or the service will create them as needed.
+  Ensure the files exist. The bundled run.sh seeds `videos.json` on first deploy; otherwise copy one in manually. Compose also sets `Data__JsonPath=/app/data/videos.json` so the API prefers the volume path.

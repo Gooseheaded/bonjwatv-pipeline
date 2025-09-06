@@ -89,8 +89,14 @@ namespace bwkt_webapp.Services
                 if (!string.IsNullOrWhiteSpace(_catalogUrl))
                 {
                     var url = BuildCatalogQuery(_catalogUrl!, query, race);
-                    var data = FetchCatalogAllPages(url);
-                    return data;
+                    var data = FetchCatalogAllPages(url).ToList();
+                    // Defensive: if API returns 0 results (e.g., empty catalog on first deploy),
+                    // fall back to local search if we have local data.
+                    if (data.Count > 0 || !_videos.Any())
+                    {
+                        return data;
+                    }
+                    // else: fall through to local search
                 }
             }
             catch

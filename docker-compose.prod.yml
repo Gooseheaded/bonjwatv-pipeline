@@ -23,12 +23,14 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://0.0.0.0:8080
       - DATA_JSON_PATH=/app/data/videos.json
+      - Data__JsonPath=/app/data/videos.json
       - DATA_RATINGS_PATH=/app/data/ratings.json
       - API_INGEST_TOKENS=${API_INGEST_TOKENS}
       - DATA_SUBTITLES_ROOT=/app/data/subtitles
       - DATA_SUBMISSIONS_PATH=/app/data/submissions.json
-    # Hide API from external network in prod
-    ports: []
+    # Expose API for reverse proxy (Nginx) on host port 5002
+    ports:
+      - "5002:8080"
     restart: unless-stopped
     build:
       args:
