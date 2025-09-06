@@ -103,26 +103,6 @@ class App(tk.Tk):
         )
         derived_hint.grid(sticky="ew", pady=(0, 12), padx=4)
 
-        # Catalog integration (optional)
-        catalog = ttk.Labelframe(main, text="Catalog integration (optional)")
-        catalog.grid(sticky="ew", pady=(0, 12))
-        for i in range(3):
-            catalog.columnconfigure(i, weight=1 if i == 1 else 0)
-
-        ttk.Checkbutton(
-            catalog,
-            text="Submit results to Catalog after run",
-            variable=self.vars["submit_to_catalog"],
-        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=(8, 8), pady=(6, 4))
-
-        ttk.Label(catalog, text="Catalog API base").grid(row=1, column=0, sticky="w", padx=(8, 8))
-        ttk.Entry(catalog, textvariable=self.vars["catalog_base"]).grid(row=1, column=1, sticky="ew", pady=2)
-
-        ttk.Label(catalog, text="Ingest token").grid(row=2, column=0, sticky="w", padx=(8, 8))
-        self.catalog_token_entry = ttk.Entry(catalog, textvariable=self.vars["catalog_api_token"], show="•")
-        self.catalog_token_entry.grid(row=2, column=1, sticky="ew", pady=2)
-        ttk.Button(catalog, text="show/hide", command=self.toggle_catalog_token).grid(row=2, column=2, padx=(8, 8))
-
         # Pipeline
         pipe = ttk.Labelframe(main, text="Pipeline steps")
         pipe.grid(sticky="ew", pady=(0, 12))
@@ -176,6 +156,26 @@ class App(tk.Tk):
             variable=self.vars["do_translate"],
             command=self.refresh_states,
         ).grid(row=4, column=0, sticky="w", padx=(8, 8), pady=(0, 4))
+
+        # bonjwa.tv integration (optional) — placed after pipeline
+        catalog = ttk.Labelframe(main, text="bonjwa.tv integration (optional)")
+        catalog.grid(sticky="ew", pady=(0, 12))
+        for i in range(3):
+            catalog.columnconfigure(i, weight=1 if i == 1 else 0)
+
+        ttk.Checkbutton(
+            catalog,
+            text="Submit results to Catalog after run",
+            variable=self.vars["submit_to_catalog"],
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=(8, 8), pady=(6, 4))
+
+        ttk.Label(catalog, text="bonjwa.tv URL").grid(row=1, column=0, sticky="w", padx=(8, 8))
+        ttk.Entry(catalog, textvariable=self.vars["catalog_base"]).grid(row=1, column=1, sticky="ew", pady=2)
+
+        ttk.Label(catalog, text="Ingest token").grid(row=2, column=0, sticky="w", padx=(8, 8))
+        self.catalog_token_entry = ttk.Entry(catalog, textvariable=self.vars["catalog_api_token"], show="•")
+        self.catalog_token_entry.grid(row=2, column=1, sticky="ew", pady=2)
+        ttk.Button(catalog, text="show/hide", command=self.toggle_catalog_token).grid(row=2, column=2, padx=(8, 8))
 
         # Run + progress
         runrow = ttk.Frame(main)
@@ -232,7 +232,7 @@ class App(tk.Tk):
             "do_translate": tk.BooleanVar(value=False),
             # Catalog integration
             "submit_to_catalog": tk.BooleanVar(value=False),
-            "catalog_base": tk.StringVar(value="http://localhost:5002"),
+            "catalog_base": tk.StringVar(value="https://bonjwa.tv"),
             "catalog_api_token": tk.StringVar(value=""),
         }
         return v
@@ -538,7 +538,7 @@ class App(tk.Tk):
                     catalog_base = self.vars["catalog_base"].get().strip()
                     token = self.vars["catalog_api_token"].get().strip()
                     if not catalog_base or not token:
-                        self.after(0, lambda: self.log_line("Catalog base or token missing; skipping submit."))
+                        self.after(0, lambda: self.log_line("bonjwa.tv URL or token missing; skipping submit."))
                         return
                     # Prefer enriched videos JSON (built alongside the input .txt)
                     enriched_videos = os.path.join(os.path.dirname(os.path.abspath(videos_file)), "videos_enriched.json")
