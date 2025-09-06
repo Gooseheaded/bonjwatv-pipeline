@@ -40,7 +40,7 @@
                     </ul>
                     @{ var raceVal = (string)(Context.Request.Query["race"].FirstOrDefault() ?? Context.Request.Cookies["race"] ?? "all"); }
                     <form class="d-flex" method="get" asp-page="/Search">
-                        <select class="form-select me-2" name="race" aria-label="Race filter">
+                        <select class="form-select me-2" name="race" aria-label="Race filter" onchange="this.form.submit()">
 @if (string.Equals(raceVal, "all", StringComparison.OrdinalIgnoreCase)) {
     <option value="all" selected>All Races</option>
 } else {
