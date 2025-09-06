@@ -108,6 +108,20 @@ app.MapPost("/api/videos/{id}/ratings", (string id, RatingRequest body, HttpCont
 .WithName("PostRating")
 .WithOpenApi(o => { o.Summary = "Submit rating (red|yellow|green) for a version"; return o; });
 
+app.MapDelete("/api/videos/{id}/ratings", (string id, int? version, HttpContext ctx, RatingsRepository repo) =>
+{
+    int v = Math.Max(1, version ?? 1);
+    var fwdUserId = ctx.Request.Headers["X-User-Id"].FirstOrDefault();
+    var user = !string.IsNullOrWhiteSpace(fwdUserId)
+        ? fwdUserId
+        : (ctx.User?.Identity?.IsAuthenticated == true ? (ctx.User.Identity!.Name ?? "") : "");
+    if (string.IsNullOrWhiteSpace(user)) return Results.StatusCode(401);
+    repo.Remove(user!, id, v);
+    return Results.Ok(new { ok = true });
+})
+.WithName("DeleteRating")
+.WithOpenApi(o => { o.Summary = "Remove current user rating for a version"; return o; });
+
 // Admin endpoints (no auth yet; rely on private network; to be secured later)
 app.MapGet("/api/admin/ratings/recent", (int? limit, RatingsRepository repo) =>
 {

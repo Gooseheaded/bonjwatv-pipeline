@@ -108,6 +108,31 @@ internal class RatingsRepository
         }
     }
 
+    public void Remove(string user, string videoId, int version)
+    {
+        lock (_lock)
+        {
+            if (_store.Videos.TryGetValue(videoId, out var vAgg) && vAgg.Versions.TryGetValue(version, out var agg))
+            {
+                if (agg.UserRatings.TryGetValue(user, out var prev))
+                {
+                    Decrement(agg, prev);
+                    agg.UserRatings.Remove(user);
+                    // Optionally prune empty structures to keep file small
+                    if (agg.Red == 0 && agg.Yellow == 0 && agg.Green == 0 && agg.UserRatings.Count == 0)
+                    {
+                        vAgg.Versions.Remove(version);
+                        if (vAgg.Versions.Count == 0)
+                        {
+                            _store.Videos.Remove(videoId);
+                        }
+                    }
+                    Save();
+                }
+            }
+        }
+    }
+
     public IReadOnlyList<RatingEvent> GetRecent(int limit)
     {
         lock (_lock)

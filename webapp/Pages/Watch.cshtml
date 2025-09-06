@@ -108,6 +108,7 @@ else
 
         // Ratings wiring
         const videoId = "@Model.Video.VideoId";
+        let currentUserRating = null;
         async function loadRatings() {
             try {
                 const res = await fetch(`/ratings/${videoId}`);
@@ -121,6 +122,13 @@ else
                     const badge = b.querySelector('.rating-count');
                     if (badge) badge.textContent = counts[val] ?? 0;
                 });
+                // Highlight current user rating if present
+                currentUserRating = (data.UserRating || '').toLowerCase() || null;
+                btns.forEach(b => b.classList.remove('active'));
+                if (currentUserRating) {
+                    const activeBtn = document.querySelector(`[data-rating="${currentUserRating}"]`);
+                    if (activeBtn) activeBtn.classList.add('active');
+                }
             } catch {}
         }
 
@@ -137,11 +145,25 @@ else
             } catch {}
         }
 
+        async function deleteRating() {
+            try {
+                const res = await fetch(`/ratings/${videoId}?version=1`, { method: 'DELETE' });
+                if (res.ok) {
+                    await loadRatings();
+                }
+            } catch {}
+        }
+
         // Attach click handlers (enabled buttons only)
         document.querySelectorAll('[data-rating]')
             .forEach(btn => btn.addEventListener('click', () => {
                 if (btn.hasAttribute('disabled')) return;
-                postRating(btn.getAttribute('data-rating'));
+                const val = btn.getAttribute('data-rating');
+                if (currentUserRating && currentUserRating === val) {
+                    deleteRating();
+                } else {
+                    postRating(val);
+                }
             }));
 
         loadRatings();
