@@ -17,7 +17,7 @@
 {
     <div class="alert alert-warning">You do not have access to this page.</div>
 }
-<h2 class="mt-4">Recent Ratings</h2>
+<h2 class="mt-4 d-flex justify-content-between align-items-center">Recent Ratings <a class="btn btn-sm btn-outline-secondary" asp-page="/Admin/Ratings">View all</a></h2>
 @if (Model.IsAdmin && Model.Events.Count > 0)
 {
     <table class="table table-striped table-sm mb-4">
@@ -35,7 +35,9 @@
         {
             <tr>
                 <td>@e.CreatedAt.ToString("u")</td>
-                <td>@e.VideoId</td>
+                <td>
+                    <a asp-page="/Watch" asp-route-v="@e.VideoId">@e.VideoId</a>
+                </td>
                 <td>@e.Version</td>
                 <td>@(string.IsNullOrEmpty(e.UserName) ? e.UserId : $"{e.UserName} ({e.UserId})")</td>
                 <td>@e.Value</td>
