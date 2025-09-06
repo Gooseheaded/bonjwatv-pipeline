@@ -7,6 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Register application services
 builder.Services.AddSingleton<IVideoService, VideoService>();
+builder.Services.AddSingleton<IRatingsClient, HttpRatingsClient>();
 // Generate all URLs in lowercase
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
 builder.Services.AddRazorPages();

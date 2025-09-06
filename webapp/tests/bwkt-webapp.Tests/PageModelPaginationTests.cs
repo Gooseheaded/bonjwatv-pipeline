@@ -9,7 +9,7 @@ using Xunit;
 
 namespace bwkt_webapp.Tests
 {
-    public class PageModelPaginationTests
+    public partial class PageModelPaginationTests
     {
         private class FakeService : IVideoService
         {
@@ -35,7 +35,7 @@ namespace bwkt_webapp.Tests
         public void IndexModel_Paginates_Items_Correctly()
         {
             var svc = new FakeService(MakeVideos(50));
-            var model = new IndexModel(svc);
+            var model = new IndexModel(svc, new DummyRatings());
             model.OnGet(pageNum: 2, pageSize: 10);
             Assert.Equal(2, model.CurrentPage);
             Assert.Equal(10, model.PageSize);
@@ -59,6 +59,17 @@ namespace bwkt_webapp.Tests
             var vids = model.Videos.Select(v => v.VideoId).ToList();
             Assert.Equal("vid015", vids.First());
             Assert.Equal("vid021", vids.Last());
+        }
+    }
+}
+
+namespace bwkt_webapp.Tests
+{
+    public partial class PageModelPaginationTests
+    {
+        private class DummyRatings : bwkt_webapp.Services.IRatingsClient
+        {
+            public (int Red, int Yellow, int Green) GetSummary(string videoId, int version = 1) => (0, 0, 0);
         }
     }
 }

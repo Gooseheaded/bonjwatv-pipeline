@@ -6,6 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- Avoid static web assets manifest copy to prevent build path issues in CI/local -->
+    <GenerateMvcTestingAppManifest>false</GenerateMvcTestingAppManifest>
+    <CopyMvcTestingAppManifestToOutput>false</CopyMvcTestingAppManifestToOutput>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +21,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
   <ItemGroup>

@@ -36,7 +36,7 @@ namespace bwkt_webapp.Tests
         public void IndexModel_OnGet_PopulatesVideos()
         {
             var svc = new FakeService(SampleVideos);
-            var model = new IndexModel(svc);
+            var model = new IndexModel(svc, new DummyRatings());
             model.OnGet();
             Assert.Equal(2, model.Videos.Count());
         }
@@ -93,6 +93,11 @@ namespace bwkt_webapp.Tests
             public IEnumerable<VideoInfo> Search(string query) => _videos;
             public IEnumerable<VideoInfo> Search(string query, string? race)
             { _onRace(race); return _videos; }
+        }
+
+        private class DummyRatings : bwkt_webapp.Services.IRatingsClient
+        {
+            public (int Red, int Yellow, int Green) GetSummary(string videoId, int version = 1) => (0, 0, 0);
         }
     }
 }

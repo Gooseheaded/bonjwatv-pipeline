@@ -101,3 +101,12 @@ Troubleshooting
 - Docker not starting: run scripts/docker-diagnose.sh and review docker-output.txt
 - Port conflicts: change published ports in docker-compose.yml
 - Static assets missing: ensure images were built via dotnet publish (compose does this)
+
+Homepage ratings and sorting
+- The homepage shows a compact ratings summary (🔴 🟡 🟢) on each card and sorts videos by a quality score computed from Catalog API ratings.
+- Scoring uses a Wilson lower confidence bound of a “positive” rate where Positive = Green + 0.5 × Yellow and Total = Red + Yellow + Green (z = 1.96).
+- The webapp calls the Catalog API ratings endpoint per video. In code, this is abstracted via `IRatingsClient` (default `HttpRatingsClient`).
+- Env resolution for the Catalog API base:
+  - Prefer `CATALOG_API_BASE_URL` (e.g., `http://catalog-api:8080/api`).
+  - Otherwise derive from `DATA_CATALOG_URL` by trimming the trailing `/videos`.
+- Tests inject a fake `IRatingsClient` for deterministic ordering; no external network is needed.
