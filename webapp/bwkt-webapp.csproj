@@ -12,4 +12,14 @@
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />
   </ItemGroup>
+  
+  <!-- Lean publish defaults for Release builds -->
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <UseAppHost>false</UseAppHost>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
 </Project>
