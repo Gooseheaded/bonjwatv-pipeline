@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using bwkt_webapp.Services;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
@@ -21,6 +22,20 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.SlidingExpiration = true;
     });
 builder.Services.AddAuthorization();
+
+// Persist Data Protection keys to disk so auth cookies survive restarts/redeploys
+try
+{
+    var keysDir = Path.Combine("/app/data", "keys");
+    Directory.CreateDirectory(keysDir);
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo(keysDir))
+        .SetApplicationName("bwkt-webapp");
+}
+catch
+{
+    // If the directory isn't writable (e.g., dev read-only bind), fall back silently.
+}
 
 var app = builder.Build();
 
@@ -62,8 +77,12 @@ app.MapGet("/account/callback", async (HttpContext ctx, DiscordOAuthService oaut
         return Results.Redirect("/");
     }
 
-    var callback = Environment.GetEnvironmentVariable("OAUTH_CALLBACK_URL")
-                   ?? ($"{ctx.Request.Scheme}://{ctx.Request.Host}/account/callback");
+    // In Development, always use current host to simplify local login
+    var envName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+    var isDevEnv = string.Equals(envName, "Development", StringComparison.OrdinalIgnoreCase);
+    var callback = isDevEnv
+        ? ($"{ctx.Request.Scheme}://{ctx.Request.Host}/account/callback")
+        : (Environment.GetEnvironmentVariable("OAUTH_CALLBACK_URL") ?? $"{ctx.Request.Scheme}://{ctx.Request.Host}/account/callback");
     var (okToken, accessToken, err1) = await oauth.ExchangeCodeAsync(code, callback);
     if (!okToken || string.IsNullOrWhiteSpace(accessToken)) return Results.BadRequest(err1 ?? "OAuth token error");
 
@@ -202,6 +221,8 @@ app.MapGet("/admin/ratings/recent", async (int? limit, HttpContext ctx) =>
     var stream = await resp.Content.ReadAsStreamAsync();
     return Results.Stream(stream, contentType);
 });
+
+// (diagnostics endpoint removed)
 
 // Admin proxy: submissions list and approve/reject
 app.MapGet("/admin/submissions", async (string? status, int? page, int? pageSize, HttpContext ctx) =>
