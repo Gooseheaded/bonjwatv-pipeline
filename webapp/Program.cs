@@ -228,7 +228,7 @@ app.MapGet("/subtitles/{id}/{version}.srt", async (string id, int version, HttpC
                                 fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
                                 form.Add(fileContent, "file", $"{id}-v{version}.srt");
                                 using var hc = new HttpClient();
-                                var ingest = Environment.GetEnvironmentVariable("CATALOG_API_INGEST_TOKEN");
+                                var ingest = Environment.GetEnvironmentVariable("LEGACY_SUBTITLE_API_TOKEN");
                                 if (!string.IsNullOrWhiteSpace(ingest))
                                 {
                                     hc.DefaultRequestHeaders.Add("X-Api-Key", ingest);
