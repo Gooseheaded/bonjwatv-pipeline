@@ -215,9 +215,25 @@ app.MapGet("/subtitles/{id}/{version}.srt", async (string id, int version, HttpC
                     var ext = await http.GetAsync(su);
                     if (ext.IsSuccessStatusCode)
                     {
+                        var bytes = await ext.Content.ReadAsByteArrayAsync();
+                        // Fire-and-forget upload to Catalog API to persist first-party copy
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                using var form = new MultipartFormDataContent();
+                                form.Add(new StringContent(id), "videoId");
+                                form.Add(new StringContent(version.ToString()), "version");
+                                var fileContent = new ByteArrayContent(bytes);
+                                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+                                form.Add(fileContent, "file", $"{id}-v{version}.srt");
+                                using var hc = new HttpClient();
+                                await hc.PostAsync($"{apiBase}/uploads/subtitles", form);
+                            }
+                            catch { /* swallow */ }
+                        });
                         var ct2 = ext.Content.Headers.ContentType?.ToString() ?? "text/plain; charset=utf-8";
-                        var st2 = await ext.Content.ReadAsStreamAsync();
-                        return Results.Stream(st2, ct2);
+                        return Results.File(bytes, ct2);
                     }
                     return Results.StatusCode((int)ext.StatusCode);
                 }
