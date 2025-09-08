@@ -2,7 +2,12 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS build
 ARG BUILD_CONFIGURATION=Debug
 WORKDIR /src
 COPY . .
-RUN dotnet restore && dotnet publish -c $BUILD_CONFIGURATION -o /app/publish
+RUN dotnet restore \
+ && dotnet publish -c $BUILD_CONFIGURATION -o /app/publish \
+    -p:SelfContained=false \
+    -p:PublishSingleFile=false \
+    -p:PublishReadyToRun=false \
+    -p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine
 WORKDIR /app
