@@ -69,11 +69,8 @@ namespace bwkt_webapp.Services
                             : null,
                         SubtitleUrl = el.TryGetProperty("subtitleUrl", out var su) ? (su.GetString() ?? string.Empty) : string.Empty
                     };
-                    // Default first-party subtitle path if missing
-                    if (string.IsNullOrWhiteSpace(v.SubtitleUrl))
-                    {
-                        v.SubtitleUrl = $"{apiBase}/subtitles/{v.VideoId}/1.srt";
-                    }
+                    // Always use same-origin proxy to avoid mixed-content/CORS
+                    v.SubtitleUrl = $"/subtitles/{v.VideoId}/1.srt";
                     return v;
                 }
             }

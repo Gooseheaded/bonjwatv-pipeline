@@ -182,6 +182,19 @@ app.MapPost("/ratings/{id}", async (string id, HttpRequest req, HttpContext ctx)
     return Results.Ok(new { ok = true });
 }).RequireAuthorization();
 
+// Subtitles proxy to avoid mixed-content/CORS issues
+app.MapGet("/subtitles/{id}/{version}.srt", async (string id, int version, HttpContext ctx) =>
+{
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    var url = $"{apiBase}/subtitles/{id}/{version}.srt";
+    using var http = new HttpClient();
+    var resp = await http.GetAsync(url);
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    var ct = resp.Content.Headers.ContentType?.ToString() ?? "text/plain; charset=utf-8";
+    var stream = await resp.Content.ReadAsStreamAsync();
+    return Results.Stream(stream, ct);
+});
+
 app.MapDelete("/ratings/{id}", async (string id, int? version, HttpContext ctx) =>
 {
     if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
