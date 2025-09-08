@@ -232,8 +232,9 @@ app.MapGet("/api/subtitles/{videoId}/{version}.srt", (string videoId, int versio
     return Results.File(path, "text/plain; charset=utf-8");
 }).WithOpenApi(o => { o.Summary = "Serve first-party subtitle SRT"; return o; });
 
-app.MapPost("/api/uploads/subtitles", async (HttpRequest req) =>
+app.MapPost("/api/uploads/subtitles", async (HttpRequest req, HttpContext ctx) =>
 {
+    if (!IsIngestAuthorized(ctx)) return Results.StatusCode(403);
     var videoId = req.Query["videoId"].FirstOrDefault();
     var versionStr = req.Query["version"].FirstOrDefault();
     if (req.HasFormContentType)
