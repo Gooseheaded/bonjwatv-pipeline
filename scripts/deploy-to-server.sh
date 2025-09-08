@@ -13,21 +13,32 @@ TARGET="$1"
 REMOTE_DIR="$2"
 BUNDLE="$3"
 
+# Reuse a single SSH connection across all ssh/scp calls to avoid multiple password prompts
+SOCK_DIR=$(mktemp -d)
+CONTROL_PATH="$SOCK_DIR/ssh_mux_%h_%p_%r"
+SSH_OPTS=("-o" "ControlMaster=auto" "-o" "ControlPersist=600" "-o" "ControlPath=$CONTROL_PATH")
+cleanup_mux() {
+  # Try to gracefully close the master connection and remove socket dir
+  ssh -O exit "${SSH_OPTS[@]}" "$TARGET" >/dev/null 2>&1 || true
+  rm -rf "$SOCK_DIR" || true
+}
+trap cleanup_mux EXIT
+
 if [[ ! -f "$BUNDLE" ]]; then
   echo "Bundle not found: $BUNDLE" >&2
   exit 1
 fi
 
 echo "Creating remote directory: $TARGET:$REMOTE_DIR"
-ssh "$TARGET" "mkdir -p '$REMOTE_DIR'"
+ssh "${SSH_OPTS[@]}" "$TARGET" "mkdir -p '$REMOTE_DIR'"
 
 echo "Uploading bundle: $BUNDLE → $TARGET:$REMOTE_DIR/"
-scp "$BUNDLE" "$TARGET:$REMOTE_DIR/"
+scp "${SSH_OPTS[@]}" "$BUNDLE" "$TARGET:$REMOTE_DIR/"
 
 BASE_NAME="$(basename "$BUNDLE")"
 
 echo "Extracting and running on remote…"
-ssh "$TARGET" "REMOTE_DIR='$REMOTE_DIR' BASE_NAME='$BASE_NAME' bash -s" <<'REMOTE'
+ssh "${SSH_OPTS[@]}" "$TARGET" "REMOTE_DIR='$REMOTE_DIR' BASE_NAME='$BASE_NAME' bash -s" <<'REMOTE'
 set -euo pipefail
 cd "$REMOTE_DIR"
 echo "Remote dir content:"
