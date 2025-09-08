@@ -44,11 +44,7 @@ else
                                     <span class="badge @css">@text</span>
                                 }
                             </div>
-                            <small class="text-muted rating-summary" data-video-id="@v.VideoId">
-                                🔴 <span class="rs-red">0</span>
-                                &nbsp;🟡 <span class="rs-yellow">0</span>
-                                &nbsp;🟢 <span class="rs-green">0</span>
-                            </small>
+                            <small class="text-muted">🔴 @v.Red &nbsp;🟡 @v.Yellow &nbsp;🟢 @v.Green</small>
                         </div>
                     </div>
                 </div>
@@ -76,21 +72,4 @@ else
         </nav>
     }
 }
-@section Scripts {
-<script>
-  (function() {
-    async function loadSummary(el) {
-      const vid = el.getAttribute('data-video-id');
-      try {
-        const res = await fetch(`/ratings/${vid}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        el.querySelector('.rs-red').textContent = data.Red ?? 0;
-        el.querySelector('.rs-yellow').textContent = data.Yellow ?? 0;
-        el.querySelector('.rs-green').textContent = data.Green ?? 0;
-      } catch {}
-    }
-    document.querySelectorAll('.rating-summary').forEach(loadSummary);
-  })();
-</script>
-}
+@* Ratings fetched inline from API list; no client JS needed *@

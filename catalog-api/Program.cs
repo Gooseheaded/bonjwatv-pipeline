@@ -89,15 +89,21 @@ app.MapGet("/api/videos", (
     var items = query
         .Skip((pg - 1) * ps)
         .Take(ps)
-        .Select(v => new VideoDto(
-            v.Id,
-            v.Title,
-            v.Creator,
-            v.Description,
-            v.Tags,
-            v.ReleaseDate,
-            v.Id
-        ))
+        .Select(v => {
+            var sum = ratings.GetSummary(v.Id, 1, null);
+            return new VideoDto(
+                v.Id,
+                v.Title,
+                v.Creator,
+                v.Description,
+                v.Tags,
+                v.ReleaseDate,
+                v.Id,
+                sum.Red,
+                sum.Yellow,
+                sum.Green
+            );
+        })
         .ToList();
 
     return Results.Json(new { items, totalCount = total, page = pg, pageSize = ps });
@@ -687,7 +693,10 @@ internal record VideoDto(
     string? Description,
     string[]? Tags,
     string? ReleaseDate,
-    string YoutubeId
+    string YoutubeId,
+    int Red,
+    int Yellow,
+    int Green
 );
 
 internal record RatingRequest([property: JsonConverter(typeof(JsonStringEnumConverter))] RatingValue Value, int Version);

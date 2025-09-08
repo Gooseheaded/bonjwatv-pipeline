@@ -27,5 +27,13 @@ namespace bwkt_webapp.Models
 
         [JsonPropertyName("submissionDate")]
         public string? SubmissionDate { get; set; }
+
+        // Optional ratings summary provided by the Catalog API list endpoint
+        [JsonPropertyName("Red")]
+        public int Red { get; set; }
+        [JsonPropertyName("Yellow")]
+        public int Yellow { get; set; }
+        [JsonPropertyName("Green")]
+        public int Green { get; set; }
     }
 }
