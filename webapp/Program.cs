@@ -186,13 +186,46 @@ app.MapPost("/ratings/{id}", async (string id, HttpRequest req, HttpContext ctx)
 app.MapGet("/subtitles/{id}/{version}.srt", async (string id, int version, HttpContext ctx) =>
 {
     if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
-    var url = $"{apiBase}/subtitles/{id}/{version}.srt";
     using var http = new HttpClient();
+    // Try first-party subtitle from Catalog API
+    var url = $"{apiBase}/subtitles/{id}/{version}.srt";
     var resp = await http.GetAsync(url);
-    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
-    var ct = resp.Content.Headers.ContentType?.ToString() ?? "text/plain; charset=utf-8";
-    var stream = await resp.Content.ReadAsStreamAsync();
-    return Results.Stream(stream, ct);
+    if (resp.IsSuccessStatusCode)
+    {
+        var ct = resp.Content.Headers.ContentType?.ToString() ?? "text/plain; charset=utf-8";
+        var stream = await resp.Content.ReadAsStreamAsync();
+        return Results.Stream(stream, ct);
+    }
+    if ((int)resp.StatusCode != 404)
+    {
+        return Results.StatusCode((int)resp.StatusCode);
+    }
+    // Fallback: consult video detail for an external subtitleUrl and proxy it
+    try
+    {
+        var vresp = await http.GetAsync($"{apiBase}/videos/{id}");
+        if (vresp.IsSuccessStatusCode)
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(await vresp.Content.ReadAsStringAsync());
+            if (doc.RootElement.TryGetProperty("subtitleUrl", out var suEl))
+            {
+                var su = suEl.GetString() ?? string.Empty;
+                if (su.StartsWith("http://") || su.StartsWith("https://"))
+                {
+                    var ext = await http.GetAsync(su);
+                    if (ext.IsSuccessStatusCode)
+                    {
+                        var ct2 = ext.Content.Headers.ContentType?.ToString() ?? "text/plain; charset=utf-8";
+                        var st2 = await ext.Content.ReadAsStreamAsync();
+                        return Results.Stream(st2, ct2);
+                    }
+                    return Results.StatusCode((int)ext.StatusCode);
+                }
+            }
+        }
+    }
+    catch { }
+    return Results.StatusCode(404);
 });
 
 app.MapDelete("/ratings/{id}", async (string id, int? version, HttpContext ctx) =>
