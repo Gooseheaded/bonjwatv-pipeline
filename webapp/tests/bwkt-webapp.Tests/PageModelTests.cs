@@ -48,7 +48,7 @@ namespace bwkt_webapp.Tests
         public void IndexModel_OnGet_PopulatesVideos()
         {
             var svc = new FakeService(SampleVideos);
-            var model = new IndexModel(svc, new DummyRatings());
+            var model = new IndexModel(svc);
             model.OnGet();
             Assert.Equal(2, model.Videos.Count());
         }
