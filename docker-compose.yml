@@ -8,14 +8,10 @@ services:
       - DATA_CATALOG_URL=http://catalog-api:8080/api/videos
       - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
       - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
-      - OAUTH_CALLBACK_URL=${OAUTH_CALLBACK_URL}
       - ADMIN_USER_IDS=${ADMIN_USER_IDS}
     ports:
       - "5001:8080"
     restart: unless-stopped
-    # Mount dev data for hot reload of videos.json without rebuild
-    volumes:
-      - ./webapp/data:/app/data:ro
     depends_on:
       - catalog-api
     develop:
@@ -28,12 +24,6 @@ services:
             - "webapp/obj/**"
             - "webapp/tests/**"
             - "webapp/.git/**"
-        # Sync only data/ into container for immediate JSON reloads
-        - action: sync
-          path: ./webapp/data
-          target: /app/data
-          ignore:
-            - "**/*.tmp"
 
   catalog-api:
     build:
@@ -48,9 +38,7 @@ services:
     ports:
       - "5002:8080"
     restart: unless-stopped
-    volumes:
-      # Allow API to read the dev videos.json from webapp
-      - ./webapp/data:/app/../webapp/data
+    volumes: []
     develop:
       watch:
         - action: rebuild

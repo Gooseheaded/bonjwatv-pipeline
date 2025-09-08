@@ -11,7 +11,6 @@ Quick Start (containerized)
   - docker compose up --build
 - Live code reload (Compose Watch):
   - docker compose watch
-  - Rebuilds on source changes; syncs `webapp/data/` directly into the container for instant `videos.json` reloads.
 - Open the apps:
   - Webapp: http://localhost:5001
   - Catalog API (Swagger): http://localhost:5002/swagger
@@ -29,21 +28,21 @@ Edit–Build–Run Loop
 Environment and Ports
 - Webapp runs at container port 8080, published to host 5001.
 - Catalog API runs at 8080, published to host 5002.
-- Webapp reads its data from the Catalog API via:
+- Webapp reads its data exclusively from the Catalog API via:
   - DATA_CATALOG_URL=http://catalog-api:8080/api/videos
-  (This is set in docker-compose.yml.)
+  (Set in docker-compose.yml.)
 - Catalog API (uploads/submissions):
   - Optional env vars for dev:
     - `API_INGEST_TOKENS=TOKEN1` (allowlist token for `X-Api-Key`)
     - `DATA_SUBTITLES_ROOT=/app/data/subtitles` (default)
     - `DATA_SUBMISSIONS_PATH=/app/data/submissions.json` (default)
- - Dev note: The `catalog-api` service mounts `./webapp/data` writable so approvals and admin actions update `videos.json` on the host; the webapp file-watcher picks up changes immediately.
+ - Dev note: The webapp no longer reads a local `data/videos.json`; it queries the Catalog API directly. The previous bind mounts are no longer required.
 
 Secrets (.env + Compose)
 - Create a local `.env` (git-ignored) next to `docker-compose.yml` or copy `.env.example`:
   - DISCORD_CLIENT_ID=your-discord-client-id
   - DISCORD_CLIENT_SECRET=your-discord-client-secret
-  - OAUTH_CALLBACK_URL=http://localhost:5001/account/callback
+  - Optional: OAUTH_CALLBACK_URL (not needed in Development)
 - Compose auto-loads `.env` and injects these into the `webapp` container via `${VAR}` expansion.
 - Rebuild/run: `docker compose up -d --build` (or use `docker compose watch`).
 
@@ -57,8 +56,11 @@ Catalog API test endpoints
 
 Admin Tools
 - Admin access: set `ADMIN_USER_IDS` (comma-separated Discord user IDs) in `.env` for the webapp.
-- Submissions (broad/narrow UI):
-  - `/Admin` shows Recent Ratings and Pending Submissions (Open → detail). Detail page has Approve/Reject.
+- Ratings:
+  - Broad UI: `/Admin` shows the 10 most recent rating events (author, value, video, version, timestamp), with a link to view all.
+  - Narrow UI: `/Admin/Ratings` lists up to the last 1000 rating events in a paginated table. Use `?page=` and `?pageSize=`.
+- Submissions:
+  - `/Admin` shows Pending Submissions (Open → detail). Detail page has Approve/Reject.
   - Watch page displays “Submitted by … [on …]”.
 - Hidden videos:
   - Admin can hide a video from the Watch page (“Hide…” prompts for a reason).
@@ -96,6 +98,7 @@ Production Differences
   - Ports: Webapp → 80:8080, API → no host port
   - Build configuration: Release (via build args)
   - Persistent volume for /app/data in webapp
+  - Webapp reads `OAUTH_CALLBACK_URL` from environment in Production; in Development it always uses `http(s)://<current-host>/account/callback`.
 
 Troubleshooting
 - Docker not starting: run scripts/docker-diagnose.sh and review docker-output.txt
