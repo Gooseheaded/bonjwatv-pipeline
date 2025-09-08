@@ -158,7 +158,10 @@ namespace bwkt_webapp.Services
                                 Tags = el.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array
                                     ? tg.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray()
                                     : null,
-                                SubtitleUrl = string.Empty
+                                SubtitleUrl = string.Empty,
+                                Red = el.TryGetProperty("Red", out var r1) ? r1.GetInt32() : 0,
+                                Yellow = el.TryGetProperty("Yellow", out var y1) ? y1.GetInt32() : 0,
+                                Green = el.TryGetProperty("Green", out var g1) ? g1.GetInt32() : 0
                             });
                         }
                     }
@@ -200,7 +203,10 @@ namespace bwkt_webapp.Services
                                 Tags = el.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array
                                     ? tg.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray()
                                     : null,
-                                SubtitleUrl = string.Empty
+                                SubtitleUrl = string.Empty,
+                                Red = el.TryGetProperty("Red", out var r2) ? r2.GetInt32() : 0,
+                                Yellow = el.TryGetProperty("Yellow", out var y2) ? y2.GetInt32() : 0,
+                                Green = el.TryGetProperty("Green", out var g2) ? g2.GetInt32() : 0
                             });
                         }
                     }
@@ -264,7 +270,10 @@ namespace bwkt_webapp.Services
                             Tags = el.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array
                                 ? tg.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray()
                                 : null,
-                            SubtitleUrl = string.Empty
+                            SubtitleUrl = string.Empty,
+                            Red = el.TryGetProperty("Red", out var r0) ? r0.GetInt32() : 0,
+                            Yellow = el.TryGetProperty("Yellow", out var y0) ? y0.GetInt32() : 0,
+                            Green = el.TryGetProperty("Green", out var g0) ? g0.GetInt32() : 0
                         });
                         count++;
                     }
