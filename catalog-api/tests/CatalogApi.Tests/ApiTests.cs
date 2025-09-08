@@ -382,4 +382,69 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         var text = await get.Content.ReadAsStringAsync();
         Assert.Contains("KEEP", text);
     }
+
+    [Fact]
+    public async Task Admin_Tags_Set_Add_Remove_Update_Endpoints()
+    {
+        // Arrange a temp store with one video
+        var tmpRoot = Directory.CreateTempSubdirectory();
+        var vidsPath = Path.Combine(tmpRoot.FullName, "videos.json");
+        var ratingsPath = Path.Combine(tmpRoot.FullName, "ratings.json");
+        var subsRoot = Path.Combine(tmpRoot.FullName, "subtitles");
+        var submissionsPath = Path.Combine(tmpRoot.FullName, "submissions.json");
+        await File.WriteAllTextAsync(vidsPath, System.Text.Json.JsonSerializer.Serialize(new [] {
+            new Dictionary<string, object?> { ["v"] = "tag001", ["title"] = "Tag Test", ["tags"] = new [] { "z" } }
+        }));
+
+        var factory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((ctx, cfg) =>
+            {
+                var dict = new Dictionary<string, string?>
+                {
+                    ["Data:JsonPath"] = vidsPath,
+                    ["Data:VideosStorePath"] = vidsPath,
+                    ["Data:RatingsPath"] = ratingsPath,
+                    ["Data:SubtitlesRoot"] = subsRoot,
+                    ["Data:SubmissionsPath"] = submissionsPath,
+                    ["API_INGEST_TOKENS"] = "TOKEN1"
+                };
+                cfg.AddInMemoryCollection(dict!);
+            });
+        });
+        var client = factory.CreateClient();
+
+        // Verify initial tags via list
+        var list1 = await client.GetFromJsonAsync<JsonElement>("/api/videos?q=Tag%20Test&pageSize=10");
+        var first1 = list1.GetProperty("items").EnumerateArray().First();
+        Assert.Contains("z", first1.GetProperty("tags").EnumerateArray().Select(e => e.GetString()));
+
+        // Set tags to [p, pvz]
+        var setPayload = JsonContent.Create(new { action = "set", tags = new [] { "p", "pvz" } });
+        var setRes = await client.PatchAsync("/api/admin/videos/tag001/tags", setPayload);
+        setRes.EnsureSuccessStatusCode();
+
+        var list2 = await client.GetFromJsonAsync<JsonElement>("/api/videos?q=Tag%20Test&pageSize=10");
+        var first2 = list2.GetProperty("items").EnumerateArray().First();
+        var tags2 = first2.GetProperty("tags").EnumerateArray().Select(e => e.GetString()).ToArray();
+        Assert.DoesNotContain("z", tags2);
+        Assert.Contains("p", tags2);
+        Assert.Contains("pvz", tags2);
+
+        // Add tag 'zvz'
+        var addRes = await client.PatchAsync("/api/admin/videos/tag001/tags", JsonContent.Create(new { action = "add", tag = "zvz" }));
+        addRes.EnsureSuccessStatusCode();
+        var adminDetail = await client.GetFromJsonAsync<JsonElement>("/api/admin/videos/tag001");
+        var tags3 = adminDetail.GetProperty("tags").EnumerateArray().Select(e => e.GetString()).ToArray();
+        Assert.Contains("zvz", tags3);
+
+        // Remove tag 'p'
+        var remRes = await client.PatchAsync("/api/admin/videos/tag001/tags", JsonContent.Create(new { action = "remove", tag = "p" }));
+        remRes.EnsureSuccessStatusCode();
+        var adminDetail2 = await client.GetFromJsonAsync<JsonElement>("/api/admin/videos/tag001");
+        var tags4 = adminDetail2.GetProperty("tags").EnumerateArray().Select(e => e.GetString()).ToArray();
+        Assert.DoesNotContain("p", tags4);
+        Assert.Contains("pvz", tags4);
+        Assert.Contains("zvz", tags4);
+    }
 }

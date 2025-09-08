@@ -35,5 +35,24 @@ public class AdminBatchTagTests : IClassFixture<TestWebAppFactory>
         Assert.Contains("Batch-Tagging Tool", html);
         Assert.Contains("You do not have access to this page.", html);
     }
-}
 
+    [Fact]
+    public async Task AdminTags_Routes_Enforce_Auth()
+    {
+        var client = _factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        // Non-admin should get 403 on tag routes
+        var postForm = new FormUrlEncodedContent(new [] { new KeyValuePair<string,string>("tags","z") });
+        var res1 = await client.PostAsync("/admin/videos/abc123/tags/set", postForm);
+        Assert.Equal(HttpStatusCode.Forbidden, res1.StatusCode);
+
+        var req = new HttpRequestMessage(HttpMethod.Patch, "/admin/videos/abc123/tags")
+        {
+            Content = new StringContent("{\"action\":\"add\",\"tag\":\"z\"}", System.Text.Encoding.UTF8, "application/json")
+        };
+        var res2 = await client.SendAsync(req);
+        Assert.Equal(HttpStatusCode.Forbidden, res2.StatusCode);
+    }
+}
