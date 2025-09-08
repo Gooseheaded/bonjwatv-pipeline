@@ -17,6 +17,10 @@ else if (Model.Video.ValueKind == JsonValueKind.Undefined || Model.Video.ValueKi
 }
 else
 {
+    if (!string.IsNullOrEmpty(Model.Info))
+    {
+        <div class="alert alert-success">@Model.Info</div>
+    }
     var v = Model.Video;
     var id = v.TryGetProperty("id", out var idEl) ? idEl.GetString() : (v.TryGetProperty("v", out var vEl) ? vEl.GetString() : null);
     var title = v.TryGetProperty("title", out var t) ? t.GetString() : null;

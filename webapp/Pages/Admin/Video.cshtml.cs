@@ -17,6 +17,7 @@ namespace bwkt_webapp.Pages.Admin
         public string? SubmissionDate { get; private set; }
         public List<string> AllowedTags { get; } = new() { "z","p","t","story","zvz","zvt","zvp","pvz","pvt","pvp","tvz","tvt","tvp" };
         public HashSet<string> SelectedTags { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
+        public string? Info { get; private set; }
 
         public VideoModel(IVideoService videoService)
         {
@@ -28,6 +29,15 @@ namespace bwkt_webapp.Pages.Admin
             IsAdmin = CheckIsAdmin();
             if (!IsAdmin) return;
             Load(id);
+            try
+            {
+                var ok = Request.Query["ok"].FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(ok) && (ok == "1" || ok.Equals("true", StringComparison.OrdinalIgnoreCase)))
+                {
+                    Info = "Tags saved successfully.";
+                }
+            }
+            catch { }
         }
 
         private bool CheckIsAdmin()
