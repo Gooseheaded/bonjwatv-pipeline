@@ -9,6 +9,7 @@ services:
       - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
       - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
       - ADMIN_USER_IDS=${ADMIN_USER_IDS}
+      - LEGACY_SUBTITLE_API_TOKEN=${LEGACY_SUBTITLE_API_TOKEN}
     ports:
       - "5001:8080"
     restart: unless-stopped
