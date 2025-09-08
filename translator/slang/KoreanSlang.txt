@@ -1,0 +1,220 @@
+# Map Directions
+- 다섯 시 (Daseot Si) – 5 o'clock  
+- 두 시 (Du Si) – 2 o'clock  
+- 세 시 (Se Si) – 3 o'clock  
+- 네 시 (Ne Si) – 4 o'clock  
+- 아홉 시 (Ahop Si) – 9 o'clock  
+- 열 시 (Yeol Si) – 10 o'clock  
+- 열한 시 (Yeolhan Si) – 11 o'clock  
+- 열두 시 (Yeoldu Si) – 12 o'clock  
+- 여덟 시 (Yeodeol Si) – 8 o'clock  
+- 여섯 시 (Yeoseot Si) – 6 o'clock  
+- 일곱 시 (Ilgop Si) – 7 o'clock  
+- 한 시 (Han Si) – 1 o'clock  
+
+# Numbers
+- 다수 (Dasu) – A large number of "x" (e.g., "Dasu-Zergling" = lots of Zerglings)  
+- 소수 (Sosu) – A small number of "x" (e.g., "Sosu-Zergling" = a few Zerglings)  
+- 삼 (Sam) – Three (e.g., upgrades)  
+- 삼질 (Sam-Jeal) – Three Zealots  
+- 사질 (Sa-Jeal) – Four Zealots  
+- 이 (I) – Two (e.g., upgrades)  
+- 일 (Il) – One (e.g., upgrades)  
+- 일꾼 (Ilkkun) – Workers  
+- 원질 (Won-Jeal) – One Zealot  
+- 투질 (Tu-Jeal) – Two Zealots  
+- 하나 (Hana) – One (general counting)  
+
+# Units
+## Zerg
+- 가디언 (Guardian) – 가디언, 가뎐, 가디안, 꽃게 (Kkotge – "Crab"), 가필패 (Gapilpae – "Guardian = Certain Loss")  
+- 디바우러 (Devourer) – 디바 (Diba), 홍합 (Honghap – "Mussel")  
+- 디파일러 (Defiler) – 디파일런 (Dipailreon), 디파 (Dipa)  
+- 러커 (Lurker) – 럴커 (Leolkeo), 럭커 (Leokkeo), 라까 (Lakka), 스탑 러커 (Stop-Leokkeo – "Hold Lurker")  
+- 뮤탈리스크 (Mutalisk) – 뮤탈 (Myutal), 무탈 (Mutal), 탈 (Tal); 글레이브 웜 (Glaive Wurm) – 쓰리쿠션 (Sseuri-Kusyeon – "3-Cushion," due to bouncing attacks)  
+- 브루들링 (Broodling) – 브루들링, 부루들링, 부르들링  
+- 스컬지 (Scourge) – 스커지 (Seukeoji), 스콜지 (Seukolji)  
+- 오버로드 (Overlord) – 오버 (Obeo)  
+- 울트라리스크 (Ultralisk) – 울트라 (Ulteura), 큰형님 (Keun Hyeongnim – "Big Bro"), 울리 (Ulli)  
+- 인페스티드 테란 (Infested Terran) – 자폭맨 (Japokmaen – "Suicide Man"), 감테 (Gamte), 인페테란 (Inpeteran)  
+- 저글링 (Zergling) – 저글링, 링 (Ling), 글링 (Gling), 도시락 (Dosirak – "Lunchbox"), 개떼 (Gaette – "Pack of Dogs")  
+- 퀸 (Queen) – 퀸 (Kwin)  
+- 히드라리스크 (Hydralisk) – 히드라 (Hideura), 하이드라 (Haideura)  
+
+## Terran
+- SCV – 에씨비 (Essibi), 딴딴이 (Ttanddani – "Tough Guy"), 건담 (Geondam – "Gundam")  
+- 골리앗 (Goliath) – 골리앗 (Golliat), 골럿 (Gollet); 킹팩골 (Kingpaekgol – "5 Factory Goliath")  
+- 드롭십 (Dropship) – 드랍쉽 (Deuraepsip), 뽀록쉽 (Pporoksip – "Lucky Ship")  
+- 레이스 (Wraith) – 레이스 (Reiseu), 종이비행기 (Jong-ibihanggi – "Paper Airplane")  
+- 마린 (Marine) – 마린 (Marin), 머린 (Merin)  
+- 벌처 (Vulture) – 벌쳐 (Beolchyeo), 그쳐 (Geuchyeo), 혐쳐 (Hyeomchyeo – "Disgusting Vulture"), 마인을 사면 딸려 나오는 사은품 (Freebie with mines)  
+- 배틀크루저 (Battlecruiser) – 배틀 (Baeteul), 배크 (Baek)  
+- 사이언스 베슬 (Science Vessel) – 베슬 (Beseul), 사베 (Sabe)  
+- 시즈 탱크 (Siege Tank) – 탱크 (Taengkeu), 시탱 (Sitaeng), 퉁퉁포 (Tungtungpo – "Unsieged Tank"); 언탱 (Eontaeng – "High Ground Tanks")  
+- 파이어뱃 (Firebat) – 파벳 (Pabet), 빨간 바지 (Ppalgan Baji – "Red Pants")  
+
+## Protoss
+- 다크 템플러 (Dark Templar) – 다템 (Datem), 닥템 (Daktem), 아싸 (Assa – "Outcast")  
+- 드라군 (Dragoon) – 드라군 (Deuragun), 드래군 (Deuraegun), 무뇌군 (Munaegun – "Brainless Goon")  
+- 리버 (Reaver) – 리버 (Ribeo)  
+- 스카우트 (Scout) – 스카웃 (Seukaut), 하늘의 쓰레기 (Haneul-ui Sseuregi – "Sky Trash")  
+- 아콘 (Archon) – 아칸 (Akan), 전구 (Jeongu – "Lightbulb")  
+- 옵저버 (Observer) – 옵 (Op), 옵접 (Opjeop)  
+- 질럿 (Zealot) – 질럿 (Jilreot), 젤럿 (Jelreot), 딱딱이 (Ttakttaki – "Tough Guy"), 용역 깡패 (Yongyeok Kkangpae – "Hired Thug"); 공발질 (Gongbaljil – "Attack Upgraded Speed Zealot")  
+- 캐리어 (Carrier) – 캐리어 (Kaerieo), 깡통 (Kkangtong – "Tin Can")  
+- 커세어 (Corsair) – 커세어 (Keoseeo), 코르세어 (Koreuseeo)  
+- 하이 템플러 (High Templar) – 하템 (Hatem), 템플러 (Tempeulleo)  
+
+# Buildings
+- 가스통 (Gaseutong) – Gas Tank (Extractor, Refinery, Assimilator)  
+- 건물 (Geonmul) – Buildings (general term)  
+- 스파이어 (Seupaieo) – Spire  
+- 커널/커날/카널/카날 (Keoneol/Keonal/Kaenneol/Kanaal) – Nydus Canal (Hive-tech Zerg building)  
+- 커맨드 (Keomaendeu) – Command Center  
+- 배럭 (Baereok) – Barracks  
+- 서플 (Seopeul) – Supply Depot  
+- 선게이트 (Seon-Geiteu) – Fast Gateway  
+- 성큰 (Seongkeun) – Sunken Colony  
+- 스포어 (Seupoeo) – Spore Colony  
+- 템아카 (Temaka) – Templar Archives  
+- 팩/펙 (Paek/Pek) – Factory  
+- 포지 (Poji) – Protoss Forge; 포지가 안돌아간다 (Poji-ga Andoraganda) – "Forge isn’t spinning" (not researching upgrades)  
+- 풀 (Pul) – Spawning Pool  
+- 해처리 (Haechyeori) – Hatchery; 육해처리 (Yuk-Haechyeori) – "6 Hatcheries"  
+- 프로브 (Peurobeu) – Probe (worker tied to building economy)  
+- 히드라덴 (Hideuraden) – Hydra Den  
+
+# Strategies & Gameplay
+- 8겟뽕 (Pal-Gaetppong) – 8 Gate (Protoss all-in timing with 8 Gateways)  
+- APM (APM) – Actions per minute  
+- GG (GG) – "Good game," typed to surrender  
+- 갈무리 (Galmuri) – Reorganizing hotkeys  
+- 강재공격/어택 (Gangjae-Gonggyeok/Eotaek) – Forced targeting (e.g., marines attacking a Hatchery instead of Zerglings)  
+- 견제 (Gyeonje) – Harassment/guerrilla tactics  
+- 겹치기 (Gyeopchigi) – Stacking (units or workers)  
+- 교란 (Gyoran) – Chaos/disorder  
+- 교전 (Gyojeon) – Battle/engagement  
+- 꼼수 (Ggom-Soo) – Devious, unexpected strategy (not necessarily cheese), e.g., Boxer’s plays  
+- 꼬라박 (Kkorabak) – Suicide attack, wasting units in a bad engagement  
+- 날빌 (Nalbil) – Cheese strategy, unexpected aggressive build  
+- 늦게 (Neutge) – Delay  
+- 뒷마당 (Dwit-Madang) – Natural expansion  
+- 돌리다 (Dollida) – Circle around (units sneaking/hiding) or producing (buildings)  
+- 더블 (Deobeul) – Double (early second town hall)  
+- 도박 (Dobak) – Gamble (risky strategy)  
+- 뽕뽑기 (Ppong-Ppopgi) – "Squeeze out units" from low economy  
+- 멀티 (Meolti) – Expansion base; 삼룡이 멀티 (Samryong-i Meolti) – Triple expansion early game; 미멀 (Mimmeol) – Mineral-only expansion; 몰래 멀티 (Mollae Meolti) – Hidden expansion  
+- 바카닉 (Bakani) – Mix of marine/medic and mech army  
+- 발럴사 (Bal-Leolsa) – Hydra Speed-Lurker-Range (build focusing on Hydralisk speed and Lurker range upgrades)  
+- 발업 (Bal-Up) – Zealot/Zergling speed upgrade  
+- 방업 (Bang-Up) – Defense upgrade  
+- 배틀넷 (Baeteulnet) – Blizzard’s online multiplayer platform  
+- 벌드 (Beoldeu) – Vulture drop  
+- 병력 (Byeongryeok) – Army/units; 추가 병력 (Chuga Byeongryeok) – Reinforcements; 주병력 (Jubyeongryeok) – Main army; 한방 병력 (Hanbang Byeongryeok) – "One-shot army" for a decisive battle  
+- 본진 (Bonjin) – Main base  
+- 빠른 전멸 (Ppareun Jeonmyeol) – "Quick extermination," crushed early  
+- 샌드박스 (Saendeubakseu) – UMS (Use Map Settings), custom maps  
+- 선뮤탈 (Seon-Myutal) – Fast Mutalisk rush  
+- 선럴커 (Seon-Leolkeo) – Fast Lurker  
+- 선아둔 (Seon-Adun) – Fast Citadel of Adun  
+- 속업 (Sok-Up) – Speed upgrade (e.g., shuttle, overlord, vulture); 스셔틀/스셔 (Seusyeoteul/Seusyeo) – Speed shuttle; 스벌 (Seubeol) – Speed vulture  
+- 손스타 (Sonseuta) – Playing StarCraft with hands (actual gameplay)  
+- 수비 (Subi) – Defense/defend  
+- 수리 (Suri) – Repair  
+- 심시티 (Simsiti) – SimCity, careful building positioning for defense  
+- 십이앞 (Ssib-i-Ap) – 12 Hatch  
+- 압박 (Apbak) – Pressure (opponent)  
+- 앞마당 (Ap-Madang) – Natural expansion  
+- 어택땅 (Eotaek-Ttang) – A-move (attack-moving without micro)  
+- 역뮤 (Yeok-Myu) – Counter Mutalisk strategy  
+- 역러시 (Yeong-Rushi) – Counterattack after a failed enemy push  
+- 역전 (Yeokjeon) – Comeback  
+- 연탄 조이기 (Yeontan Jo-igi) – "Korean charcoal contain," Lurker field containment  
+- 연도기 (Yeondogi) – Practice machine/helper  
+- 운영 (Unyeong) – Macro; 후반운영 (Huban Unyeong) – Late-game macro  
+- 위치 (Wichi) – Position/location  
+- 육-(unit name) (Yuk-[unit]) – Counter unit (e.g., Mutalisks after killing Corsairs with Scourge)  
+- 웃어주다 (Useojuda) – Favorable/smile upon (e.g., RNG or game favoring a player)  
+- 전술 (Jeonsul) – Tactics  
+- 전장 (Jeonjang) – Battlefield  
+- 전진 (Jeonjin) – Proxy (forwarded build)  
+- 전투 (Jeontu) – Battle  
+- 정찰 (Jungchal) – To scout  
+- 조이기 (Jo-igi) – To contain/containment  
+- 조합 (Johap) – Army composition  
+- 진출 (Jinchul) – To advance (stages) or push out (army)  
+- 컨트롤 (Keonteurol) – Micro (unit control)  
+- 커로보 (Keorobo) – Corsair-Robo (Corsair with Robotics Facility build)  
+- 커닼/커세어 다크 (Keodak/Keoseeo Dakeu) – Corsair-DT (Corsair with Dark Templar build)  
+- 테러 (Tereo) – Terror (targeted unit elimination, e.g., worker terror with Vultures)  
+- 테크 (Teke) – Tech tree level  
+- 털리다 (Teollida) – Take damage  
+- 포지더블 (Poji-Deobeul) – Forge expand  
+- 필살기 (Pilsalgi) – "Ace card," unexpected build/counter (e.g., proxy 2 gate)  
+- 한방 (Hanbang) – "One good punch," a decisive attack from limited resources or massed army  
+
+# Spells & Abilities
+- 다크 스웜 (Dakeu Seuwom) – Dark Swarm; 스웜 (Seuwom), 방귀 (Bang-gwi – "Fart"), 미세먼지 (Mise-Meonji – "Fine Dust")  
+- 디펜시브 매트릭스 (Dipensibeu Maeteurikseu) – Defensive Matrix; 디펜 (Dipen)  
+- 락다운 (Rakdaun) – Lockdown; 락다 (Rakda)  
+- 사이오닉 스톰 (Saionik Seutom) – Psionic Storm; 스톰 (Seutom); 천지스톰 (Cheonji Seutom – "Heavenly Storms," multiple storms)  
+- 옵티컬 플레어 (Optikeol Peulle-eo) – Optical Flare; 눈뽕 (Nunppong – "Blind")  
+- 이레디에이트 (Iredieiteu) – Irradiate; 이레딧 (Iredit), 지우개 (Jiugae – "Eraser," used to wipe bio units)  
+- 치료 (Chiryo) – Heal (Medic ability)  
+- 클로킹 (Keulloking) – Cloaking; 클록 (Keullok), 클락 (Keullak)  
+
+# Player Nicknames & Culture
+- Bisu (비수) – 택신 (Taeksin – "God of Taek"), 김택용 (Kim Taek-yong), 택용 (Taekyong)  
+- Nal_rA (날라) – 강민 (Kang Min)  
+- sAviOr (세이비어) – 마모 (Mamo), 마주작 (Majujak), 마재윤 (Ma Jae-yoon)  
+- 고수 (Gosu) – Exceptionally skilled player  
+- 관광 (Gwangwang) – Humiliating loss ("sightseeing"); 마패관광 (Mapae Gwangwang) – Extreme humiliation  
+- 김캐리 (Kim Kaeri) – "Kim Carrier," caster known for curses (e.g., "Kim Carrier Curse")  
+- 김정민 (Kim Jung Min) – "TheMarine," ex-player and caster, known for singing  
+- 스덕후 (Seudeokhu) – StarCraft otaku, diehard fan  
+- 안진마 (Anjinma) – "Not gonna lose"  
+- 엄대엄 (Eomdae-Eom) – 50:50 (even odds)  
+- 엏허엏허엏허 (Eotheo-Eotheo-Eotheo) – Mocking Bisu’s laugh, now a cute compliment  
+- 입스타 (Ipseuta) – "Internet Star," big talker with poor performance  
+- 정ㅋ벅ㅋ (Jung k Bug k) – "Conqueror," forGG’s nickname  
+- 접스타 (Jeopseuta) – "Retirement Star," players who quit and return  
+- 조공 (Jogong) – Unintentionally donating units/resources to the opponent  
+- 초보 (Chobo) – Newbie  
+- 최종병기 (Choe-Jong-Byung-Gi) – "The Ultimate Weapon," Flash’s nickname  
+- 천재태란 (Cheon-jae Taeran) – "Genius Terran," (T)NaDa’s nickname  
+- 콩 (Kong) – "Bean," (Z)YellOw’s nickname  
+- 투신 (Tusin) – "God of War," (Z)JulyZerg’s nickname  
+- 프징징 (Peujingjing) – "Protoss whiners," complaining about balance  
+- 플토빠 (Peultoppa) – Protoss fanboys (derogatory)  
+- 황제 (Hwang-jae) – "The Emperor," (T)BoxeR’s nickname  
+
+# Competitive Terms
+- 결승전 (Gyeolseungjeon) – The Finals  
+- 단판 (Danpan) – Best of X game series  
+- 메프 (Mepeu) – Major Proleague  
+- 스폰 (Seupon) – Sponsored games  
+- 슈에 (Syue) – Super Ace match (Pro League)  
+- 승리 (Seungri) – Victory  
+- 위너스 (Wineoseu) – Winner’s League  
+- 정배 (Jeongbae) – Favored (in betting/odds)  
+- 패 (Pae) – Loss  
+- 패자전 (Paejajeon) – Losers’ match  
+- 완패 (Wanpae) – Complete defeat  
+- 역배 (Yeokbae) – Unfavored (in betting/odds)  
+
+# Miscellaneous
+- 공업 (Gong-Up) – Attack upgrade  
+- 네 (Nae) – Yes  
+- 눈스타 (Nunseuta) – Theorycrafting ("playing with eyes")  
+- 대각선 (Daegakseon) – Diagonal  
+- 대규모 (Daegyumo) – Large scale  
+- 상황 (Sanghwang) – Situation/game state  
+- 소규모 (Sogyumo) – Small scale  
+- 시작하죠 (Sijakhajyo) – "Let’s start!" (commentator phrase)  
+- 심리전 (Simrijeon) – Psychological warfare/mindgames  
+- 아드날린 (Adeunallin) – Adrenal Glands (Zergling Hive upgrade)  
+- 업/업그레이드 (Up/Eopgeureideu) – Upgrade (general term)  
+- 오지게 (Ojige) – Very (intensifier, e.g., "very good")  
+- 이 한 타이밍 (I Han Taiming) – "This one timing," a critical window to win  
+- 터지면 (Teojimyeon) – A unit "pops" (Zerg unit finishing morphing from egg)  
+- 헤그 (Hek) – Nuke  

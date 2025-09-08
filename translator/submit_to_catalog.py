@@ -39,7 +39,14 @@ def http_post_json(url: str, body: Dict[str, Any], headers: Optional[Dict[str, s
         raise urllib.error.HTTPError(he.url, he.code, f"{he.reason}: {detail}", he.hdrs, None)
 
 
-def http_post_multipart(url: str, fields: Dict[str, str], file_field: str, file_path: str, content_type: str = "text/plain") -> Dict[str, Any]:
+def http_post_multipart(
+    url: str,
+    fields: Dict[str, str],
+    file_field: str,
+    file_path: str,
+    content_type: str = "text/plain",
+    headers: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
     # Minimal multipart builder (no external deps)
     boundary = "----bwktboundary"
     lines: List[bytes] = []
@@ -58,7 +65,10 @@ def http_post_multipart(url: str, fields: Dict[str, str], file_field: str, file_
     lines.append(b"\r\n")
     lines.append(f"--{boundary}--\r\n".encode("utf-8"))
     body = b"".join(lines)
-    req = urllib.request.Request(url, data=body, headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+    merged_headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    if headers:
+        merged_headers.update(headers)
+    req = urllib.request.Request(url, data=body, headers=merged_headers)
     with urllib.request.urlopen(req) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
@@ -129,7 +139,13 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
         # 1) Upload SRT
         try:
             up_url = f"{catalog_base.rstrip('/')}/api/uploads/subtitles"
-            upload_resp = http_post_multipart(up_url, {"videoId": vid, "version": "1"}, "file", en_srt)
+            upload_resp = http_post_multipart(
+                up_url,
+                {"videoId": vid, "version": "1"},
+                "file",
+                en_srt,
+                headers=headers,
+            )
             storage_key = upload_resp.get("storage_key")
             if not storage_key:
                 _print(f"ERROR: upload response missing storage_key for {vid}")
@@ -138,7 +154,9 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
         except urllib.error.HTTPError as he:
             if he.code == 403:
                 _print(
-                    "ERROR: upload rejected with 403 Forbidden. This endpoint usually does not require a token; verify bonjwa.tv URL and server availability."
+                    "ERROR: upload rejected with 403 Forbidden — the API requires an ingest token in X-Api-Key.\n"
+                    "Ensure you passed --api-key and that the server's API_INGEST_TOKENS includes this token.\n"
+                    "For local dev, set API_INGEST_TOKENS in .env (e.g., DEV123), rebuild docker compose, and pass --api-key DEV123."
                 )
             else:
                 _print(f"ERROR: upload failed for {vid}: {he}")

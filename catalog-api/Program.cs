@@ -29,6 +29,28 @@ app.MapGet("/", () => Results.Redirect("/swagger"));
 app.MapGet("/healthz", () => Results.Json(new { ok = true }))
    .WithOpenApi(o => { o.Summary = "Health check"; return o; });
 
+// Readiness endpoint: verifies videos store path is accessible
+app.MapGet("/readyz", () =>
+{
+    try
+    {
+        var path = VideosStorePath();
+        var dir = Path.GetDirectoryName(path);
+        if (string.IsNullOrWhiteSpace(dir)) return Results.StatusCode(500);
+        Directory.CreateDirectory(dir);
+        if (!File.Exists(path))
+        {
+            File.WriteAllText(path, "[]");
+        }
+        using var fs = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        return Results.Json(new { ok = true, store = path });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { ok = false, error = ex.Message }, statusCode: 500);
+    }
+}).WithOpenApi(o => { o.Summary = "Readiness check for store path"; return o; });
+
 app.MapGet("/api/videos", (
     [Microsoft.AspNetCore.Mvc.FromServices] VideoRepository repo,
     [Microsoft.AspNetCore.Mvc.FromServices] RatingsRepository ratings,
@@ -103,6 +125,7 @@ app.MapGet("/api/videos", (
                 v.Tags,
                 v.ReleaseDate,
                 v.Id,
+                v.SubtitleUrl,
                 sum.Red,
                 sum.Yellow,
                 sum.Green
@@ -145,6 +168,7 @@ app.MapGet("/api/videos/{id}", (
         v.Tags,
         v.ReleaseDate,
         v.Id,
+        v.SubtitleUrl,
         s.Red,
         s.Yellow,
         s.Green
@@ -358,7 +382,7 @@ app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, S
     var ok = repo.Review(id, "admin", action!, reason);
     if (!ok) return Results.NotFound();
 
-    // On approval, upsert into videos.json and ensure first‑party subtitle is available
+    // On approval, upsert into videos store and ensure first‑party subtitle is available
     if (string.Equals(action, "approve", StringComparison.OrdinalIgnoreCase))
     {
         var s = repo.Get(id);
@@ -373,10 +397,9 @@ app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, S
                 var storageKey = await EnsureSubtitleStoredAsync(subsRoot, vid, version, s.Payload.SubtitleStorageKey, s.Payload.SubtitleUrl);
                 // Compute first‑party serving URL
                 var internalUrl = $"/api/subtitles/{SanitizeId(vid)}/{version}.srt";
-                // Upsert in videos.json
+                // Upsert in primary videos store (decoupled from legacy videos.json)
                 UpsertVideoIntoCatalogJson(
-                    // Prefer env var path in prod, fall back to appsettings/dev default
-                    app.Configuration["DATA_JSON_PATH"] ?? app.Configuration["Data:JsonPath"] ?? Path.Combine(app.Environment.ContentRootPath, "../webapp/data/videos.json"),
+                    VideosStorePath(),
                     vid,
                     s.Payload.Title,
                     s.Payload.Creator,
@@ -397,10 +420,10 @@ app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, S
         var storageKey = s?.Payload?.SubtitleStorageKey;
         if (!string.IsNullOrWhiteSpace(storageKey))
         {
-            // Only delete if not referenced by catalog videos.json
+            // Only delete if not referenced by catalog videos store
             if (TryParseStorageKey(storageKey!, out var vid, out var ver))
             {
-                var inUse = IsSubtitleReferencedInCatalog(CatalogJsonPath(), vid!, ver);
+                var inUse = IsSubtitleReferencedInCatalog(VideosStorePath(), vid!, ver);
                 if (!inUse)
                 {
                     var full = MapStorageKeyToPath(SubtitlesRoot(), storageKey!);
@@ -431,11 +454,7 @@ app.MapGet("/api/admin/videos/{id}", (string id, [Microsoft.AspNetCore.Mvc.FromS
     return v == null ? Results.NotFound() : Results.Json(v);
 }).WithOpenApi(o => { o.Summary = "Get video detail (admin)"; return o; });
 
-string CatalogJsonPath()
-{
-    // Prefer env var in prod; fallback to appsettings/dev default
-    return Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, app.Configuration["DATA_JSON_PATH"] ?? app.Configuration["Data:JsonPath"] ?? "../webapp/data/videos.json"));
-}
+// Legacy helper removed; use VideosStorePath() instead
 
 app.MapPatch("/api/admin/videos/{id}/hide", async (string id, HttpRequest req) =>
 {
@@ -447,25 +466,32 @@ app.MapPatch("/api/admin/videos/{id}/hide", async (string id, HttpRequest req) =
         try { using var doc = System.Text.Json.JsonDocument.Parse(body); reason = doc.RootElement.TryGetProperty("reason", out var r) ? r.GetString() : null; }
         catch { }
     }
-    HideOrShowVideo(CatalogJsonPath(), id, hide: true, reason: reason);
+    HideOrShowVideo(VideosStorePath(), id, hide: true, reason: reason);
     return Results.Ok(new { ok = true });
 }).WithOpenApi(o => { o.Summary = "Hide a video with reason"; return o; });
 
 app.MapPatch("/api/admin/videos/{id}/show", (string id) =>
 {
-    HideOrShowVideo(CatalogJsonPath(), id, hide: false, reason: null);
+    HideOrShowVideo(VideosStorePath(), id, hide: false, reason: null);
     return Results.Ok(new { ok = true });
 }).WithOpenApi(o => { o.Summary = "Unhide a video"; return o; });
 
 app.MapDelete("/api/admin/videos/{id}", (string id) =>
 {
-    DeleteVideo(CatalogJsonPath(), id);
+    DeleteVideo(VideosStorePath(), id);
     return Results.Ok(new { ok = true });
 }).WithOpenApi(o => { o.Summary = "Delete a video from catalog"; return o; });
 
 app.Run();
 
 // ----- Helpers (must remain before type declarations) -----
+
+string VideosStorePath()
+{
+    // Primary store path (new): prefers DATA_VIDEOS_STORE_PATH / Data:VideosStorePath; fallback to data/catalog-videos.json
+    return Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath,
+        app.Configuration["DATA_VIDEOS_STORE_PATH"] ?? app.Configuration["Data:VideosStorePath"] ?? "data/catalog-videos.json"));
+}
 
 static string? NormalizeRace(string? value)
 {
@@ -724,6 +750,7 @@ internal record VideoDto(
     string[]? Tags,
     string? ReleaseDate,
     string YoutubeId,
+    string? SubtitleUrl,
     int Red,
     int Yellow,
     int Green

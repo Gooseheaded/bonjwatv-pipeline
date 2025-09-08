@@ -79,6 +79,9 @@ Health, logs, troubleshooting
 Persisted data paths (production)
 - Webapp: `/app/data` mounted from `web-data` (already configured).
 - Catalog API: `/app/data` mounted from `api-data` with:
-  - `DATA_JSON_PATH=/app/data/videos.json`
+  - `DATA_VIDEOS_STORE_PATH=/app/data/catalog-videos.json` (primary videos store owned by the API)
+  - `DATA_JSON_PATH=/app/data/videos.json` (optional legacy bootstrap; imported once if the primary store is empty)
   - `DATA_RATINGS_PATH=/app/data/ratings.json`
-  Ensure the files exist. The bundled run.sh seeds `videos.json` on first deploy; otherwise copy one in manually. Compose also sets `Data__JsonPath=/app/data/videos.json` so the API prefers the volume path.
+  - `DATA_SUBMISSIONS_PATH=/app/data/submissions.json`
+  - `DATA_SUBTITLES_ROOT=/app/data/subtitles`
+  Ensure the folder exists; the API will create the primary store if missing and expose `/readyz` to verify readiness.

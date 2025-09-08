@@ -17,3 +17,614 @@ Image Size and Bundle Measurement — 2025-09-08
 Paste outputs below this line
 -----------------------------------------------------------------------
 
+Image Size and Bundle Measurement — 2025-09-08 16:39:39 UTC
+
+## Docker versions
+Docker version 28.3.3, build 980b856816
+Docker Compose version 2.39.2
+
+## Rebuild (clean cache)
++ docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
+time="2025-09-08T10:39:40-06:00" level=warning msg="Docker Compose is configured to build using Bake, but buildx isn't installed"
+permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Head "http://%2Fvar%2Frun%2Fdocker.sock/_ping": dial unix /var/run/docker.sock: connect: permission denied
+Image Size and Bundle Measurement — 2025-09-08 16:39:45 UTC
+
+## Docker versions
+Docker version 28.3.3, build 980b856816
+Docker Compose version 2.39.2
+
+## Rebuild (clean cache)
++ docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
+time="2025-09-08T10:39:45-06:00" level=warning msg="Docker Compose is configured to build using Bake, but buildx isn't installed"
+#0 building with "default" instance using docker driver
+
+#1 [catalog-api internal] load build definition from Dockerfile
+#1 transferring dockerfile: 410B done
+#1 DONE 0.0s
+
+#2 [catalog-api internal] load metadata for mcr.microsoft.com/dotnet/sdk:9.0-alpine
+#2 DONE 1.3s
+
+#3 [catalog-api internal] load metadata for mcr.microsoft.com/dotnet/aspnet:9.0-alpine
+#3 DONE 1.4s
+
+#4 [catalog-api internal] load .dockerignore
+#4 transferring context: 213B done
+#4 DONE 0.0s
+
+#5 [catalog-api build 1/4] FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine@sha256:430bd56f4348f9dd400331f0d71403554ec83ae1700a7dcfe1e1519c9fd12174
+#5 DONE 0.0s
+
+#6 [catalog-api stage-1 1/3] FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine@sha256:d4bf3d8c8f0236341ddd93d15208152e26bc6dcc9d34c635351a3402c284137f
+#6 DONE 0.0s
+
+#7 [catalog-api stage-1 2/3] WORKDIR /app
+#7 CACHED
+
+#8 [catalog-api build 2/4] WORKDIR /src
+#8 CACHED
+
+#9 [catalog-api internal] load build context
+#9 transferring context: 17.49MB 1.1s done
+#9 DONE 1.2s
+
+#10 [catalog-api build 3/4] COPY . .
+#10 DONE 3.1s
+
+#11 [catalog-api build 4/4] RUN dotnet restore && dotnet publish -c Release -o /app/publish
+#11 8.691   Determining projects to restore...
+#11 18.77   Restored /src/catalog-api.csproj (in 9.8 sec).
+#11 29.21   Determining projects to restore...
+#11 29.50   All projects are up-to-date for restore.
+#11 41.01   catalog-api -> /src/bin/Release/net9.0/catalog-api.dll
+#11 45.40   catalog-api -> /app/publish/
+#11 DONE 45.7s
+
+#12 [catalog-api stage-1 3/3] COPY --from=build /app/publish .
+#12 DONE 3.2s
+
+#13 [catalog-api] exporting to image
+#13 exporting layers
+#13 exporting layers 6.4s done
+#13 writing image sha256:450014e25fffe7d0be960c3bf22c5a14c6cc2c7ac544ac297d109d34636fc431 done
+#13 naming to docker.io/library/bwkt-catalog-api:prod done
+#13 DONE 6.4s
+
+#14 [catalog-api] resolving provenance for metadata file
+#14 DONE 0.0s
+
+#15 [webapp internal] load build definition from Dockerfile
+#15 transferring dockerfile: 410B done
+#15 DONE 0.0s
+
+#3 [webapp internal] load metadata for mcr.microsoft.com/dotnet/aspnet:9.0-alpine
+#3 ...
+
+#2 [webapp internal] load metadata for mcr.microsoft.com/dotnet/sdk:9.0-alpine
+#2 DONE 3.3s
+
+#3 [webapp internal] load metadata for mcr.microsoft.com/dotnet/aspnet:9.0-alpine
+#3 DONE 3.4s
+
+#16 [webapp internal] load .dockerignore
+#16 transferring context: 234B done
+#16 DONE 0.0s
+
+#5 [webapp build 1/4] FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine@sha256:430bd56f4348f9dd400331f0d71403554ec83ae1700a7dcfe1e1519c9fd12174
+#5 DONE 0.0s
+
+#6 [webapp stage-1 1/3] FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine@sha256:d4bf3d8c8f0236341ddd93d15208152e26bc6dcc9d34c635351a3402c284137f
+#6 DONE 0.0s
+
+#7 [webapp stage-1 2/3] WORKDIR /app
+#7 CACHED
+
+#8 [webapp build 2/4] WORKDIR /src
+#8 CACHED
+
+#17 [webapp internal] load build context
+#17 transferring context: 2.48kB done
+#17 DONE 0.0s
+
+#18 [webapp build 3/4] COPY . .
+#18 DONE 0.1s
+
+#19 [webapp build 4/4] RUN dotnet restore && dotnet publish -c Release -o /app/publish
+#19 0.828   Determining projects to restore...
+#19 1.261   Restored /src/bwkt-webapp.csproj (in 92 ms).
+#19 1.955   Determining projects to restore...
+#19 2.335   All projects are up-to-date for restore.
+#19 7.867 /src/Services/VideoService.cs(117,42): warning CS8600: Converting null literal or possible null value to non-nullable type. [/src/bwkt-webapp.csproj]
+#19 8.083   bwkt-webapp -> /src/bin/Release/net9.0/bwkt-webapp.dll
+#19 8.253   bwkt-webapp -> /app/publish/
+#19 DONE 8.3s
+
+#20 [webapp stage-1 3/3] COPY --from=build /app/publish .
+#20 DONE 0.2s
+
+#21 [webapp] exporting to image
+#21 exporting layers
+#21 exporting layers 0.6s done
+#21 writing image sha256:ef2f0aeefac7ecef3e3747447c35d2c78d089b6a8689e312859201fa524c140d done
+#21 naming to docker.io/library/bwkt-webapp:prod
+#21 naming to docker.io/library/bwkt-webapp:prod done
+#21 DONE 0.7s
+
+#22 [webapp] resolving provenance for metadata file
+#22 DONE 0.0s
+ catalog-api  Built
+ webapp  Built
+
+## Image sizes
+bwkt-catalog-api     dev       b85e733ec335   2 days ago       365MB
+bwkt-webapp          dev       b335af19e1a6   2 hours ago      276MB
+bwkt-webapp          prod      ef2f0aeefac7   2 seconds ago    114MB
+bwkt-catalog-api     prod      450014e25fff   19 seconds ago   476MB
+
+## Layer history — bwkt-webapp:prod
+IMAGE          CREATED          CREATED BY                                      SIZE      COMMENT
+ef2f0aeefac7   2 seconds ago    ENTRYPOINT ["dotnet" "bwkt-webapp.dll"]         0B        buildkit.dockerfile.v0
+<missing>      2 seconds ago    EXPOSE map[8080/tcp:{}]                         0B        buildkit.dockerfile.v0
+<missing>      2 seconds ago    ENV ASPNETCORE_URLS=http://0.0.0.0:8080         0B        buildkit.dockerfile.v0
+<missing>      2 seconds ago    COPY /app/publish . # buildkit                  553kB     buildkit.dockerfile.v0
+<missing>      10 minutes ago   WORKDIR /app                                    0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      COPY /dotnet /usr/share/dotnet # buildkit       24.7MB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      ENV ASPNET_VERSION=9.0.8                        0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      RUN /bin/sh -c ln -s /usr/share/dotnet/dotne…   0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      COPY /dotnet /usr/share/dotnet # buildkit       78.1MB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      ENV DOTNET_VERSION=9.0.8                        0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      RUN /bin/sh -c addgroup         --gid=$APP_U…   3.03kB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      RUN /bin/sh -c apk add --upgrade --no-cache …   2.97MB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      ENV APP_UID=1654 ASPNETCORE_HTTP_PORTS=8080 …   0B        buildkit.dockerfile.v0
+<missing>      7 weeks ago      CMD ["/bin/sh"]                                 0B        buildkit.dockerfile.v0
+<missing>      7 weeks ago      ADD alpine-minirootfs-3.21.4-x86_64.tar.gz /…   7.82MB    buildkit.dockerfile.v0
+
+## Layer history — bwkt-catalog-api:prod
+IMAGE          CREATED          CREATED BY                                      SIZE      COMMENT
+450014e25fff   19 seconds ago   ENTRYPOINT ["dotnet" "catalog-api.dll"]         0B        buildkit.dockerfile.v0
+<missing>      19 seconds ago   EXPOSE map[8080/tcp:{}]                         0B        buildkit.dockerfile.v0
+<missing>      19 seconds ago   ENV ASPNETCORE_URLS=http://0.0.0.0:8080         0B        buildkit.dockerfile.v0
+<missing>      19 seconds ago   COPY /app/publish . # buildkit                  363MB     buildkit.dockerfile.v0
+<missing>      10 minutes ago   WORKDIR /app                                    0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      COPY /dotnet /usr/share/dotnet # buildkit       24.7MB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      ENV ASPNET_VERSION=9.0.8                        0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      RUN /bin/sh -c ln -s /usr/share/dotnet/dotne…   0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      COPY /dotnet /usr/share/dotnet # buildkit       78.1MB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      ENV DOTNET_VERSION=9.0.8                        0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      RUN /bin/sh -c addgroup         --gid=$APP_U…   3.03kB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      RUN /bin/sh -c apk add --upgrade --no-cache …   2.97MB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      ENV APP_UID=1654 ASPNETCORE_HTTP_PORTS=8080 …   0B        buildkit.dockerfile.v0
+<missing>      7 weeks ago      CMD ["/bin/sh"]                                 0B        buildkit.dockerfile.v0
+<missing>      7 weeks ago      ADD alpine-minirootfs-3.21.4-x86_64.tar.gz /…   7.82MB    buildkit.dockerfile.v0
+
+## Package bundle
++ scripts/package-docker.sh
+[1/4] Building images with prod overrides (Release)…
+time="2025-09-08T10:41:02-06:00" level=warning msg="Docker Compose is configured to build using Bake, but buildx isn't installed"
+#0 building with "default" instance using docker driver
+
+#1 [catalog-api internal] load build definition from Dockerfile
+#1 transferring dockerfile: 410B done
+#1 DONE 0.0s
+
+#2 [catalog-api internal] load metadata for mcr.microsoft.com/dotnet/aspnet:9.0-alpine
+#2 DONE 0.3s
+
+#3 [catalog-api internal] load metadata for mcr.microsoft.com/dotnet/sdk:9.0-alpine
+#3 DONE 0.3s
+
+#4 [catalog-api internal] load .dockerignore
+#4 transferring context: 213B done
+#4 DONE 0.0s
+
+#5 [catalog-api build 1/4] FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine@sha256:430bd56f4348f9dd400331f0d71403554ec83ae1700a7dcfe1e1519c9fd12174
+#5 DONE 0.0s
+
+#6 [catalog-api stage-1 1/3] FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine@sha256:d4bf3d8c8f0236341ddd93d15208152e26bc6dcc9d34c635351a3402c284137f
+#6 DONE 0.0s
+
+#7 [catalog-api internal] load build context
+#7 transferring context: 17.49MB 1.1s done
+#7 DONE 1.2s
+
+#8 [catalog-api build 4/4] RUN dotnet restore && dotnet publish -c Release -o /app/publish
+#8 CACHED
+
+#9 [catalog-api stage-1 2/3] WORKDIR /app
+#9 CACHED
+
+#10 [catalog-api build 2/4] WORKDIR /src
+#10 CACHED
+
+#11 [catalog-api build 3/4] COPY . .
+#11 CACHED
+
+#12 [catalog-api stage-1 3/3] COPY --from=build /app/publish .
+#12 CACHED
+
+#13 [catalog-api] exporting to image
+#13 exporting layers done
+#13 writing image sha256:450014e25fffe7d0be960c3bf22c5a14c6cc2c7ac544ac297d109d34636fc431 done
+#13 naming to docker.io/library/bwkt-catalog-api:prod done
+#13 DONE 0.0s
+
+#14 [catalog-api] resolving provenance for metadata file
+#14 DONE 0.0s
+
+#15 [webapp internal] load build definition from Dockerfile
+#15 transferring dockerfile: 410B done
+#15 DONE 0.0s
+
+#2 [webapp internal] load metadata for mcr.microsoft.com/dotnet/aspnet:9.0-alpine
+#2 ...
+
+#3 [webapp internal] load metadata for mcr.microsoft.com/dotnet/sdk:9.0-alpine
+#3 DONE 1.6s
+
+#2 [webapp internal] load metadata for mcr.microsoft.com/dotnet/aspnet:9.0-alpine
+#2 DONE 1.7s
+
+#16 [webapp internal] load .dockerignore
+#16 transferring context: 234B done
+#16 DONE 0.0s
+
+#5 [webapp build 1/4] FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine@sha256:430bd56f4348f9dd400331f0d71403554ec83ae1700a7dcfe1e1519c9fd12174
+#5 DONE 0.0s
+
+#6 [webapp stage-1 1/3] FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine@sha256:d4bf3d8c8f0236341ddd93d15208152e26bc6dcc9d34c635351a3402c284137f
+#6 DONE 0.0s
+
+#17 [webapp internal] load build context
+#17 transferring context: 2.48kB done
+#17 DONE 0.0s
+
+#9 [webapp stage-1 2/3] WORKDIR /app
+#9 CACHED
+
+#18 [webapp build 3/4] COPY . .
+#18 CACHED
+
+#19 [webapp build 4/4] RUN dotnet restore && dotnet publish -c Release -o /app/publish
+#19 CACHED
+
+#10 [webapp build 2/4] WORKDIR /src
+#10 CACHED
+
+#20 [webapp stage-1 3/3] COPY --from=build /app/publish .
+#20 CACHED
+
+#21 [webapp] exporting to image
+#21 exporting layers done
+#21 writing image sha256:ef2f0aeefac7ecef3e3747447c35d2c78d089b6a8689e312859201fa524c140d done
+#21 naming to docker.io/library/bwkt-webapp:prod done
+#21 DONE 0.0s
+
+#22 [webapp] resolving provenance for metadata file
+#22 DONE 0.0s
+ catalog-api  Built
+ webapp  Built
+[2/4] Saving images to tar files…
+[3/4] Staging compose files and run script…
+- Including seed catalog: /home/gctrindade/programming/bwkt-webapp/webapp/data/videos.json
+[4/4] Creating bundle archive…
+
+Bundle created: /home/gctrindade/programming/bwkt-webapp/dist/bwkt-docker-20250908-104102.tar.gz
+Contents:
+total 612M
+-rw------- 1 root root 502M Sep  8 10:41 catalog-api-image.tar
+-rw-r--r-- 1 root root 1.2K Sep  8 10:41 docker-compose.prod.yml
+-rw-r--r-- 1 root root 1.9K Sep  8 10:41 docker-compose.yml
+-rwxr-xr-x 1 root root 2.4K Sep  8 10:41 run.sh
+-rw-r--r-- 1 root root  65K Sep  8 10:41 videos.json
+-rw------- 1 root root 110M Sep  8 10:41 webapp-image.tar
+
+Next: copy to server and run run.sh there, or use scripts/deploy-to-server.sh user@host /opt/bwkt /home/gctrindade/programming/bwkt-webapp/dist/bwkt-docker-20250908-104102.tar.gz
+
+## Latest bundle size
+-rw-r--r-- 1 root root 130M Sep  8 10:41 /home/gctrindade/programming/bwkt-webapp/dist/bwkt-docker-20250908-104102.tar.gz
+
+Done. Output written to: docs/logs/docker-sizes-2025-09-08.txt
+Image Size and Bundle Measurement — 2025-09-08 16:47:37 UTC
+
+## Docker versions
+Docker version 28.3.3, build 980b856816
+Docker Compose version 2.39.2
+
+## Rebuild (clean cache)
++ docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
+time="2025-09-08T10:47:37-06:00" level=warning msg="Docker Compose is configured to build using Bake, but buildx isn't installed"
+#0 building with "default" instance using docker driver
+
+#1 [catalog-api internal] load build definition from Dockerfile
+#1 transferring dockerfile: 534B done
+#1 DONE 0.0s
+
+#2 [catalog-api internal] load metadata for mcr.microsoft.com/dotnet/sdk:9.0-alpine
+#2 ...
+
+#3 [catalog-api internal] load metadata for mcr.microsoft.com/dotnet/aspnet:9.0-alpine
+#3 DONE 1.8s
+
+#2 [catalog-api internal] load metadata for mcr.microsoft.com/dotnet/sdk:9.0-alpine
+#2 DONE 1.9s
+
+#4 [catalog-api internal] load .dockerignore
+#4 transferring context: 213B done
+#4 DONE 0.0s
+
+#5 [catalog-api build 1/4] FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine@sha256:430bd56f4348f9dd400331f0d71403554ec83ae1700a7dcfe1e1519c9fd12174
+#5 DONE 0.0s
+
+#6 [catalog-api stage-1 1/3] FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine@sha256:d4bf3d8c8f0236341ddd93d15208152e26bc6dcc9d34c635351a3402c284137f
+#6 DONE 0.0s
+
+#7 [catalog-api stage-1 2/3] WORKDIR /app
+#7 CACHED
+
+#8 [catalog-api build 2/4] WORKDIR /src
+#8 CACHED
+
+#9 [catalog-api internal] load build context
+#9 transferring context: 17.49MB 1.1s done
+#9 DONE 1.2s
+
+#10 [catalog-api build 3/4] COPY . .
+#10 DONE 4.1s
+
+#11 [catalog-api build 4/4] RUN dotnet restore  && dotnet publish -c Release -o /app/publish     -p:SelfContained=false     -p:PublishSingleFile=false     -p:PublishReadyToRun=false     -p:UseAppHost=false
+#11 8.569   Determining projects to restore...
+#11 20.02   Restored /src/catalog-api.csproj (in 11.16 sec).
+#11 30.42   Determining projects to restore...
+#11 30.75   All projects are up-to-date for restore.
+#11 44.78   catalog-api -> /src/bin/Release/net9.0/catalog-api.dll
+#11 50.58   catalog-api -> /app/publish/
+#11 DONE 51.3s
+
+#12 [catalog-api stage-1 3/3] COPY --from=build /app/publish .
+#12 DONE 3.3s
+
+#13 [catalog-api] exporting to image
+#13 exporting layers
+#13 exporting layers 7.0s done
+#13 writing image sha256:d857d4caed83dad4393f6588cd7ced906c7ea43debb4e9b0cdea739285589f8a done
+#13 naming to docker.io/library/bwkt-catalog-api:prod done
+#13 DONE 7.0s
+
+#14 [catalog-api] resolving provenance for metadata file
+#14 DONE 0.0s
+
+#15 [webapp internal] load build definition from Dockerfile
+#15 transferring dockerfile: 534B done
+#15 DONE 0.0s
+
+#2 [webapp internal] load metadata for mcr.microsoft.com/dotnet/sdk:9.0-alpine
+#2 DONE 3.6s
+
+#3 [webapp internal] load metadata for mcr.microsoft.com/dotnet/aspnet:9.0-alpine
+#3 DONE 3.6s
+
+#16 [webapp internal] load .dockerignore
+#16 transferring context: 234B done
+#16 DONE 0.0s
+
+#5 [webapp build 1/4] FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine@sha256:430bd56f4348f9dd400331f0d71403554ec83ae1700a7dcfe1e1519c9fd12174
+#5 DONE 0.0s
+
+#6 [webapp stage-1 1/3] FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine@sha256:d4bf3d8c8f0236341ddd93d15208152e26bc6dcc9d34c635351a3402c284137f
+#6 DONE 0.0s
+
+#7 [webapp stage-1 2/3] WORKDIR /app
+#7 CACHED
+
+#8 [webapp build 2/4] WORKDIR /src
+#8 CACHED
+
+#17 [webapp internal] load build context
+#17 transferring context: 2.99kB done
+#17 DONE 0.0s
+
+#18 [webapp build 3/4] COPY . .
+#18 DONE 0.0s
+
+#19 [webapp build 4/4] RUN dotnet restore  && dotnet publish -c Release -o /app/publish     -p:SelfContained=false     -p:PublishSingleFile=false     -p:PublishReadyToRun=false     -p:UseAppHost=false
+#19 0.821   Determining projects to restore...
+#19 1.198   Restored /src/bwkt-webapp.csproj (in 84 ms).
+#19 1.877   Determining projects to restore...
+#19 2.210   All projects are up-to-date for restore.
+#19 7.825 /src/Services/VideoService.cs(117,42): warning CS8600: Converting null literal or possible null value to non-nullable type. [/src/bwkt-webapp.csproj]
+#19 8.038   bwkt-webapp -> /src/bin/Release/net9.0/bwkt-webapp.dll
+#19 8.205   bwkt-webapp -> /app/publish/
+#19 DONE 8.3s
+
+#20 [webapp stage-1 3/3] COPY --from=build /app/publish .
+#20 DONE 0.0s
+
+#21 [webapp] exporting to image
+#21 exporting layers
+#21 exporting layers 0.4s done
+#21 writing image sha256:485551d6c9228584afe897e92b5429bb1d530e85e846ac4bfbcc71f841cff506
+#21 writing image sha256:485551d6c9228584afe897e92b5429bb1d530e85e846ac4bfbcc71f841cff506 done
+#21 naming to docker.io/library/bwkt-webapp:prod done
+#21 DONE 0.9s
+
+#22 [webapp] resolving provenance for metadata file
+#22 DONE 0.0s
+ catalog-api  Built
+ webapp  Built
+
+## Image sizes
+bwkt-catalog-api     dev       b85e733ec335   2 days ago       365MB
+bwkt-catalog-api     prod      d857d4caed83   19 seconds ago   476MB
+bwkt-webapp          dev       b335af19e1a6   2 hours ago      276MB
+bwkt-webapp          prod      485551d6c922   2 seconds ago    114MB
+
+## Layer history — bwkt-webapp:prod
+IMAGE          CREATED          CREATED BY                                      SIZE      COMMENT
+485551d6c922   2 seconds ago    ENTRYPOINT ["dotnet" "bwkt-webapp.dll"]         0B        buildkit.dockerfile.v0
+<missing>      2 seconds ago    EXPOSE map[8080/tcp:{}]                         0B        buildkit.dockerfile.v0
+<missing>      2 seconds ago    ENV ASPNETCORE_URLS=http://0.0.0.0:8080         0B        buildkit.dockerfile.v0
+<missing>      2 seconds ago    COPY /app/publish . # buildkit                  475kB     buildkit.dockerfile.v0
+<missing>      18 minutes ago   WORKDIR /app                                    0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      COPY /dotnet /usr/share/dotnet # buildkit       24.7MB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      ENV ASPNET_VERSION=9.0.8                        0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      RUN /bin/sh -c ln -s /usr/share/dotnet/dotne…   0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      COPY /dotnet /usr/share/dotnet # buildkit       78.1MB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      ENV DOTNET_VERSION=9.0.8                        0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      RUN /bin/sh -c addgroup         --gid=$APP_U…   3.03kB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      RUN /bin/sh -c apk add --upgrade --no-cache …   2.97MB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      ENV APP_UID=1654 ASPNETCORE_HTTP_PORTS=8080 …   0B        buildkit.dockerfile.v0
+<missing>      7 weeks ago      CMD ["/bin/sh"]                                 0B        buildkit.dockerfile.v0
+<missing>      7 weeks ago      ADD alpine-minirootfs-3.21.4-x86_64.tar.gz /…   7.82MB    buildkit.dockerfile.v0
+
+## Layer history — bwkt-catalog-api:prod
+IMAGE          CREATED          CREATED BY                                      SIZE      COMMENT
+d857d4caed83   19 seconds ago   ENTRYPOINT ["dotnet" "catalog-api.dll"]         0B        buildkit.dockerfile.v0
+<missing>      19 seconds ago   EXPOSE map[8080/tcp:{}]                         0B        buildkit.dockerfile.v0
+<missing>      19 seconds ago   ENV ASPNETCORE_URLS=http://0.0.0.0:8080         0B        buildkit.dockerfile.v0
+<missing>      19 seconds ago   COPY /app/publish . # buildkit                  363MB     buildkit.dockerfile.v0
+<missing>      18 minutes ago   WORKDIR /app                                    0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      COPY /dotnet /usr/share/dotnet # buildkit       24.7MB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      ENV ASPNET_VERSION=9.0.8                        0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      RUN /bin/sh -c ln -s /usr/share/dotnet/dotne…   0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      COPY /dotnet /usr/share/dotnet # buildkit       78.1MB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      ENV DOTNET_VERSION=9.0.8                        0B        buildkit.dockerfile.v0
+<missing>      4 weeks ago      RUN /bin/sh -c addgroup         --gid=$APP_U…   3.03kB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      RUN /bin/sh -c apk add --upgrade --no-cache …   2.97MB    buildkit.dockerfile.v0
+<missing>      4 weeks ago      ENV APP_UID=1654 ASPNETCORE_HTTP_PORTS=8080 …   0B        buildkit.dockerfile.v0
+<missing>      7 weeks ago      CMD ["/bin/sh"]                                 0B        buildkit.dockerfile.v0
+<missing>      7 weeks ago      ADD alpine-minirootfs-3.21.4-x86_64.tar.gz /…   7.82MB    buildkit.dockerfile.v0
+
+## Package bundle
++ scripts/package-docker.sh
+[1/4] Building images with prod overrides (Release)…
+time="2025-09-08T10:49:02-06:00" level=warning msg="Docker Compose is configured to build using Bake, but buildx isn't installed"
+#0 building with "default" instance using docker driver
+
+#1 [catalog-api internal] load build definition from Dockerfile
+#1 transferring dockerfile:
+#1 transferring dockerfile: 534B done
+#1 DONE 0.6s
+
+#2 [catalog-api internal] load metadata for mcr.microsoft.com/dotnet/sdk:9.0-alpine
+#2 ...
+
+#3 [catalog-api internal] load metadata for mcr.microsoft.com/dotnet/aspnet:9.0-alpine
+#3 DONE 0.2s
+
+#2 [catalog-api internal] load metadata for mcr.microsoft.com/dotnet/sdk:9.0-alpine
+#2 DONE 0.3s
+
+#4 [catalog-api internal] load .dockerignore
+#4 transferring context: 213B done
+#4 DONE 0.3s
+
+#5 [catalog-api internal] load build context
+#5 DONE 0.0s
+
+#6 [catalog-api build 1/4] FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine@sha256:430bd56f4348f9dd400331f0d71403554ec83ae1700a7dcfe1e1519c9fd12174
+#6 DONE 0.0s
+
+#7 [catalog-api stage-1 1/3] FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine@sha256:d4bf3d8c8f0236341ddd93d15208152e26bc6dcc9d34c635351a3402c284137f
+#7 DONE 0.0s
+
+#5 [catalog-api internal] load build context
+#5 transferring context: 17.49MB 1.1s done
+#5 DONE 1.6s
+
+#8 [catalog-api stage-1 2/3] WORKDIR /app
+#8 CACHED
+
+#9 [catalog-api build 2/4] WORKDIR /src
+#9 CACHED
+
+#10 [catalog-api build 3/4] COPY . .
+#10 CACHED
+
+#11 [catalog-api build 4/4] RUN dotnet restore  && dotnet publish -c Release -o /app/publish     -p:SelfContained=false     -p:PublishSingleFile=false     -p:PublishReadyToRun=false     -p:UseAppHost=false
+#11 CACHED
+
+#12 [catalog-api stage-1 3/3] COPY --from=build /app/publish .
+#12 CACHED
+
+#13 [catalog-api] exporting to image
+#13 exporting layers done
+#13 writing image sha256:d857d4caed83dad4393f6588cd7ced906c7ea43debb4e9b0cdea739285589f8a done
+#13 naming to docker.io/library/bwkt-catalog-api:prod done
+#13 DONE 0.0s
+
+#14 [catalog-api] resolving provenance for metadata file
+#14 DONE 0.0s
+
+#15 [webapp internal] load build definition from Dockerfile
+#15 transferring dockerfile: 534B done
+#15 DONE 0.0s
+
+#3 [webapp internal] load metadata for mcr.microsoft.com/dotnet/aspnet:9.0-alpine
+#3 ...
+
+#2 [webapp internal] load metadata for mcr.microsoft.com/dotnet/sdk:9.0-alpine
+#2 DONE 0.5s
+
+#3 [webapp internal] load metadata for mcr.microsoft.com/dotnet/aspnet:9.0-alpine
+#3 DONE 0.4s
+
+#16 [webapp internal] load .dockerignore
+#16 transferring context: 234B done
+#16 DONE 0.0s
+
+#7 [webapp stage-1 1/3] FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine@sha256:d4bf3d8c8f0236341ddd93d15208152e26bc6dcc9d34c635351a3402c284137f
+#7 DONE 0.0s
+
+#6 [webapp build 1/4] FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine@sha256:430bd56f4348f9dd400331f0d71403554ec83ae1700a7dcfe1e1519c9fd12174
+#6 DONE 0.0s
+
+#17 [webapp internal] load build context
+#17 transferring context: 2.48kB done
+#17 DONE 0.0s
+
+#9 [webapp build 2/4] WORKDIR /src
+#9 CACHED
+
+#8 [webapp stage-1 2/3] WORKDIR /app
+#8 CACHED
+
+#18 [webapp build 3/4] COPY . .
+#18 CACHED
+
+#19 [webapp build 4/4] RUN dotnet restore  && dotnet publish -c Release -o /app/publish     -p:SelfContained=false     -p:PublishSingleFile=false     -p:PublishReadyToRun=false     -p:UseAppHost=false
+#19 CACHED
+
+#20 [webapp stage-1 3/3] COPY --from=build /app/publish .
+#20 CACHED
+
+#21 [webapp] exporting to image
+#21 exporting layers done
+#21 writing image sha256:485551d6c9228584afe897e92b5429bb1d530e85e846ac4bfbcc71f841cff506 done
+#21 naming to docker.io/library/bwkt-webapp:prod done
+#21 DONE 0.0s
+
+#22 [webapp] resolving provenance for metadata file
+#22 DONE 0.0s
+ catalog-api  Built
+ webapp  Built
+[2/4] Saving images to tar files…
+[3/4] Staging compose files and run script…
+- Including seed catalog: /home/gctrindade/programming/bwkt-webapp/webapp/data/videos.json
+[4/4] Creating bundle archive…
+
+Bundle created: /home/gctrindade/programming/bwkt-webapp/dist/bwkt-docker-20250908-104902.tar.gz
+Contents:
+total 611M
+-rw------- 1 root root 502M Sep  8 10:49 catalog-api-image.tar
+-rw-r--r-- 1 root root 1.2K Sep  8 10:49 docker-compose.prod.yml
+-rw-r--r-- 1 root root 1.9K Sep  8 10:49 docker-compose.yml
+-rwxr-xr-x 1 root root 2.4K Sep  8 10:49 run.sh
+-rw-r--r-- 1 root root  65K Sep  8 10:49 videos.json
+-rw------- 1 root root 110M Sep  8 10:49 webapp-image.tar
+
+Next: copy to server and run run.sh there, or use scripts/deploy-to-server.sh user@host /opt/bwkt /home/gctrindade/programming/bwkt-webapp/dist/bwkt-docker-20250908-104902.tar.gz
+
+## Latest bundle size
+-rw-r--r-- 1 root root 130M Sep  8 10:49 /home/gctrindade/programming/bwkt-webapp/dist/bwkt-docker-20250908-104902.tar.gz
+
+Done. Output written to: docs/logs/docker-sizes-2025-09-08.txt

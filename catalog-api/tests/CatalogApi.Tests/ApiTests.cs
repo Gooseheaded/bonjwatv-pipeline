@@ -33,6 +33,7 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
                 var dict = new Dictionary<string, string?>
                 {
                     ["Data:JsonPath"] = path,
+                    ["Data:VideosStorePath"] = path,
                     ["Data:RatingsPath"] = ratingsPath,
                     ["Data:SubtitlesRoot"] = subsRoot,
                     ["Data:SubmissionsPath"] = submissionsPath,
@@ -132,7 +133,9 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         form.Add(new StringContent("abc123"), "videoId");
         form.Add(new StringContent("1"), "version");
         form.Add(new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(srt)), "file", "sub.srt");
-        var post = await client.PostAsync("/api/uploads/subtitles", form);
+        var upReq = new HttpRequestMessage(HttpMethod.Post, "/api/uploads/subtitles") { Content = form };
+        upReq.Headers.Add("X-Api-Key", "TOKEN1");
+        var post = await client.SendAsync(upReq);
         post.EnsureSuccessStatusCode();
         var j = await post.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(j.TryGetProperty("storage_key", out var key));
@@ -187,7 +190,9 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         content.Add(new StringContent("xyz123"), "videoId");
         content.Add(new StringContent("1"), "version");
         content.Add(new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nOK\n")), "file", "x.srt");
-        var up = await client.PostAsync("/api/uploads/subtitles", content);
+        var upReq2 = new HttpRequestMessage(HttpMethod.Post, "/api/uploads/subtitles") { Content = content };
+        upReq2.Headers.Add("X-Api-Key", "TOKEN1");
+        var up = await client.SendAsync(upReq2);
         up.EnsureSuccessStatusCode();
         var upJson = await up.Content.ReadFromJsonAsync<JsonElement>();
         var storageKey = upJson.GetProperty("storage_key").GetString();
@@ -272,6 +277,7 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
                 var dict = new Dictionary<string, string?>
                 {
                     ["Data:JsonPath"] = vidsPath,
+                    ["Data:VideosStorePath"] = vidsPath,
                     ["Data:RatingsPath"] = ratingsPath,
                     ["Data:SubtitlesRoot"] = subsRoot,
                     ["Data:SubmissionsPath"] = submissionsPath,
@@ -288,7 +294,9 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         up.Add(new StringContent("rej001"), "videoId");
         up.Add(new StringContent("1"), "version");
         up.Add(new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nDEL\n")), "file", "d.srt");
-        var respUp = await client.PostAsync("/api/uploads/subtitles", up);
+        var upReq3 = new HttpRequestMessage(HttpMethod.Post, "/api/uploads/subtitles") { Content = up };
+        upReq3.Headers.Add("X-Api-Key", "TOKEN1");
+        var respUp = await client.SendAsync(upReq3);
         respUp.EnsureSuccessStatusCode();
         var storageKey = (await respUp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("storage_key").GetString();
 
@@ -327,6 +335,7 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
                 var dict = new Dictionary<string, string?>
                 {
                     ["Data:JsonPath"] = vidsPath,
+                    ["Data:VideosStorePath"] = vidsPath,
                     ["Data:RatingsPath"] = ratingsPath,
                     ["Data:SubtitlesRoot"] = subsRoot,
                     ["Data:SubmissionsPath"] = submissionsPath,
@@ -343,7 +352,9 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         up.Add(new StringContent("keep001"), "videoId");
         up.Add(new StringContent("1"), "version");
         up.Add(new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nKEEP\n")), "file", "k.srt");
-        var respUp = await client.PostAsync("/api/uploads/subtitles", up);
+        var upReq4 = new HttpRequestMessage(HttpMethod.Post, "/api/uploads/subtitles") { Content = up };
+        upReq4.Headers.Add("X-Api-Key", "TOKEN1");
+        var respUp = await client.SendAsync(upReq4);
         respUp.EnsureSuccessStatusCode();
         var storageKey = (await respUp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("storage_key").GetString();
 

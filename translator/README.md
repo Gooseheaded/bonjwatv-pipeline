@@ -25,6 +25,31 @@ python pipeline_orchestrator.py --config pipeline-config.json
 - The GUI allows selecting a transcription provider (`local` or `openai`).
 - Note: On Linux you may need Tkinter installed (e.g., `sudo apt-get install python3-tk`).
 
+## Submitting to bonjwa.tv (Catalog API)
+
+Use `submit_to_catalog.py` to upload the English SRT to the API and create a submission for review. Both upload and submission require an ingest token via the `X-Api-Key` header.
+
+Local dev example:
+
+```
+# 1) Set an ingest token for the API (.env at repo root), rebuild, and start:
+#    echo "API_INGEST_TOKENS=DEV123" >> .env
+#    docker compose up --build
+# 2) Submit using the same token and your local API base:
+python submit_to_catalog.py \
+  --catalog-base http://localhost:5002 \
+  --api-key DEV123 \
+  --videos-json /path/to/videos_enriched.json \
+  --subtitles-dir /path/to/subtitles
+```
+
+Notes:
+- The GUI exposes fields for "bonjwa.tv URL" and "Ingest token"; it calls this script under the hood.
+- The script prefers `videos_enriched.json` in the run-root when available.
+- If you see `403 Forbidden` during upload or submission, verify:
+  - You passed `--api-key` and it matches one of the API's `API_INGEST_TOKENS` values.
+  - The API is reachable at `--catalog-base` (e.g., `http://localhost:5002`).
+
 ## Workflows
 
 This project supports two primary workflows for subtitle processing: a default URL-list pipeline and a simple ad-hoc folder translation.

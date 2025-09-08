@@ -1,0 +1,22 @@
+[
+  {
+    "v": "file001",
+    "title": "Delta",
+    "tags": [
+      "t"
+    ],
+    "subtitleUrl": "/api/subtitles/file001/1.srt",
+    "submitter": "TOKEN1",
+    "submissionDate": "2025-09-08"
+  },
+  {
+    "v": "abc123",
+    "title": "Alpha",
+    "tags": [
+      "z"
+    ],
+    "subtitleUrl": "/api/subtitles/abc123/1.srt",
+    "submitter": "TOKEN1",
+    "submissionDate": "2025-09-08"
+  }
+]
