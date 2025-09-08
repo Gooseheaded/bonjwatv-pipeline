@@ -14,32 +14,22 @@ namespace bwkt_webapp.Tests
 {
     public class IntegrationPaginationTests
     {
-        private static string PrepareIsolatedContentRootWithVideos(int count)
-        {
-            var testDataRoot = Path.Combine(Path.GetTempPath(), "bwkt-tests-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path.Combine(testDataRoot, "data"));
-            var path = Path.Combine(testDataRoot, "data", "videos.json");
-            var items = Enumerable.Range(1, count).Select(i => new
-            {
-                v = $"vid{i:D3}",
-                title = $"Video {i:D3}",
-                description = "d",
-                creator = "C",
-                subtitleUrl = "http://example.com",
-                tags = new[] { "z" }
-            });
-            var json = JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = false });
-            File.WriteAllText(path, json, Encoding.UTF8);
-            return testDataRoot;
-        }
+        private static bwkt_webapp.Models.VideoInfo[] MakeVideos(int count) =>
+            Enumerable.Range(1, count)
+                .Select(i => new bwkt_webapp.Models.VideoInfo { VideoId = $"vid{i:D3}", Title = $"Video {i:D3}", SubtitleUrl = "http://example.com", Creator = "C", Tags = new []{"z"} })
+                .ToArray();
 
         [Fact]
         public async Task Index_Paginates_Items_Based_On_Query()
         {
-            var contentRoot = PrepareIsolatedContentRootWithVideos(30);
             await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             {
-                builder.UseContentRoot(contentRoot);
+                builder.ConfigureServices(services =>
+                {
+                    var vs = services.FirstOrDefault(d => d.ServiceType == typeof(bwkt_webapp.Services.IVideoService));
+                    if (vs != null) services.Remove(vs);
+                    services.AddSingleton<bwkt_webapp.Services.IVideoService>(new FakeVideoService(MakeVideos(30)));
+                });
             });
             var client = factory.CreateClient();
 
@@ -61,10 +51,14 @@ namespace bwkt_webapp.Tests
         [Fact]
         public async Task Search_Paginates_And_Preserves_Query()
         {
-            var contentRoot = PrepareIsolatedContentRootWithVideos(25);
             await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             {
-                builder.UseContentRoot(contentRoot);
+                builder.ConfigureServices(services =>
+                {
+                    var vs = services.FirstOrDefault(d => d.ServiceType == typeof(bwkt_webapp.Services.IVideoService));
+                    if (vs != null) services.Remove(vs);
+                    services.AddSingleton<bwkt_webapp.Services.IVideoService>(new FakeVideoService(MakeVideos(25)));
+                });
             });
             var client = factory.CreateClient();
 

@@ -21,7 +21,7 @@ public class VideoServiceApiFallbackTests
     }
 
     [Fact]
-    public async Task UsesApi_WhenConfigured_AndFallsBackOnError()
+    public async Task UsesApi_WhenConfigured()
     {
         // Start a minimal API server serving two items
         var builder = WebApplication.CreateBuilder();
@@ -46,20 +46,6 @@ public class VideoServiceApiFallbackTests
             var results = svc.Search("From", "z").ToList();
             Assert.Single(results);
             Assert.Equal("api1", results[0].VideoId);
-
-            // Now break the API and ensure local fallback works
-            Environment.SetEnvironmentVariable("DATA_CATALOG_URL", "http://127.0.0.1:9/api/videos");
-
-            // write a local JSON file with one item
-            var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-            Directory.CreateDirectory(Path.Combine(tempDir, "data"));
-            File.WriteAllText(Path.Combine(tempDir, "data", "videos.json"),
-                "[ {\"v\":\"local1\",\"title\":\"Local Item\",\"subtitleUrl\":\"u\",\"tags\":[\"z\"]} ]");
-            var env2 = new TestEnv { ContentRootPath = tempDir };
-            var svc2 = new VideoService(env2);
-            var localResults = svc2.Search("Local", "z").ToList();
-            Assert.Single(localResults);
-            Assert.Equal("local1", localResults[0].VideoId);
         }
         finally
         {

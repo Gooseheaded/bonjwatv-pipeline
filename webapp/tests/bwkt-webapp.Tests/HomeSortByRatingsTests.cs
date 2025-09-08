@@ -34,21 +34,20 @@ namespace bwkt_webapp.Tests
         [Fact]
         public async Task Homepage_Sorts_By_Ratings_Descending()
         {
-            var contentRoot = PrepareVideos();
-
-            try
+            await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             {
-                await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+                builder.ConfigureServices(services =>
                 {
-                    builder.UseContentRoot(contentRoot);
-                    builder.ConfigureServices(services =>
-                    {
-                        // Remove existing IRatingsClient registration, then inject a fake
-                        var toRemove = services.FirstOrDefault(d => d.ServiceType == typeof(bwkt_webapp.Services.IRatingsClient));
-                        if (toRemove != null) services.Remove(toRemove);
-                        services.AddSingleton<bwkt_webapp.Services.IRatingsClient>(new FakeRatingsClient());
-                    });
+                    // Replace ratings client with fake
+                    var rc = services.FirstOrDefault(d => d.ServiceType == typeof(bwkt_webapp.Services.IRatingsClient));
+                    if (rc != null) services.Remove(rc);
+                    services.AddSingleton<bwkt_webapp.Services.IRatingsClient>(new FakeRatingsClient());
+                    // Replace video service with fake data set
+                    var vs = services.FirstOrDefault(d => d.ServiceType == typeof(bwkt_webapp.Services.IVideoService));
+                    if (vs != null) services.Remove(vs);
+                    services.AddSingleton<bwkt_webapp.Services.IVideoService>(new FakeVideoService());
                 });
+            });
                 var client = factory.CreateClient();
                 var res = await client.GetAsync("/");
                 res.EnsureSuccessStatusCode();
@@ -59,13 +58,9 @@ namespace bwkt_webapp.Tests
                 var idxB = html.IndexOf("img.youtube.com/vi/vidB/hqdefault.jpg", StringComparison.Ordinal);
                 var idxA = html.IndexOf("img.youtube.com/vi/vidA/hqdefault.jpg", StringComparison.Ordinal);
                 Assert.True(idxC >= 0 && idxB > idxC && idxA > idxB, $"Order wrong: C({idxC}) B({idxB}) A({idxA})\nHTML: {html}");
-            }
-            finally
-            {
-                Environment.SetEnvironmentVariable("DATA_CATALOG_URL", null);
-                Environment.SetEnvironmentVariable("HOMEPAGE_RATINGS_BASE_URL", null);
-                Environment.SetEnvironmentVariable("CATALOG_API_BASE_URL", null);
-            }
+            Environment.SetEnvironmentVariable("DATA_CATALOG_URL", null);
+            Environment.SetEnvironmentVariable("HOMEPAGE_RATINGS_BASE_URL", null);
+            Environment.SetEnvironmentVariable("CATALOG_API_BASE_URL", null);
         }
 
         private class FakeRatingsClient : bwkt_webapp.Services.IRatingsClient
@@ -78,5 +73,22 @@ namespace bwkt_webapp.Tests
                 _ => (0, 0, 0)
             };
         }
+    }
+}
+
+namespace bwkt_webapp.Tests
+{
+    internal class FakeVideoService : bwkt_webapp.Services.IVideoService
+    {
+        private readonly bwkt_webapp.Models.VideoInfo[] _videos = new []
+        {
+            new bwkt_webapp.Models.VideoInfo { VideoId = "vidA", Title = "Alpha", SubtitleUrl = "u", Tags = new []{"z"} },
+            new bwkt_webapp.Models.VideoInfo { VideoId = "vidB", Title = "Beta", SubtitleUrl = "u", Tags = new []{"z"} },
+            new bwkt_webapp.Models.VideoInfo { VideoId = "vidC", Title = "Gamma", SubtitleUrl = "u", Tags = new []{"z"} },
+        };
+        public IEnumerable<bwkt_webapp.Models.VideoInfo> GetAll() => _videos;
+        public bwkt_webapp.Models.VideoInfo? GetById(string videoId) => _videos.FirstOrDefault(v => v.VideoId == videoId);
+        public IEnumerable<bwkt_webapp.Models.VideoInfo> Search(string query) => _videos;
+        public IEnumerable<bwkt_webapp.Models.VideoInfo> Search(string query, string? race) => _videos;
     }
 }
