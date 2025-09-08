@@ -63,11 +63,11 @@ def run_build_videos_json(
                 or details.get("creator")
                 or ""
             )
+            # Only use translated sources for English title; do not backfill with original title.
             en_title = (
                 item.get("EN Title")
                 or item.get("title_en")
                 or title_cache.get("title_en")
-                or details.get("title")
                 or ""
             )
             # merge

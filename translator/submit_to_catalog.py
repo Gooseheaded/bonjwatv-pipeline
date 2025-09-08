@@ -63,13 +63,38 @@ def http_post_multipart(url: str, fields: Dict[str, str], file_field: str, file_
         return json.loads(resp.read().decode("utf-8"))
 
 
-def choose_title(item: Dict[str, Any]) -> str:
-    return (
+def _load_cached_title_en(base_dir: str, vid: str) -> Optional[str]:
+    """Try to load title_en from a local cache next to the provided videos_json.
+
+    This makes submit robust even if a non-enriched videos.json is passed.
+    """
+    try:
+        cache_file = os.path.join(base_dir, ".cache", f"title_{vid}.json")
+        if os.path.exists(cache_file):
+            data = json.load(open(cache_file, encoding="utf-8"))
+            t = (data.get("title_en") or "").strip()
+            return t or None
+    except Exception:
+        pass
+    return None
+
+
+def choose_title(item: Dict[str, Any], base_dir: Optional[str], vid: str) -> str:
+    # Prefer enriched fields
+    t = (
         item.get("EN Title")
         or item.get("title_en")
         or item.get("title")
         or ""
     )
+    if t:
+        return t
+    # Fallback: consult local cache if available (run-root/.cache/title_{vid}.json)
+    if base_dir:
+        cached = _load_cached_title_en(base_dir, vid)
+        if cached:
+            return cached
+    return ""
 
 
 def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -> bool:
@@ -82,6 +107,7 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
 
     headers = {"X-Api-Key": api_key}
     ok_all = True
+    base_dir = os.path.dirname(os.path.abspath(videos_json))
     for item in items:
         vid = item.get("v") or item.get("videoId") or item.get("id")
         if not vid:
@@ -122,7 +148,10 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
         # 2) Submit video proposal
         try:
             sub_url = f"{catalog_base.rstrip('/')}/api/submissions/videos"
-            title = choose_title(item) or f"Video {vid}"
+            title = choose_title(item, base_dir=base_dir, vid=vid)
+            if not title:
+                _print(f"WARN: No translated title found for {vid}; using fallback.")
+                title = f"Video {vid}"
             # Coerce tags to list[str]
             raw_tags = item.get("tags") or []
             tags: List[str] = []

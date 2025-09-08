@@ -551,8 +551,9 @@ class App(tk.Tk):
                     if not catalog_base or not token:
                         self.after(0, lambda: self.log_line("bonjwa.tv URL or token missing; skipping submit."))
                         return
-                    # Prefer enriched videos JSON (built alongside the input .txt)
-                    enriched_videos = os.path.join(os.path.dirname(os.path.abspath(videos_file)), "videos_enriched.json")
+                    # Prefer enriched videos JSON built in the run-root next to the derived videos.json
+                    run_videos_dir = os.path.dirname(os.path.abspath(run_dirs["video_list_file"]))
+                    enriched_videos = os.path.join(run_videos_dir, "videos_enriched.json")
                     videos_json = enriched_videos if os.path.exists(enriched_videos) else run_dirs["video_list_file"]
                     cmd = [
                         sys.executable,
