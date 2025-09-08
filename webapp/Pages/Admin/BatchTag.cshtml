@@ -1,0 +1,76 @@
+@page
+@model bwkt_webapp.Pages.Admin.BatchTagModel
+@{
+    ViewData["Title"] = "Admin — Batch Tag";
+}
+
+<h1>Batch-Tagging Tool</h1>
+
+@if (!Model.IsAdmin)
+{
+    <div class="alert alert-warning">You do not have access to this page.</div>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <div class="alert alert-danger">@Model.Error</div>
+    }
+    @if (!string.IsNullOrEmpty(Model.Info))
+    {
+        <div class="alert alert-info">@Model.Info</div>
+    }
+
+    <form method="post">
+        <div class="mb-3">
+            <label for="videoIds" class="form-label">Video IDs (one per line)</label>
+            <textarea class="form-control" id="videoIds" name="videoIds" rows="8" placeholder="isIm67yGPzo&#10;abcDEF123">@Model.VideoIds</textarea>
+            <div class="form-text">Enter one YouTube video ID per line. Duplicates and blanks are ignored.</div>
+        </div>
+        <div class="mb-3">
+            <label for="tag" class="form-label">Tag</label>
+            <select class="form-select" id="tag" name="tag" asp-for="Tag">
+                <option value="">-- Select a tag --</option>
+                <option value="z">Zerg</option>
+                <option value="p">Protoss</option>
+                <option value="t">Terran</option>
+                <option value="story">Story time</option>
+                <option value="zvz">ZvZ</option>
+                <option value="zvt">ZvT</option>
+                <option value="zvp">ZvP</option>
+                <option value="pvz">PvZ</option>
+                <option value="pvt">PvT</option>
+                <option value="pvp">PvP</option>
+                <option value="tvz">TvZ</option>
+                <option value="tvt">TvT</option>
+                <option value="tvp">TvP</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Apply tag</button>
+        <a class="btn btn-link" asp-page="/Admin/Index">Back to Admin</a>
+    </form>
+
+    @if (Model.Results.Count > 0)
+    {
+        <h2 class="mt-4">Results</h2>
+        <table class="table table-sm table-striped">
+            <thead>
+                <tr>
+                    <th>Video Id</th>
+                    <th>Status</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var r in Model.Results)
+            {
+                <tr>
+                    <td>@r.VideoId</td>
+                    <td>@(r.Ok ? "OK" : "Error")</td>
+                    <td>@r.Message</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+}

@@ -28,6 +28,7 @@ namespace bwkt_webapp.Helpers
                 "tvt" => ("TvT", "bg-primary"),
                 "tvp" => ("TvP", "bg-primary"),
                 // Misc.
+                "story" => ("Story time", "bg-info"),
                 _   => (code ?? string.Empty, "bg-secondary"),
             };
     }
