@@ -58,6 +58,23 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Health_Returns_Ok()
+    {
+        var client = _factory.CreateClient();
+        var res = await client.GetFromJsonAsync<JsonElement>("/healthz");
+        Assert.True(res.TryGetProperty("ok", out var ok) && ok.GetBoolean());
+    }
+
+    [Fact]
+    public async Task GetVideoById_Returns_Item()
+    {
+        var client = _factory.CreateClient();
+        var dto = await client.GetFromJsonAsync<JsonElement>("/api/videos/a");
+        Assert.Equal("a", dto.GetProperty("id").GetString());
+        Assert.Equal("Alpha Z", dto.GetProperty("title").GetString());
+    }
+
+    [Fact]
     public async Task Ratings_Endpoint_Allows_Post_And_Summarizes()
     {
         var client = _factory.CreateClient();

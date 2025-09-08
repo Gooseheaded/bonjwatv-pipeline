@@ -25,6 +25,10 @@ if (app.Environment.IsDevelopment())
 app.UseForwardedHeaders();
 app.MapGet("/", () => Results.Redirect("/swagger"));
 
+// Health endpoint
+app.MapGet("/healthz", () => Results.Json(new { ok = true }))
+   .WithOpenApi(o => { o.Summary = "Health check"; return o; });
+
 app.MapGet("/api/videos", (
     [Microsoft.AspNetCore.Mvc.FromServices] VideoRepository repo,
     [Microsoft.AspNetCore.Mvc.FromServices] RatingsRepository ratings,
