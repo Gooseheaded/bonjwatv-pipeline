@@ -15,6 +15,8 @@ namespace bwkt_webapp.Pages.Admin
         public string? SubtitleText { get; private set; }
         public string? Submitter { get; private set; }
         public string? SubmissionDate { get; private set; }
+        public List<string> AllowedTags { get; } = new() { "z","p","t","story","zvz","zvt","zvp","pvz","pvt","pvp","tvz","tvt","tvp" };
+        public HashSet<string> SelectedTags { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
 
         public VideoModel(IVideoService videoService)
         {
@@ -48,6 +50,14 @@ namespace bwkt_webapp.Pages.Admin
                 var json = http.GetStringAsync(url).GetAwaiter().GetResult();
                 using var doc = JsonDocument.Parse(json);
                 Video = doc.RootElement.Clone();
+                try
+                {
+                    if (Video.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array)
+                    {
+                        SelectedTags = tg.EnumerateArray().Select(e => e.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    }
+                }
+                catch { }
 
                 // Load ratings summary (version 1)
                 try

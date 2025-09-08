@@ -482,6 +482,54 @@ app.MapDelete("/api/admin/videos/{id}", (string id) =>
     return Results.Ok(new { ok = true });
 }).WithOpenApi(o => { o.Summary = "Delete a video from catalog"; return o; });
 
+// Admin: manage tags (add/remove/set)
+app.MapPatch("/api/admin/videos/{id}/tags", async (string id, HttpRequest req) =>
+{
+    using var sr = new StreamReader(req.Body);
+    var body = await sr.ReadToEndAsync();
+    if (string.IsNullOrWhiteSpace(body)) return Results.BadRequest("Missing body");
+    try
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        var action = root.TryGetProperty("action", out var a) ? (a.GetString() ?? string.Empty).ToLowerInvariant() : string.Empty;
+        if (string.IsNullOrWhiteSpace(action)) return Results.BadRequest("Missing action");
+        List<string> tags = new();
+        if (string.Equals(action, "set", StringComparison.OrdinalIgnoreCase))
+        {
+            if (root.TryGetProperty("tags", out var arr) && arr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var el in arr.EnumerateArray())
+                {
+                    var s = el.GetString();
+                    if (!string.IsNullOrWhiteSpace(s)) tags.Add(s!);
+                }
+            }
+            SetTags(VideosStorePath(), id, tags);
+            return Results.Ok(new { ok = true, count = tags.Count });
+        }
+        else if (string.Equals(action, "add", StringComparison.OrdinalIgnoreCase))
+        {
+            var tag = root.TryGetProperty("tag", out var t) ? t.GetString() : null;
+            if (string.IsNullOrWhiteSpace(tag)) return Results.BadRequest("Missing tag");
+            AddTag(VideosStorePath(), id, tag!);
+            return Results.Ok(new { ok = true });
+        }
+        else if (string.Equals(action, "remove", StringComparison.OrdinalIgnoreCase))
+        {
+            var tag = root.TryGetProperty("tag", out var t) ? t.GetString() : null;
+            if (string.IsNullOrWhiteSpace(tag)) return Results.BadRequest("Missing tag");
+            RemoveTag(VideosStorePath(), id, tag!);
+            return Results.Ok(new { ok = true });
+        }
+        return Results.BadRequest("Unknown action");
+    }
+    catch
+    {
+        return Results.BadRequest("Invalid JSON");
+    }
+}).WithOpenApi(o => { o.Summary = "Add/remove/set tags for a video (admin)"; return o; });
+
 app.Run();
 
 // ----- Helpers (must remain before type declarations) -----
@@ -735,6 +783,81 @@ static void DeleteVideo(string jsonPath, string id)
         var next = list.Where(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) != id).ToList();
         var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
         File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(next, opts));
+    }
+    catch { }
+}
+
+static void SetTags(string jsonPath, string id, IEnumerable<string> tags)
+{
+    try
+    {
+        var full = Path.GetFullPath(jsonPath);
+        if (!File.Exists(full)) return;
+        var json = File.ReadAllText(full);
+        var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
+        var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
+        if (item == null) return;
+        var unique = tags.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        item["tags"] = unique;
+        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+        File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
+    }
+    catch { }
+}
+
+static void AddTag(string jsonPath, string id, string tag)
+{
+    try
+    {
+        var full = Path.GetFullPath(jsonPath);
+        if (!File.Exists(full)) return;
+        var json = File.ReadAllText(full);
+        var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
+        var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
+        if (item == null) return;
+        var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (item.TryGetValue("tags", out var tv) && tv is System.Text.Json.JsonElement jel && jel.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var el in jel.EnumerateArray())
+            {
+                var s = el.GetString(); if (!string.IsNullOrWhiteSpace(s)) existing.Add(s!);
+            }
+        }
+        else if (item.TryGetValue("tags", out var tv2) && tv2 is IEnumerable<object?> arr)
+        {
+            foreach (var o in arr) { var s = Convert.ToString(o); if (!string.IsNullOrWhiteSpace(s)) existing.Add(s!); }
+        }
+        existing.Add(tag);
+        item["tags"] = existing.ToArray();
+        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+        File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
+    }
+    catch { }
+}
+
+static void RemoveTag(string jsonPath, string id, string tag)
+{
+    try
+    {
+        var full = Path.GetFullPath(jsonPath);
+        if (!File.Exists(full)) return;
+        var json = File.ReadAllText(full);
+        var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
+        var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
+        if (item == null) return;
+        var existing = new List<string>();
+        if (item.TryGetValue("tags", out var tv) && tv is System.Text.Json.JsonElement jel && jel.ValueKind == JsonValueKind.Array)
+        {
+            existing = jel.EnumerateArray().Select(e => e.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+        }
+        else if (item.TryGetValue("tags", out var tv2) && tv2 is IEnumerable<object?> arr)
+        {
+            existing = arr.Select(o => Convert.ToString(o) ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+        }
+        existing = existing.Where(s => !string.Equals(s, tag, StringComparison.OrdinalIgnoreCase)).ToList();
+        item["tags"] = existing.ToArray();
+        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+        File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
     }
     catch { }
 }

@@ -366,6 +366,40 @@ app.MapPost("/admin/videos/{id}/delete", async (string id, HttpContext ctx) =>
     return Results.Redirect("/Admin?ok=1&status=deleted");
 });
 
+// Admin proxy: batch/individual tag management
+app.MapPatch("/admin/videos/{id}/tags", async (string id, HttpRequest req, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    using var sr = new StreamReader(req.Body);
+    var body = await sr.ReadToEndAsync();
+    using var http = new HttpClient();
+    using var msg = new HttpRequestMessage(HttpMethod.Patch, $"{apiBase}/admin/videos/{id}/tags")
+    {
+        Content = new StringContent(body ?? "{}", System.Text.Encoding.UTF8, "application/json")
+    };
+    var resp = await http.SendAsync(msg);
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    return Results.Ok(new { ok = true });
+});
+
+app.MapPost("/admin/videos/{id}/tags/set", async (string id, HttpRequest req, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    var form = await req.ReadFormAsync();
+    var tags = form["tags"].ToArray();
+    using var http = new HttpClient();
+    var payload = System.Text.Json.JsonSerializer.Serialize(new { action = "set", tags });
+    using var msg = new HttpRequestMessage(HttpMethod.Patch, $"{apiBase}/admin/videos/{id}/tags")
+    {
+        Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json")
+    };
+    var resp = await http.SendAsync(msg);
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    return Results.Redirect($"/Admin/Video?id={Uri.EscapeDataString(id)}&ok=1");
+});
+
 app.MapGet("/admin/submissions/{id}", async (string id, HttpContext ctx) =>
 {
     if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
