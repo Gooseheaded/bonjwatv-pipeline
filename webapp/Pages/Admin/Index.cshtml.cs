@@ -32,11 +32,25 @@ namespace bwkt_webapp.Pages.Admin
         {
             try
             {
+                // Prefer direct Catalog API call; fall back to same-origin proxy with cookie forwarding
                 var apiBase = DeriveApiBase();
-                if (string.IsNullOrWhiteSpace(apiBase)) return;
-                var url = $"{apiBase}/admin/ratings/recent?limit=100";
                 using var http = new HttpClient();
-                var json = http.GetStringAsync(url).GetAwaiter().GetResult();
+                string json;
+                if (!string.IsNullOrWhiteSpace(apiBase))
+                {
+                    var url = $"{apiBase}/admin/ratings/recent?limit=10";
+                    json = http.GetStringAsync(url).GetAwaiter().GetResult();
+                }
+                else
+                {
+                    var url = $"{Request.Scheme}://{Request.Host}/admin/ratings/recent?limit=10";
+                    using var msg = new HttpRequestMessage(HttpMethod.Get, url);
+                    var cookie = Request.Headers["Cookie"].ToString();
+                    if (!string.IsNullOrWhiteSpace(cookie)) msg.Headers.Add("Cookie", cookie);
+                    var resp = http.Send(msg);
+                    resp.EnsureSuccessStatusCode();
+                    json = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                }
                 var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var items = JsonSerializer.Deserialize<List<RatingEvent>>(json, opts) ?? new();
                 Events = items;
@@ -125,7 +139,8 @@ namespace bwkt_webapp.Pages.Admin
             catch { return null; }
         }
 
-        public record RatingEvent(string VideoId, int Version, string UserId, string? UserName, string Value, DateTimeOffset CreatedAt);
+        public enum RatingValue { red = 0, yellow = 1, green = 2 }
+        public record RatingEvent(string VideoId, int Version, string UserId, string? UserName, RatingValue Value, DateTimeOffset CreatedAt);
         public record SubmissionItem(string Id, string Status, DateTimeOffset SubmittedAt, string? SubmittedBy, string? YoutubeId, string? Title);
         public record HiddenItem(string Id, string Title, string? Reason, string? HiddenAt);
     }

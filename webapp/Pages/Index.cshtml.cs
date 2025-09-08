@@ -28,15 +28,13 @@ public class IndexModel : PageModel
         CurrentPage = pageNum < 1 ? 1 : pageNum;
         PageSize = pageSize < 1 ? 1 : (pageSize > 100 ? 100 : pageSize);
 
-        var all = _videoService.GetAll().ToList();
-        // Sort by ratings score (desc), then by total ratings (desc), then title
-        var scored = ScoreAndSort(all);
-        all = scored.ToList();
-        TotalCount = all.Count;
+        var (items, total) = _videoService.GetPaged(CurrentPage, PageSize);
+        // Sort the returned page by ratings score for a stable UX
+        var scoredPage = ScoreAndSort(items.ToList());
+        TotalCount = total;
         TotalPages = Math.Max(1, (int)Math.Ceiling(TotalCount / (double)PageSize));
         if (CurrentPage > TotalPages) CurrentPage = TotalPages;
-
-        Videos = all.Skip((CurrentPage - 1) * PageSize).Take(PageSize);
+        Videos = scoredPage;
     }
 
     private IEnumerable<VideoInfo> ScoreAndSort(List<VideoInfo> videos)

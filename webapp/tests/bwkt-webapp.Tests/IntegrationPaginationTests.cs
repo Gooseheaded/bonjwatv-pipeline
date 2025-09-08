@@ -28,7 +28,7 @@ namespace bwkt_webapp.Tests
                 {
                     var vs = services.FirstOrDefault(d => d.ServiceType == typeof(bwkt_webapp.Services.IVideoService));
                     if (vs != null) services.Remove(vs);
-                    services.AddSingleton<bwkt_webapp.Services.IVideoService>(new FakeVideoService(MakeVideos(30)));
+                    services.AddSingleton<bwkt_webapp.Services.IVideoService>(new ParamFakeVideoService(MakeVideos(30)));
                 });
             });
             var client = factory.CreateClient();
@@ -57,7 +57,7 @@ namespace bwkt_webapp.Tests
                 {
                     var vs = services.FirstOrDefault(d => d.ServiceType == typeof(bwkt_webapp.Services.IVideoService));
                     if (vs != null) services.Remove(vs);
-                    services.AddSingleton<bwkt_webapp.Services.IVideoService>(new FakeVideoService(MakeVideos(25)));
+                    services.AddSingleton<bwkt_webapp.Services.IVideoService>(new ParamFakeVideoService(MakeVideos(25)));
                 });
             });
             var client = factory.CreateClient();
@@ -70,6 +70,29 @@ namespace bwkt_webapp.Tests
             Assert.Contains("img.youtube.com/vi/vid025/hqdefault.jpg", html);
             Assert.DoesNotContain("img.youtube.com/vi/vid001/hqdefault.jpg", html);
             Assert.DoesNotContain("img.youtube.com/vi/vid011/hqdefault.jpg", html);
+        }
+    }
+}
+
+namespace bwkt_webapp.Tests
+{
+    internal class ParamFakeVideoService : bwkt_webapp.Services.IVideoService
+    {
+        private readonly IEnumerable<bwkt_webapp.Models.VideoInfo> _videos;
+        public ParamFakeVideoService(IEnumerable<bwkt_webapp.Models.VideoInfo> videos) { _videos = videos; }
+        public IEnumerable<bwkt_webapp.Models.VideoInfo> GetAll() => _videos;
+        public bwkt_webapp.Models.VideoInfo? GetById(string videoId) => _videos.FirstOrDefault(v => v.VideoId == videoId);
+        public IEnumerable<bwkt_webapp.Models.VideoInfo> Search(string query) => _videos;
+        public IEnumerable<bwkt_webapp.Models.VideoInfo> Search(string query, string? race) => _videos;
+        public (IEnumerable<bwkt_webapp.Models.VideoInfo> Items, int TotalCount) GetPaged(int page, int pageSize)
+        {
+            var list = _videos.ToList();
+            return (list.Skip((Math.Max(1,page)-1)*pageSize).Take(pageSize), list.Count);
+        }
+        public (IEnumerable<bwkt_webapp.Models.VideoInfo> Items, int TotalCount) SearchPaged(string query, string? race, int page, int pageSize)
+        {
+            var list = _videos.ToList();
+            return (list.Skip((Math.Max(1,page)-1)*pageSize).Take(pageSize), list.Count);
         }
     }
 }

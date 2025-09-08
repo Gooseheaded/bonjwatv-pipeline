@@ -90,5 +90,15 @@ namespace bwkt_webapp.Tests
         public bwkt_webapp.Models.VideoInfo? GetById(string videoId) => _videos.FirstOrDefault(v => v.VideoId == videoId);
         public IEnumerable<bwkt_webapp.Models.VideoInfo> Search(string query) => _videos;
         public IEnumerable<bwkt_webapp.Models.VideoInfo> Search(string query, string? race) => _videos;
+        public (IEnumerable<bwkt_webapp.Models.VideoInfo> Items, int TotalCount) GetPaged(int page, int pageSize)
+        {
+            var list = _videos.ToList();
+            return (list.Skip((Math.Max(1,page)-1)*pageSize).Take(pageSize), list.Count);
+        }
+        public (IEnumerable<bwkt_webapp.Models.VideoInfo> Items, int TotalCount) SearchPaged(string query, string? race, int page, int pageSize)
+        {
+            var list = _videos.ToList();
+            return (list.Skip((Math.Max(1,page)-1)*pageSize).Take(pageSize), list.Count);
+        }
     }
 }

@@ -46,11 +46,11 @@ namespace bwkt_webapp.Pages
             }
 
             var raceParam = SelectedRace == "all" ? null : SelectedRace;
-            var all = _videoService.Search(Query, raceParam).ToList();
-            TotalCount = all.Count;
+            var (items, total) = _videoService.SearchPaged(Query, raceParam, CurrentPage, PageSize);
+            TotalCount = total;
             TotalPages = Math.Max(1, (int)Math.Ceiling(TotalCount / (double)PageSize));
             if (CurrentPage > TotalPages) CurrentPage = TotalPages;
-            Videos = all.Skip((CurrentPage - 1) * PageSize).Take(PageSize);
+            Videos = items;
         }
 
         private static string NormalizeRace(string value)

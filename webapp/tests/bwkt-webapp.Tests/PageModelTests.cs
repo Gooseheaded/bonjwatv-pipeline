@@ -24,6 +24,18 @@ namespace bwkt_webapp.Tests
                 : _videos.Where(v => v.Title.Contains(query, StringComparison.OrdinalIgnoreCase));
             public IEnumerable<VideoInfo> Search(string query, string? race)
                 => Search(query);
+            public (IEnumerable<VideoInfo> Items, int TotalCount) GetPaged(int page, int pageSize)
+            {
+                var total = _videos.Count;
+                var items = _videos.Skip((Math.Max(1,page)-1)*pageSize).Take(pageSize);
+                return (items, total);
+            }
+            public (IEnumerable<VideoInfo> Items, int TotalCount) SearchPaged(string query, string? race, int page, int pageSize)
+            {
+                var list = Search(query, race).ToList();
+                var items = list.Skip((Math.Max(1,page)-1)*pageSize).Take(pageSize);
+                return (items, list.Count);
+            }
         }
 
         private List<VideoInfo> SampleVideos => new List<VideoInfo>
@@ -93,6 +105,19 @@ namespace bwkt_webapp.Tests
             public IEnumerable<VideoInfo> Search(string query) => _videos;
             public IEnumerable<VideoInfo> Search(string query, string? race)
             { _onRace(race); return _videos; }
+            public (IEnumerable<VideoInfo> Items, int TotalCount) GetPaged(int page, int pageSize)
+            {
+                var total = _videos.Count;
+                var items = _videos.Skip((Math.Max(1,page)-1)*pageSize).Take(pageSize);
+                return (items, total);
+            }
+            public (IEnumerable<VideoInfo> Items, int TotalCount) SearchPaged(string query, string? race, int page, int pageSize)
+            {
+                _onRace(race);
+                var list = _videos.ToList();
+                var items = list.Skip((Math.Max(1,page)-1)*pageSize).Take(pageSize);
+                return (items, list.Count);
+            }
         }
 
         private class DummyRatings : bwkt_webapp.Services.IRatingsClient
