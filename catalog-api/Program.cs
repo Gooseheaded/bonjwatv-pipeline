@@ -123,6 +123,31 @@ app.MapGet("/api/videos", (
     return o;
 });
 
+// Single video by id (public)
+app.MapGet("/api/videos/{id}", (
+    string id,
+    [Microsoft.AspNetCore.Mvc.FromServices] VideoRepository repo,
+    [Microsoft.AspNetCore.Mvc.FromServices] RatingsRepository ratings
+) =>
+{
+    var v = repo.All().FirstOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase) && x.Hidden != true);
+    if (v == null) return Results.NotFound();
+    var s = ratings.GetSummary(v.Id, 1, null);
+    var dto = new VideoDto(
+        v.Id,
+        v.Title,
+        v.Creator,
+        v.Description,
+        v.Tags,
+        v.ReleaseDate,
+        v.Id,
+        s.Red,
+        s.Yellow,
+        s.Green
+    );
+    return Results.Json(dto);
+}).WithOpenApi(o => { o.Summary = "Get a single video by id"; return o; });
+
 app.MapGet("/api/videos/{id}/ratings", (string id, int? version, HttpContext ctx, RatingsRepository repo) =>
 {
     int v = Math.Max(1, version ?? 1);
