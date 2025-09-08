@@ -159,9 +159,9 @@ namespace bwkt_webapp.Services
                                     ? tg.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray()
                                     : null,
                                 SubtitleUrl = string.Empty,
-                                Red = el.TryGetProperty("Red", out var r1) ? r1.GetInt32() : 0,
-                                Yellow = el.TryGetProperty("Yellow", out var y1) ? y1.GetInt32() : 0,
-                                Green = el.TryGetProperty("Green", out var g1) ? g1.GetInt32() : 0
+                                Red = GetIntCaseInsensitive(el, "Red"),
+                                Yellow = GetIntCaseInsensitive(el, "Yellow"),
+                                Green = GetIntCaseInsensitive(el, "Green")
                             });
                         }
                     }
@@ -204,9 +204,9 @@ namespace bwkt_webapp.Services
                                     ? tg.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray()
                                     : null,
                                 SubtitleUrl = string.Empty,
-                                Red = el.TryGetProperty("Red", out var r2) ? r2.GetInt32() : 0,
-                                Yellow = el.TryGetProperty("Yellow", out var y2) ? y2.GetInt32() : 0,
-                                Green = el.TryGetProperty("Green", out var g2) ? g2.GetInt32() : 0
+                                Red = GetIntCaseInsensitive(el, "Red"),
+                                Yellow = GetIntCaseInsensitive(el, "Yellow"),
+                                Green = GetIntCaseInsensitive(el, "Green")
                             });
                         }
                     }
@@ -271,9 +271,9 @@ namespace bwkt_webapp.Services
                                 ? tg.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray()
                                 : null,
                             SubtitleUrl = string.Empty,
-                            Red = el.TryGetProperty("Red", out var r0) ? r0.GetInt32() : 0,
-                            Yellow = el.TryGetProperty("Yellow", out var y0) ? y0.GetInt32() : 0,
-                            Green = el.TryGetProperty("Green", out var g0) ? g0.GetInt32() : 0
+                            Red = GetIntCaseInsensitive(el, "Red"),
+                            Yellow = GetIntCaseInsensitive(el, "Yellow"),
+                            Green = GetIntCaseInsensitive(el, "Green")
                         });
                         count++;
                     }
@@ -287,6 +287,18 @@ namespace bwkt_webapp.Services
                 if (page > 1000) break; // safety
             }
             return list;
+        }
+
+        private static int GetIntCaseInsensitive(JsonElement el, string name)
+        {
+            if (el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number) return v.GetInt32();
+            // Try lower-camel variant (e.g., Red -> red)
+            if (!string.IsNullOrEmpty(name))
+            {
+                var lower = char.ToLowerInvariant(name[0]) + name.Substring(1);
+                if (el.TryGetProperty(lower, out var v2) && v2.ValueKind == JsonValueKind.Number) return v2.GetInt32();
+            }
+            return 0;
         }
 
         private static string? DeriveApiBase(string apiVideosUrl)
