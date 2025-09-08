@@ -20,6 +20,10 @@ else
     {
         <div class="alert alert-info">@Model.Info</div>
     }
+    @if (!string.IsNullOrEmpty(Model.Success))
+    {
+        <div class="alert alert-success">@Model.Success</div>
+    }
 
     <form method="post">
         <div class="mb-3">

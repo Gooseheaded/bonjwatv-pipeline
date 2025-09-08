@@ -14,6 +14,7 @@ namespace bwkt_webapp.Pages.Admin
         public bool IsAdmin { get; private set; }
         public string? Error { get; private set; }
         public string? Info { get; private set; }
+        public string? Success { get; private set; }
         public List<ResultItem> Results { get; } = new();
 
         private static readonly HashSet<string> AllowedTags = new(StringComparer.OrdinalIgnoreCase)
@@ -55,6 +56,7 @@ namespace bwkt_webapp.Pages.Admin
                 return;
             }
 
+            var okCount = 0;
             foreach (var id in ids)
             {
                 try
@@ -68,6 +70,7 @@ namespace bwkt_webapp.Pages.Admin
                     var resp = http.Send(msg);
                     if (resp.IsSuccessStatusCode)
                     {
+                        okCount++;
                         Results.Add(new ResultItem(id, true, ""));
                     }
                     else
@@ -81,6 +84,7 @@ namespace bwkt_webapp.Pages.Admin
                     Results.Add(new ResultItem(id, false, ex.Message));
                 }
             }
+            Success = $"Applied '{Tag}' to {okCount} of {ids.Count} video(s).";
         }
 
         private bool CheckIsAdmin()
