@@ -47,7 +47,7 @@ namespace bwkt_webapp.Tests
         public void IndexModel_Paginates_Items_Correctly()
         {
             var svc = new FakeService(MakeVideos(50));
-            var model = new IndexModel(svc, new DummyRatings());
+            var model = new IndexModel(svc);
             model.OnGet(pageNum: 2, pageSize: 10);
             Assert.Equal(2, model.CurrentPage);
             Assert.Equal(10, model.PageSize);

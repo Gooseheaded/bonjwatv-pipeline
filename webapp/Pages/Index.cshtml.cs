@@ -8,7 +8,6 @@ namespace bwkt_webapp.Pages;
 public class IndexModel : PageModel
 {
     private readonly IVideoService _videoService;
-    private readonly IRatingsClient _ratings;
     public IEnumerable<VideoInfo> Videos { get; private set; } = new List<VideoInfo>();
 
     public int CurrentPage { get; private set; } = 1;
@@ -16,10 +15,9 @@ public class IndexModel : PageModel
     public int TotalCount { get; private set; } = 0;
     public int TotalPages { get; private set; } = 1;
 
-    public IndexModel(IVideoService videoService, IRatingsClient ratings)
+    public IndexModel(IVideoService videoService)
     {
         _videoService = videoService;
-        _ratings = ratings;
     }
 
     public void OnGet(int pageNum = 1, int pageSize = 24)
