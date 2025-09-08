@@ -1,0 +1,18 @@
+bin/
+obj/
+.git/
+.gitignore
+*.md
+docs/
+dist/
+logs/
+*.log
+.DS_Store
+*.tar
+*.tar.gz
+.venv/
+../bonjwatv-pipeline (Copy)/
+../translator/
+../webapp/tests/
+../metadata/
+../dist/
