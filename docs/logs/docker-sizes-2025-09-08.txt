@@ -1,0 +1,19 @@
+Image Size and Bundle Measurement — 2025-09-08
+
+1) Rebuild (clean cache):
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
+
+2) Image sizes:
+   docker images | grep -E 'bwkt-webapp|bwkt-catalog-api'
+
+3) Layer history (largest layers first):
+   docker history bwkt-webapp:prod
+   docker history bwkt-catalog-api:prod
+
+4) Package and measure bundle:
+   scripts/package-docker.sh
+   ls -lh dist/bwkt-docker-*.tar.gz | tail -n1
+
+Paste outputs below this line
+-----------------------------------------------------------------------
+
