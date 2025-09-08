@@ -74,8 +74,68 @@ namespace bwkt_webapp.Services
 
         public IEnumerable<VideoInfo> GetAll() => _videos;
 
-        public VideoInfo? GetById(string videoId) =>
-            _videos.FirstOrDefault(v => string.Equals(v.VideoId, videoId, StringComparison.OrdinalIgnoreCase));
+        public IEnumerable<VideoInfo> GetAll()
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(_catalogUrl))
+                {
+                    // Fetch all pages from Catalog API and return
+                    var url = BuildCatalogQuery(_catalogUrl!, query: string.Empty, race: null);
+                    var data = FetchCatalogAllPages(url).ToList();
+                    if (data.Count > 0)
+                    {
+                        return data;
+                    }
+                }
+            }
+            catch { }
+            return _videos;
+        }
+
+        public VideoInfo? GetById(string videoId)
+        {
+            // Try local first only if API is not configured
+            if (string.IsNullOrWhiteSpace(_catalogUrl))
+            {
+                return _videos.FirstOrDefault(v => string.Equals(v.VideoId, videoId, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // API-first lookup
+            try
+            {
+                var apiBase = DeriveApiBase(_catalogUrl!);
+                if (!string.IsNullOrWhiteSpace(apiBase))
+                {
+                    var url = $"{apiBase}/videos/{videoId}";
+                    var json = _httpClient.GetStringAsync(url).GetAwaiter().GetResult();
+                    using var doc = JsonDocument.Parse(json);
+                    var el = doc.RootElement;
+                    // Map API fields into VideoInfo
+                    var v = new VideoInfo
+                    {
+                        VideoId = el.GetProperty("id").GetString() ?? videoId,
+                        Title = el.GetProperty("title").GetString() ?? string.Empty,
+                        Creator = el.TryGetProperty("creator", out var c) ? c.GetString() : null,
+                        Description = el.TryGetProperty("description", out var d) ? d.GetString() : null,
+                        Tags = el.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array
+                            ? tg.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray()
+                            : null,
+                        SubtitleUrl = el.TryGetProperty("subtitleUrl", out var su) ? (su.GetString() ?? string.Empty) : string.Empty
+                    };
+                    // Default first-party subtitle path if missing
+                    if (string.IsNullOrWhiteSpace(v.SubtitleUrl))
+                    {
+                        v.SubtitleUrl = $"{apiBase}/subtitles/{v.VideoId}/1.srt";
+                    }
+                    return v;
+                }
+            }
+            catch { }
+
+            // Fallback to local cache
+            return _videos.FirstOrDefault(v => string.Equals(v.VideoId, videoId, StringComparison.OrdinalIgnoreCase));
+        }
 
         public IEnumerable<VideoInfo> Search(string query)
         {
@@ -189,6 +249,22 @@ namespace bwkt_webapp.Services
                 if (page > 1000) break; // safety
             }
             return list;
+        }
+
+        private static string? DeriveApiBase(string apiVideosUrl)
+        {
+            try
+            {
+                var uri = new Uri(apiVideosUrl);
+                var path = uri.AbsolutePath.TrimEnd('/');
+                if (path.EndsWith("/videos", StringComparison.OrdinalIgnoreCase))
+                {
+                    path = path.Substring(0, path.Length - "/videos".Length);
+                }
+                var builderUri = new UriBuilder(uri.Scheme, uri.Host, uri.Port, path);
+                return builderUri.Uri.ToString().TrimEnd('/');
+            }
+            catch { return null; }
         }
 
         private static string AddOrReplaceQuery(string url, string key, string value)
