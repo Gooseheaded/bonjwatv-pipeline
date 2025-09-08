@@ -92,8 +92,36 @@ namespace bwkt_webapp.Tests
         public IEnumerable<bwkt_webapp.Models.VideoInfo> Search(string query, string? race) => _videos;
         public (IEnumerable<bwkt_webapp.Models.VideoInfo> Items, int TotalCount) GetPaged(int page, int pageSize)
         {
-            var list = _videos.ToList();
-            return (list.Skip((Math.Max(1,page)-1)*pageSize).Take(pageSize), list.Count);
+            double Score(string id)
+            {
+                // Mirror FakeRatingsClient values
+                int red = id == "vidA" ? 2 : id == "vidB" ? 1 : 0;
+                int yellow = 1;
+                int green = id == "vidC" ? 5 : id == "vidB" ? 2 : 0;
+                int n = Math.Max(0, red + yellow + green);
+                if (n <= 0) return 0;
+                double pos = green + 0.5 * yellow;
+                double p = pos / n;
+                double z = 1.96; double z2 = z * z;
+                double denom = 1 + z2 / n;
+                double centre = p + z2 / (2 * n);
+                double adj = z * Math.Sqrt((p * (1 - p) + z2 / (4 * n)) / n);
+                return (centre - adj) / denom;
+            }
+            int Total(string id)
+            {
+                int red = id == "vidA" ? 2 : id == "vidB" ? 1 : 0;
+                int yellow = 1;
+                int green = id == "vidC" ? 5 : id == "vidB" ? 2 : 0;
+                return red + yellow + green;
+            }
+            var ordered = _videos
+                .OrderByDescending(v => Score(v.VideoId))
+                .ThenByDescending(v => Total(v.VideoId))
+                .ThenBy(v => v.Title)
+                .ToList();
+            var slice = ordered.Skip((Math.Max(1,page)-1)*pageSize).Take(pageSize);
+            return (slice, ordered.Count);
         }
         public (IEnumerable<bwkt_webapp.Models.VideoInfo> Items, int TotalCount) SearchPaged(string query, string? race, int page, int pageSize)
         {
