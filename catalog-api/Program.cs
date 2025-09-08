@@ -27,10 +27,12 @@ app.MapGet("/", () => Results.Redirect("/swagger"));
 
 app.MapGet("/api/videos", (
     [Microsoft.AspNetCore.Mvc.FromServices] VideoRepository repo,
+    [Microsoft.AspNetCore.Mvc.FromServices] RatingsRepository ratings,
     string? q,
     string? race,
     int? page,
-    int? pageSize
+    int? pageSize,
+    string? sortBy
 ) =>
 {
     var all = repo.All();
@@ -51,6 +53,34 @@ app.MapGet("/api/videos", (
     if (r != null)
     {
         query = query.Where(v => v.Tags != null && v.Tags.Any(tag => tag.Equals(r, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    // Optional sorting
+    var sb = (sortBy ?? string.Empty).Trim().ToLowerInvariant();
+    if (sb == "rating_desc")
+    {
+        double Score(string id)
+        {
+            var sum = ratings.GetSummary(id, 1, null);
+            int red = sum.Red; int yellow = sum.Yellow; int green = sum.Green;
+            int n = Math.Max(0, red + yellow + green);
+            if (n <= 0) return 0;
+            double pos = green + 0.5 * yellow;
+            double p = pos / n;
+            double z = 1.96; double z2 = z * z;
+            double denom = 1 + z2 / n;
+            double centre = p + z2 / (2 * n);
+            double adj = z * Math.Sqrt((p * (1 - p) + z2 / (4 * n)) / n);
+            return (centre - adj) / denom;
+        }
+        int Total(string id)
+        {
+            var sum = ratings.GetSummary(id, 1, null);
+            return Math.Max(0, sum.Red + sum.Yellow + sum.Green);
+        }
+        query = query.OrderByDescending(v => Score(v.Id))
+                     .ThenByDescending(v => Total(v.Id))
+                     .ThenBy(v => v.Title);
     }
 
     var total = query.Count();
@@ -80,6 +110,10 @@ app.MapGet("/api/videos", (
     o.Parameters[1].Description = "Race code: z|t|p (omit for all)";
     o.Parameters[2].Description = "Page number (1-based)";
     o.Parameters[3].Description = "Page size (1-100, default 24)";
+    if (o.Parameters.Count > 4)
+    {
+        o.Parameters[4].Description = "Sort: rating_desc for ratings-based sort (default none)";
+    }
     return o;
 });
 

@@ -20,8 +20,6 @@ namespace bwkt_webapp.Services
             _catalogUrl = Environment.GetEnvironmentVariable("DATA_CATALOG_URL");
         }
 
-        public IEnumerable<VideoInfo> GetAll() => _videos;
-
         public IEnumerable<VideoInfo> GetAll()
         {
             try
@@ -133,6 +131,92 @@ namespace bwkt_webapp.Services
                 baseQuery = baseQuery.Where(v => v.Tags != null && v.Tags.Any(t => string.Equals(t, r, StringComparison.OrdinalIgnoreCase)));
             }
             return baseQuery;
+        }
+
+        public (IEnumerable<VideoInfo> Items, int TotalCount) GetPaged(int page, int pageSize)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(_catalogUrl))
+                {
+                    var url = BuildCatalogQuery(_catalogUrl!, query: string.Empty, race: null);
+                    // Request ratings-based sort for homepage
+                    url = AddOrReplaceQuery(url, "sortBy", "rating_desc");
+                    url = AddOrReplaceQuery(url, "page", Math.Max(1, page).ToString());
+                    url = AddOrReplaceQuery(url, "pageSize", Math.Clamp(pageSize, 1, 100).ToString());
+                    var json = _httpClient.GetStringAsync(url).GetAwaiter().GetResult();
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+                    var items = new List<VideoInfo>();
+                    if (root.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in itemsEl.EnumerateArray())
+                        {
+                            items.Add(new VideoInfo
+                            {
+                                VideoId = el.GetProperty("id").GetString() ?? string.Empty,
+                                Title = el.GetProperty("title").GetString() ?? string.Empty,
+                                Creator = el.TryGetProperty("creator", out var c) ? c.GetString() : null,
+                                Description = el.TryGetProperty("description", out var d) ? d.GetString() : null,
+                                Tags = el.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array
+                                    ? tg.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray()
+                                    : null,
+                                SubtitleUrl = string.Empty
+                            });
+                        }
+                    }
+                    var total = root.TryGetProperty("totalCount", out var tc) ? tc.GetInt32() : items.Count;
+                    return (items, total);
+                }
+            }
+            catch { }
+            // Local fallback
+            var all = _videos;
+            var totalLocal = all.Count;
+            var slice = all.Skip((Math.Max(1, page) - 1) * Math.Clamp(pageSize, 1, 100)).Take(Math.Clamp(pageSize, 1, 100));
+            return (slice, totalLocal);
+        }
+
+        public (IEnumerable<VideoInfo> Items, int TotalCount) SearchPaged(string query, string? race, int page, int pageSize)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(_catalogUrl))
+                {
+                    var url = BuildCatalogQuery(_catalogUrl!, query, race);
+                    url = AddOrReplaceQuery(url, "page", Math.Max(1, page).ToString());
+                    url = AddOrReplaceQuery(url, "pageSize", Math.Clamp(pageSize, 1, 100).ToString());
+                    var json = _httpClient.GetStringAsync(url).GetAwaiter().GetResult();
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+                    var items = new List<VideoInfo>();
+                    if (root.TryGetProperty("items", out var itemsEl) && itemsEl.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in itemsEl.EnumerateArray())
+                        {
+                            items.Add(new VideoInfo
+                            {
+                                VideoId = el.GetProperty("id").GetString() ?? string.Empty,
+                                Title = el.GetProperty("title").GetString() ?? string.Empty,
+                                Creator = el.TryGetProperty("creator", out var c) ? c.GetString() : null,
+                                Description = el.TryGetProperty("description", out var d) ? d.GetString() : null,
+                                Tags = el.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array
+                                    ? tg.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray()
+                                    : null,
+                                SubtitleUrl = string.Empty
+                            });
+                        }
+                    }
+                    var total = root.TryGetProperty("totalCount", out var tc) ? tc.GetInt32() : items.Count;
+                    return (items, total);
+                }
+            }
+            catch { }
+            // Local fallback
+            var all = Search(query, race).ToList();
+            var totalLocal = all.Count;
+            var slice = all.Skip((Math.Max(1, page) - 1) * Math.Clamp(pageSize, 1, 100)).Take(Math.Clamp(pageSize, 1, 100));
+            return (slice, totalLocal);
         }
 
         private static string? NormalizeRace(string? value)
