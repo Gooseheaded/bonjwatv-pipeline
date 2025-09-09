@@ -245,6 +245,12 @@ int MaxUploadBytes()
     return int.TryParse(v, out var n) && n > 0 ? n : 1024 * 1024;
 }
 
+string SubtitlesStagingRoot()
+{
+    var root = app.Configuration["Data:SubtitlesStagingRoot"] ?? app.Configuration["DATA_SUBTITLES_STAGING_ROOT"] ?? "/app/data/subtitles-staging";
+    return Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, root));
+}
+
 app.MapGet("/api/subtitles/{videoId}/{version}.srt", (string videoId, int version, HttpResponse res) =>
 {
     var root = SubtitlesRoot();
@@ -282,13 +288,14 @@ app.MapPost("/api/uploads/subtitles", async (HttpRequest req, HttpContext ctx) =
         }
         else return Results.BadRequest("Missing content");
         if (data.Length > MaxUploadBytes()) return Results.BadRequest("File too large");
-        var root = SubtitlesRoot();
+        // Write to staging, not public, until admin approval promotes it
+        var root = SubtitlesStagingRoot();
         var vid = SanitizeId(videoId!);
         var dir = Path.Combine(root, vid);
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, $"v{ver}.srt");
         await System.IO.File.WriteAllBytesAsync(path, data);
-        var storageKey = $"subtitles/{vid}/v{ver}.srt";
+        var storageKey = $"staging/{vid}/v{ver}.srt";
         return Results.Json(new { storage_key = storageKey });
     }
     else
@@ -300,13 +307,13 @@ app.MapPost("/api/uploads/subtitles", async (HttpRequest req, HttpContext ctx) =
         var data = ms.ToArray();
         if (data.Length == 0) return Results.BadRequest("Empty body");
         if (data.Length > MaxUploadBytes()) return Results.BadRequest("File too large");
-        var root = SubtitlesRoot();
+        var root = SubtitlesStagingRoot();
         var vid = SanitizeId(videoId!);
         var dir = Path.Combine(root, vid);
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, $"v{ver}.srt");
         await System.IO.File.WriteAllBytesAsync(path, data);
-        var storageKey = $"subtitles/{vid}/v{ver}.srt";
+        var storageKey = $"staging/{vid}/v{ver}.srt";
         return Results.Json(new { storage_key = storageKey });
     }
 }).WithOpenApi(o => { o.Summary = "Upload SRT (multipart or raw text)"; return o; });
@@ -394,7 +401,13 @@ app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, S
                 // Ensure we have a local subtitle file; mirror external if necessary
                 var version = 1;
                 var subsRoot = SubtitlesRoot();
-                var storageKey = await EnsureSubtitleStoredAsync(subsRoot, vid, version, s.Payload.SubtitleStorageKey, s.Payload.SubtitleUrl);
+                // If a staged storage_key exists, promote it to public; else mirror external if provided
+                string? promotedKey = null;
+                if (!string.IsNullOrWhiteSpace(s.Payload.SubtitleStorageKey))
+                {
+                    promotedKey = PromoteStagedSubtitleToPublic(s.Payload.SubtitleStorageKey!, vid, version);
+                }
+                var storageKey = promotedKey ?? await EnsureSubtitleStoredAsync(subsRoot, vid, version, null, s.Payload.SubtitleUrl);
                 // Compute first‑party serving URL
                 var internalUrl = $"/api/subtitles/{SanitizeId(vid)}/{version}.srt";
                 // Upsert in primary videos store (decoupled from legacy videos.json)
@@ -683,6 +696,30 @@ static string? MapStorageKeyToPath(string subtitlesRoot, string storageKey)
         if (!verNoExt.StartsWith("v") || verNoExt.Length < 2 || !int.TryParse(verNoExt.Substring(1), out var _)) return null;
         var path = Path.Combine(subtitlesRoot, vid, verNoExt + ".srt");
         return Path.GetFullPath(path);
+    }
+    catch { return null; }
+}
+
+static string? PromoteStagedSubtitleToPublic(string storageKey, string videoId, int version)
+{
+    try
+    {
+        // Expected storageKey like: staging/{vid}/v{ver}.srt
+        var key = storageKey.Replace('\\', '/');
+        if (!key.StartsWith("staging/", StringComparison.OrdinalIgnoreCase)) return null;
+        var rel = key.Substring("staging/".Length);
+        var parts = rel.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2) return null;
+        var vid = SanitizeId(parts[0]);
+        // Source (staging) path
+        var src = Path.Combine(SubtitlesStagingRoot(), vid, $"v{version}.srt");
+        if (!File.Exists(src)) return null;
+        // Destination (public) path
+        var dstDir = Path.Combine(SubtitlesRoot(), vid);
+        Directory.CreateDirectory(dstDir);
+        var dst = Path.Combine(dstDir, $"v{version}.srt");
+        File.Copy(src, dst, overwrite: true);
+        return $"subtitles/{vid}/v{version}.srt";
     }
     catch { return null; }
 }

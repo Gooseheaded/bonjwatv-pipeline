@@ -139,13 +139,24 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         post.EnsureSuccessStatusCode();
         var j = await post.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(j.TryGetProperty("storage_key", out var key));
-        Assert.Contains("abc123", key.GetString());
-
+        // Now staged; should not be publicly served yet
+        Assert.Contains("staging/abc123", key.GetString());
         var get = await client.GetAsync("/api/subtitles/abc123/1.srt");
-        get.EnsureSuccessStatusCode();
-        var text = await get.Content.ReadAsStringAsync();
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, get.StatusCode);
+        // Create submission and approve to promote staged file
+        using var submitReq = new HttpRequestMessage(HttpMethod.Post, "/api/submissions/videos");
+        submitReq.Headers.Add("X-Api-Key", "TOKEN1");
+        submitReq.Content = JsonContent.Create(new { youtube_id = "abc123", title = "Alpha", subtitle_storage_key = key.GetString() });
+        var submit = await client.SendAsync(submitReq);
+        submit.EnsureSuccessStatusCode();
+        var sid = (await submit.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("submission_id").GetString();
+        var approve = await client.PatchAsync($"/api/admin/submissions/{sid}", JsonContent.Create(new { action = "approve" }));
+        approve.EnsureSuccessStatusCode();
+        var get2 = await client.GetAsync("/api/subtitles/abc123/1.srt");
+        get2.EnsureSuccessStatusCode();
+        var text = await get2.Content.ReadAsStringAsync();
         Assert.Contains("Hello!", text);
-        Assert.Equal("text/plain; charset=utf-8", get.Content.Headers.ContentType!.ToString());
+        Assert.Equal("text/plain; charset=utf-8", get2.Content.Headers.ContentType!.ToString());
     }
 
     [Fact]
