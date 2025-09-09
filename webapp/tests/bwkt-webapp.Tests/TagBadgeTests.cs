@@ -41,6 +41,24 @@ public class TagBadgeTests : IClassFixture<TestWebAppFactory>
         }
     }
 }
+    
+    public class TagBadgeMappingUnitTests
+    {
+        [Theory]
+        [InlineData("zvz", "ZvZ")]
+        [InlineData("zvp", "ZvP")]
+        [InlineData("pvz", "PvZ")]
+        [InlineData("pvt", "PvT")]
+        [InlineData("pvp", "PvP")]
+        [InlineData("tvz", "TvZ")]
+        [InlineData("tvt", "TvT")]
+        [InlineData("tvp", "TvP")]
+        public void MatchupTags_MapToExpectedDisplay(string code, string expected)
+        {
+            var (text, _) = bwkt_webapp.Helpers.TagBadge.Get(code);
+            Assert.Equal(expected, text);
+        }
+    }
 namespace bwkt_webapp.Tests
 {
     internal class TagBadgeFakeVideoService : bwkt_webapp.Services.IVideoService

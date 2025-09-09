@@ -7,6 +7,7 @@ namespace bwkt_webapp.Pages.Admin
     {
         public bool IsAdmin { get; private set; }
         public JsonElement Submission { get; private set; }
+        public string? SubtitleText { get; private set; }
 
         public void OnGet(string id)
         {
@@ -34,6 +35,30 @@ namespace bwkt_webapp.Pages.Admin
                 var json = http.GetStringAsync(url).GetAwaiter().GetResult();
                 using var doc = JsonDocument.Parse(json);
                 Submission = doc.RootElement.Clone();
+
+                // Attempt to load subtitle preview: prefer first-party via youtube_id; fallback to external subtitle_url
+                try
+                {
+                    var payload = Submission.TryGetProperty("payload", out var p) ? p : default;
+                    string? vid = null;
+                    if (payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("youtube_id", out var y))
+                    {
+                        vid = y.GetString();
+                    }
+                    if (!string.IsNullOrWhiteSpace(vid))
+                    {
+                        SubtitleText = http.GetStringAsync($"{apiBase}/subtitles/{vid}/1.srt").GetAwaiter().GetResult();
+                    }
+                    else if (payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("subtitle_url", out var su))
+                    {
+                        var ext = su.GetString();
+                        if (!string.IsNullOrWhiteSpace(ext))
+                        {
+                            SubtitleText = http.GetStringAsync(ext!).GetAwaiter().GetResult();
+                        }
+                    }
+                }
+                catch { SubtitleText = null; }
             }
             catch { }
         }

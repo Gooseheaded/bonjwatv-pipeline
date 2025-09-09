@@ -50,17 +50,31 @@ else
                     else { <span class="text-muted">(none)</span> }
                 </dd>
             </dl>
-            <div>
-                <form class="d-inline" method="post" action="/admin/submissions/@id/approve">
-                    <button type="submit" class="btn btn-success">Approve</button>
-                </form>
-                <form class="d-inline" method="post" action="/admin/submissions/@id/reject">
-                    <input type="hidden" name="reason" value="Rejected via detail page" />
-                    <button type="submit" class="btn btn-outline-danger">Reject</button>
-                </form>
-                <a class="btn btn-link" asp-page="/Admin/Index">Back to Admin</a>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <form class="d-inline" method="post" action="/admin/submissions/@id/approve">
+                            <button type="submit" class="btn btn-success">Approve</button>
+                        </form>
+                        <form class="d-inline" method="post" action="/admin/submissions/@id/reject">
+                            <input type="hidden" name="reason" value="Rejected via detail page" />
+                            <button type="submit" class="btn btn-outline-danger">Reject</button>
+                        </form>
+                        <a class="btn btn-link" asp-page="/Admin/Index">Back to Admin</a>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h5>Subtitles (v1)</h5>
+                    @if (!string.IsNullOrEmpty(Model.SubtitleText))
+                    {
+                        <textarea class="form-control" readonly style="max-height: 260px; min-height: 160px; overflow: auto; font-family: monospace; font-size: 0.9rem;">@Model.SubtitleText</textarea>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No subtitle preview available.</p>
+                    }
+                </div>
             </div>
         </div>
     </div>
 }
-

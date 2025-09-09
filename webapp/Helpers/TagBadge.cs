@@ -18,7 +18,7 @@ namespace bwkt_webapp.Helpers
                 "p" => ("Protoss", "bg-warning"),
                 "t" => ("Terran",  "bg-primary"),
                 // Matchup.
-                "zvz" => ("ZvP", "bg-danger"),
+                "zvz" => ("ZvZ", "bg-danger"),
                 "zvt" => ("ZvT", "bg-danger"),
                 "zvp" => ("ZvP", "bg-danger"),
                 "pvz" => ("PvZ", "bg-warning"),
