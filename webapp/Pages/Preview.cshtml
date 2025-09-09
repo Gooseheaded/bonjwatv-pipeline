@@ -17,7 +17,7 @@
     <div class="mb-3">
         <label for="srtText" class="form-label">SRT (paste)</label>
         <textarea id="srtText" class="form-control" rows="6" placeholder="1\n00:00:01,000 --&gt; 00:00:03,000\nHello world"></textarea>
-        <div class="form-text">Or upload a file instead:</div>
+        <div class="form-text">Or upload a file instead (if both are provided, pasted SRT is used):</div>
         <input type="file" id="srtFile" class="form-control" accept=".srt,text/plain" />
     </div>
 
@@ -28,6 +28,13 @@
     <div class="position-relative ratio ratio-16x9 mb-3 video-wrapper">
         <iframe id="player" title="Preview Player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
         <div id="subtitle-container" class="position-absolute start-50 translate-middle-x subtitle-overlay"></div>
+    </div>
+    <div class="mb-3 text-center">
+        <label class="form-label me-2 mb-0">Subtitle Font Size:</label>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Subtitle font size">
+            <button id="dec-font" type="button" class="btn btn-outline-secondary">A-</button>
+            <button id="inc-font" type="button" class="btn btn-outline-secondary">A+</button>
+        </div>
     </div>
 </div>
 
@@ -79,7 +86,25 @@ async function startPreview(e) {
   document.getElementById('preview-area').style.display = '';
   // Initialize overlay with our data URL
   initSubtitles(dataUrl, 'player', 'subtitle-container');
+
+  // Apply saved font size
+  const container = document.getElementById('subtitle-container');
+  const savedSize = parseFloat(localStorage.getItem('subtitleFontSize'));
+  if (!isNaN(savedSize)) {
+    container.style.fontSize = savedSize + 'px';
+  }
+  // Wire font size buttons
+  const decBtn = document.getElementById('dec-font');
+  const incBtn = document.getElementById('inc-font');
+  function adjustFontSize(deltaPx) {
+    const style = window.getComputedStyle(container);
+    const current = parseFloat(style.fontSize) || 16;
+    const next = Math.max(6, current + deltaPx);
+    container.style.fontSize = next + 'px';
+    localStorage.setItem('subtitleFontSize', next);
+  }
+  decBtn.addEventListener('click', () => adjustFontSize(-2));
+  incBtn.addEventListener('click', () => adjustFontSize(2));
   return false;
 }
 </script>
-
