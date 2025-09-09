@@ -1,6 +1,6 @@
 # ADR 0002: API-only Webapp and On-Demand Subtitle Mirroring
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2025-09-08
 
 ## Context
@@ -28,3 +28,6 @@
 - First request for a legacy subtitle can incur extra latency while fetching + mirroring; subsequent requests are first‑party and cached.
 - Recommend a background admin tool to bulk‑mirror remaining legacy subtitles and update `videos.json` entries to first‑party paths.
 - API schema now includes `subtitleUrl` for detail and list items to support fallback decisions.
+
+## References
+- Session 2025-09-09: docs/sessions/session-2025-09-09.md (staging uploads, preview page, admin tagging refinements)
