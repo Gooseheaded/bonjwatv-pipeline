@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import urllib.request
 import urllib.error
+import re
 
 
 def _print(msg: str) -> None:
@@ -107,6 +108,55 @@ def choose_title(item: Dict[str, Any], base_dir: Optional[str], vid: str) -> str
     return ""
 
 
+def _reconstruct_en_from_cache(cache_dir: str, vid: str, subtitles_dir: str) -> Optional[str]:
+    """Attempt to reconstruct en_{vid}.srt from cached translated chunks.
+
+    Looks for files like {cache_dir}/kr_{vid}_chunk{N}.json with a 'translation' field
+    containing SRT text. Parses and concatenates in chunk order while renumbering.
+    Returns the output file path if reconstruction succeeds, else None.
+    """
+    try:
+        base = f"kr_{vid}"
+        if not os.path.isdir(cache_dir):
+            return None
+        # Collect chunk files in order
+        chunk_files = []
+        for name in os.listdir(cache_dir):
+            m = re.match(rf"{re.escape(base)}_chunk(\d+)\.json$", name)
+            if m:
+                chunk_files.append((int(m.group(1)), os.path.join(cache_dir, name)))
+        if not chunk_files:
+            return None
+        chunk_files.sort(key=lambda x: x[0])
+
+        # Helper to parse SRT blocks
+        pat = re.compile(r"(\d+)\s+(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\s+([\s\S]*?)(?=\n\n|\Z)", re.MULTILINE)
+        merged_blocks: List[str] = []
+        for idx, path in chunk_files:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            text = (data.get("translation") or "").strip()
+            if not text:
+                continue
+            # Extract SRT blocks as raw text segments to keep simple
+            for m in pat.finditer(text):
+                block = f"{m.group(2)} --> {m.group(3)}\n{m.group(4).strip()}\n"
+                merged_blocks.append(block)
+        if not merged_blocks:
+            return None
+        # Renumber and write
+        os.makedirs(subtitles_dir, exist_ok=True)
+        out_path = os.path.join(subtitles_dir, f"en_{vid}.srt")
+        with open(out_path, "w", encoding="utf-8") as out:
+            for i, blk in enumerate(merged_blocks, start=1):
+                out.write(str(i) + "\n")
+                out.write(blk)
+                out.write("\n")
+        return out_path
+    except Exception:
+        return None
+
+
 def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -> bool:
     try:
         with open(videos_json, encoding="utf-8") as f:
@@ -124,17 +174,36 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
             continue
         en_srt = os.path.join(subtitles_dir, f"en_{vid}.srt")
         if not os.path.exists(en_srt):
-            # Auto-scaffold a minimal SRT to keep the flow moving
+            # Try to reconstruct from cached chunks first
+            reconstructed = None
             try:
-                os.makedirs(subtitles_dir, exist_ok=True)
-                stub = "1\n00:00:01,000 --> 00:00:02,000\nHello!\n"
-                with open(en_srt, "w", encoding="utf-8") as f:
-                    f.write(stub)
-                _print(f"INFO: created stub subtitle for {vid}: {en_srt}")
-            except Exception as e:
-                _print(f"WARN: subtitle not found for {vid}: {en_srt} (and failed to create stub: {e})")
-                ok_all = False
-                continue
+                reconstructed = _reconstruct_en_from_cache(os.path.join(base_dir, ".cache"), vid, subtitles_dir)
+            except Exception:
+                reconstructed = None
+            if reconstructed:
+                _print(f"INFO: reconstructed English SRT from cache for {vid}: {reconstructed}")
+            else:
+                # Auto-scaffold a minimal SRT to keep the flow moving
+                try:
+                    os.makedirs(subtitles_dir, exist_ok=True)
+                    stub = "1\n00:00:01,000 --> 00:00:02,000\nHello!\n"
+                    with open(en_srt, "w", encoding="utf-8") as f:
+                        f.write(stub)
+                    _print(f"INFO: created stub subtitle for {vid}: {en_srt}")
+                except Exception as e:
+                    _print(f"WARN: subtitle not found for {vid}: {en_srt} (and failed to create stub: {e})")
+                    ok_all = False
+                    continue
+        else:
+            # If file exists but appears to be the stub, attempt reconstruction from cache
+            try:
+                size = os.path.getsize(en_srt)
+                if size < 64:
+                    reconstructed = _reconstruct_en_from_cache(os.path.join(base_dir, ".cache"), vid, subtitles_dir)
+                    if reconstructed:
+                        _print(f"INFO: replaced stub with reconstructed English SRT for {vid}: {reconstructed}")
+            except Exception:
+                pass
 
         # 1) Upload SRT
         try:
