@@ -1,0 +1,85 @@
+@page
+@model bwkt_webapp.Pages.PreviewModel
+@{
+    ViewData["Title"] = "Preview Subtitles";
+}
+
+<h1>Preview Subtitles</h1>
+
+<p class="text-muted">Paste a YouTube URL and your SRT (paste or upload). Nothing is uploaded to the server — the preview runs entirely in your browser.</p>
+
+<form id="preview-form" onsubmit="return startPreview(event)">
+    <div class="mb-3">
+        <label for="ytUrl" class="form-label">YouTube URL</label>
+        <input type="url" class="form-control" id="ytUrl" placeholder="https://www.youtube.com/watch?v=..." required />
+    </div>
+
+    <div class="mb-3">
+        <label for="srtText" class="form-label">SRT (paste)</label>
+        <textarea id="srtText" class="form-control" rows="6" placeholder="1\n00:00:01,000 --&gt; 00:00:03,000\nHello world"></textarea>
+        <div class="form-text">Or upload a file instead:</div>
+        <input type="file" id="srtFile" class="form-control" accept=".srt,text/plain" />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Preview</button>
+</form>
+
+<div id="preview-area" class="mt-4" style="display:none;">
+    <div class="position-relative ratio ratio-16x9 mb-3 video-wrapper">
+        <iframe id="player" title="Preview Player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+        <div id="subtitle-container" class="position-absolute start-50 translate-middle-x subtitle-overlay"></div>
+    </div>
+</div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script src="~/js/subtitles.js"></script>
+<script>
+function extractYouTubeId(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtu.be')) {
+      return u.pathname.replace('/', '').trim();
+    }
+    if (u.hostname.includes('youtube.com')) {
+      if (u.pathname === '/watch') return u.searchParams.get('v');
+      const m = u.pathname.match(/^\/(?:shorts|live|embed)\/([A-Za-z0-9_-]{6,})/);
+      if (m) return m[1];
+    }
+  } catch {}
+  return null;
+}
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+}
+
+async function startPreview(e) {
+  e.preventDefault();
+  const url = document.getElementById('ytUrl').value.trim();
+  const vid = extractYouTubeId(url);
+  if (!vid) { alert('Could not extract a YouTube video ID from that URL.'); return false; }
+
+  let srt = document.getElementById('srtText').value.trim();
+  const file = document.getElementById('srtFile').files[0];
+  if (!srt && file) {
+    try { srt = (await readFile(file)) || ''; } catch { srt = ''; }
+  }
+  if (!srt) { alert('Please paste SRT text or choose a file.'); return false; }
+
+  // Build a data: URL so no server storage is needed
+  const dataUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(srt);
+
+  const iframe = document.getElementById('player');
+  iframe.src = 'https://www.youtube.com/embed/' + vid + '?enablejsapi=1';
+  document.getElementById('preview-area').style.display = '';
+  // Initialize overlay with our data URL
+  initSubtitles(dataUrl, 'player', 'subtitle-container');
+  return false;
+}
+</script>
+
