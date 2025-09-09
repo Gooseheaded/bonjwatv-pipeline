@@ -73,11 +73,65 @@ else
             <hr />
             <h5>Tagging Tool</h5>
             <form method="post" action="/admin/videos/@id/tags/set">
-                <div class="row">
-                    @foreach (var tag in Model.AllowedTags)
+                @{ var race = new [] { "z", "p", "t" }; }
+                @{ var pv = new [] { "pvp", "pvt", "pvz" }; }
+                @{ var tv = new [] { "tvp", "tvt", "tvz" }; }
+                @{ var zv = new [] { "zvz", "zvt", "zvp" }; }
+                @{ var misc = new [] { "story" }; }
+
+                <div class="row mb-2">
+                    @foreach (var tag in race)
                     {
                         var isChecked = Model.SelectedTags.Contains(tag, StringComparer.OrdinalIgnoreCase);
-                        <div class="col-6 mb-1">
+                        <div class="col-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="@tag" id="tag_@tag" name="tags" @(isChecked ? "checked" : null) />
+                                <label class="form-check-label" for="tag_@tag">@bwkt_webapp.Helpers.TagBadge.Get(tag).Text</label>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="row mb-2">
+                    @foreach (var tag in pv)
+                    {
+                        var isChecked = Model.SelectedTags.Contains(tag, StringComparer.OrdinalIgnoreCase);
+                        <div class="col-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="@tag" id="tag_@tag" name="tags" @(isChecked ? "checked" : null) />
+                                <label class="form-check-label" for="tag_@tag">@bwkt_webapp.Helpers.TagBadge.Get(tag).Text</label>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="row mb-2">
+                    @foreach (var tag in tv)
+                    {
+                        var isChecked = Model.SelectedTags.Contains(tag, StringComparer.OrdinalIgnoreCase);
+                        <div class="col-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="@tag" id="tag_@tag" name="tags" @(isChecked ? "checked" : null) />
+                                <label class="form-check-label" for="tag_@tag">@bwkt_webapp.Helpers.TagBadge.Get(tag).Text</label>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="row mb-2">
+                    @foreach (var tag in zv)
+                    {
+                        var isChecked = Model.SelectedTags.Contains(tag, StringComparer.OrdinalIgnoreCase);
+                        <div class="col-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="@tag" id="tag_@tag" name="tags" @(isChecked ? "checked" : null) />
+                                <label class="form-check-label" for="tag_@tag">@bwkt_webapp.Helpers.TagBadge.Get(tag).Text</label>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="row mb-2">
+                    @foreach (var tag in misc)
+                    {
+                        var isChecked = Model.SelectedTags.Contains(tag, StringComparer.OrdinalIgnoreCase);
+                        <div class="col-12">
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" value="@tag" id="tag_@tag" name="tags" @(isChecked ? "checked" : null) />
                                 <label class="form-check-label" for="tag_@tag">@bwkt_webapp.Helpers.TagBadge.Get(tag).Text</label>
