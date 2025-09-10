@@ -1,7 +1,9 @@
+
 using System;
 using System.IO;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Hosting;
 
 namespace bwkt_webapp.Tests
 {
@@ -12,9 +14,20 @@ namespace bwkt_webapp.Tests
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            // Point the content root to the TestData folder copied to the test output
-            var testDataPath = Path.Combine(AppContext.BaseDirectory, "TestData");
-            builder.UseContentRoot(testDataPath);
+            var solutionDir = FindSolutionDirectory();
+            var projectDir = Path.Combine(solutionDir, "webapp");
+            builder.UseContentRoot(projectDir);
+        }
+
+        private static string FindSolutionDirectory()
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !dir.GetFiles("*.sln").Any())
+            {
+                dir = dir.Parent;
+            }
+            return dir?.FullName ?? throw new InvalidOperationException("Solution directory not found.");
         }
     }
 }
+

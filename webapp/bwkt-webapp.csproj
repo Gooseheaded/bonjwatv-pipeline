@@ -10,7 +10,9 @@
 
   <!-- Exclude test projects from main application compilation -->
   <ItemGroup>
-    <Compile Remove="tests\**\*.cs" />
+    <Content Remove="tests\**" />
+    <Compile Remove="tests\**" />
+    <None Include="tests\**" />
   </ItemGroup>
   
   <!-- Lean publish defaults for Release builds -->

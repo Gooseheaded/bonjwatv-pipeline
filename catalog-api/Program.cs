@@ -7,9 +7,9 @@ using Microsoft.AspNetCore.HttpOverrides;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddSingleton<VideoRepository>();
-builder.Services.AddSingleton<RatingsRepository>();
-builder.Services.AddSingleton<SubmissionsRepository>();
+builder.Services.AddScoped<VideoRepository>();
+builder.Services.AddScoped<RatingsRepository>();
+builder.Services.AddScoped<SubmissionsRepository>();
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -247,7 +247,8 @@ int MaxUploadBytes()
 
 string SubtitlesStagingRoot()
 {
-    var root = app.Configuration["Data:SubtitlesStagingRoot"] ?? app.Configuration["DATA_SUBTITLES_STAGING_ROOT"] ?? "/app/data/subtitles-staging";
+    // Prefer explicit staging root; default under app data folder (relative) to avoid permission issues in tests
+    var root = app.Configuration["Data:SubtitlesStagingRoot"] ?? app.Configuration["DATA_SUBTITLES_STAGING_ROOT"] ?? "data/subtitles-staging";
     return Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, root));
 }
 
@@ -375,6 +376,62 @@ app.MapGet("/api/admin/submissions/{id}", (string id, SubmissionsRepository repo
     var s = repo.Get(id);
     return s == null ? Results.NotFound() : Results.Json(s);
 }).WithOpenApi(o => { o.Summary = "Get submission detail (admin)"; return o; });
+
+// Admin: subtitle preview for a submission (supports staged or external)
+app.MapGet("/api/admin/submissions/{id}/subtitle", async (string id, SubmissionsRepository repo, HttpResponse res) =>
+{
+    var s = repo.Get(id);
+    if (s?.Payload == null) return Results.NotFound();
+
+    // 1) If there's a staged storage key, read from staging
+    if (!string.IsNullOrWhiteSpace(s.Payload.SubtitleStorageKey))
+    {
+        var key = s.Payload.SubtitleStorageKey!;
+        var stagedPath = MapStagingStorageKeyToPath(SubtitlesStagingRoot(), key);
+        if (!string.IsNullOrWhiteSpace(stagedPath) && System.IO.File.Exists(stagedPath))
+        {
+            res.Headers["Cache-Control"] = "no-store";
+            return Results.File(stagedPath!, "text/plain; charset=utf-8");
+        }
+    }
+
+    // 2) If external URL present, fetch and return
+    if (!string.IsNullOrWhiteSpace(s.Payload.SubtitleUrl))
+    {
+        try
+        {
+            string text;
+            var url = s.Payload.SubtitleUrl!;
+            if (url.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+            {
+                var fp = url.Substring("file://".Length);
+                text = await System.IO.File.ReadAllTextAsync(fp);
+            }
+            else
+            {
+                using var http = new HttpClient();
+                text = await http.GetStringAsync(url);
+            }
+            res.Headers["Cache-Control"] = "no-store";
+            return Results.Text(text, "text/plain; charset=utf-8");
+        }
+        catch { }
+    }
+
+    // 3) Fallback to first-party approved path by youtube id (if present)
+    var vid = s.Payload.YoutubeId;
+    if (!string.IsNullOrWhiteSpace(vid))
+    {
+        var path = Path.Combine(SubtitlesRoot(), SanitizeId(vid!), "v1.srt");
+        if (System.IO.File.Exists(path))
+        {
+            res.Headers["Cache-Control"] = "no-store";
+            return Results.File(path, "text/plain; charset=utf-8");
+        }
+    }
+
+    return Results.NotFound();
+}).WithOpenApi(o => { o.Summary = "Get subtitle text for a submission (admin preview; staged or external)"; return o; });
 
 app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, SubmissionsRepository repo) =>
 {
@@ -700,7 +757,30 @@ static string? MapStorageKeyToPath(string subtitlesRoot, string storageKey)
     catch { return null; }
 }
 
-static string? PromoteStagedSubtitleToPublic(string storageKey, string videoId, int version)
+static string? MapStagingStorageKeyToPath(string stagingRoot, string storageKey)
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(storageKey)) return null;
+        var key = storageKey.Replace('\\', '/');
+        if (!key.StartsWith("staging/", StringComparison.OrdinalIgnoreCase)) return null;
+        var rel = key.Substring("staging/".Length);
+        var parts = rel.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2) return null;
+        var vid = SanitizeId(parts[0]);
+        var verPart = parts[1];
+        // Accept both "v1" and "v1.srt"
+        var verNoExt = verPart.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)
+            ? verPart.Substring(0, verPart.Length - 4)
+            : verPart;
+        if (!verNoExt.StartsWith("v", StringComparison.OrdinalIgnoreCase)) return null;
+        var path = Path.Combine(stagingRoot, vid, verNoExt + ".srt");
+        return path;
+    }
+    catch { return null; }
+}
+
+string? PromoteStagedSubtitleToPublic(string storageKey, string videoId, int version)
 {
     try
     {
@@ -852,20 +932,31 @@ static void AddTag(string jsonPath, string id, string tag)
         var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
         var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
         if (item == null) return;
+        
         var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (item.TryGetValue("tags", out var tv) && tv is System.Text.Json.JsonElement jel && jel.ValueKind == JsonValueKind.Array)
+        if (item.TryGetValue("tags", out var tagsValue) && tagsValue != null)
         {
-            foreach (var el in jel.EnumerateArray())
+            if (tagsValue is JsonElement tagsElement && tagsElement.ValueKind == JsonValueKind.Array)
             {
-                var s = el.GetString(); if (!string.IsNullOrWhiteSpace(s)) existing.Add(s!);
+                foreach (var el in tagsElement.EnumerateArray())
+                {
+                    var s = el.GetString();
+                    if (!string.IsNullOrWhiteSpace(s)) existing.Add(s);
+                }
+            }
+            else if (tagsValue is IEnumerable<object> objEnumerable)
+            {
+                 foreach (var o in objEnumerable)
+                 {
+                    var s = Convert.ToString(o);
+                    if (!string.IsNullOrWhiteSpace(s)) existing.Add(s);
+                 }
             }
         }
-        else if (item.TryGetValue("tags", out var tv2) && tv2 is IEnumerable<object?> arr)
-        {
-            foreach (var o in arr) { var s = Convert.ToString(o); if (!string.IsNullOrWhiteSpace(s)) existing.Add(s!); }
-        }
+
         existing.Add(tag);
         item["tags"] = existing.ToArray();
+        
         var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
         File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
     }
@@ -882,17 +973,31 @@ static void RemoveTag(string jsonPath, string id, string tag)
         var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
         var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
         if (item == null) return;
-        var existing = new List<string>();
-        if (item.TryGetValue("tags", out var tv) && tv is System.Text.Json.JsonElement jel && jel.ValueKind == JsonValueKind.Array)
+
+        var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (item.TryGetValue("tags", out var tagsValue) && tagsValue != null)
         {
-            existing = jel.EnumerateArray().Select(e => e.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+            if (tagsValue is JsonElement tagsElement && tagsElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var el in tagsElement.EnumerateArray())
+                {
+                    var s = el.GetString();
+                    if (!string.IsNullOrWhiteSpace(s)) existing.Add(s);
+                }
+            }
+            else if (tagsValue is IEnumerable<object> objEnumerable)
+            {
+                 foreach (var o in objEnumerable)
+                 {
+                    var s = Convert.ToString(o);
+                    if (!string.IsNullOrWhiteSpace(s)) existing.Add(s);
+                 }
+            }
         }
-        else if (item.TryGetValue("tags", out var tv2) && tv2 is IEnumerable<object?> arr)
-        {
-            existing = arr.Select(o => Convert.ToString(o) ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
-        }
-        existing = existing.Where(s => !string.Equals(s, tag, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        existing.RemoveWhere(s => string.Equals(s, tag, StringComparison.OrdinalIgnoreCase));
         item["tags"] = existing.ToArray();
+
         var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
         File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
     }

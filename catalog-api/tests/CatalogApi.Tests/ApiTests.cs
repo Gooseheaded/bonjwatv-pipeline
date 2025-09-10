@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Linq;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -13,7 +14,7 @@ using Xunit;
 
 namespace CatalogApi.Tests;
 
-public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
+public class ApiTests : IClassFixture<WebApplicationFactory<Program>> 
 {
     private readonly WebApplicationFactory<Program> _factory;
 
@@ -21,6 +22,10 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
     {
         _factory = factory.WithWebHostBuilder(builder =>
         {
+            var solutionDir = FindSolutionDirectory();
+            var projectDir = Path.Combine(solutionDir, "catalog-api");
+            builder.UseContentRoot(projectDir);
+
             builder.ConfigureAppConfiguration((ctx, cfg) =>
             {
                 // Write a temp JSON file for the repository
@@ -42,6 +47,16 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
                 cfg.AddInMemoryCollection(dict!);
             });
         });
+    }
+
+    private static string FindSolutionDirectory()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !dir.GetFiles("*.sln").Any())
+        {
+            dir = dir.Parent;
+        }
+        return dir?.FullName ?? throw new InvalidOperationException("Solution directory not found.");
     }
 
     [Fact]
@@ -371,9 +386,11 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
 
         // Manually add an entry in videos.json that references this subtitle URL
         var internalUrl = "/api/subtitles/keep001/1.srt";
-        var json = System.Text.Json.JsonSerializer.Serialize(new [] {
-            new Dictionary<string, object?> { ["v"] = "keep001", ["title"] = "Gamma", ["subtitleUrl"] = internalUrl }
-        }, new System.Text.Json.JsonSerializerOptions{ WriteIndented = true });
+        var publicSubsDir = Path.Combine(subsRoot, "keep001");
+        Directory.CreateDirectory(publicSubsDir);
+        await File.WriteAllTextAsync(Path.Combine(publicSubsDir, "v1.srt"), "1\n00:00:01,000 --> 00:00:02,000\nKEEP\n");
+
+        var json = System.Text.Json.JsonSerializer.Serialize(new [] { new Dictionary<string, object?> { ["v"] = "keep001", ["title"] = "Gamma", ["subtitleUrl"] = internalUrl } }, new System.Text.Json.JsonSerializerOptions{ WriteIndented = true });
         await File.WriteAllTextAsync(vidsPath, json);
 
         // Submit a video referencing the same stored subtitle
@@ -403,9 +420,7 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         var ratingsPath = Path.Combine(tmpRoot.FullName, "ratings.json");
         var subsRoot = Path.Combine(tmpRoot.FullName, "subtitles");
         var submissionsPath = Path.Combine(tmpRoot.FullName, "submissions.json");
-        await File.WriteAllTextAsync(vidsPath, System.Text.Json.JsonSerializer.Serialize(new [] {
-            new Dictionary<string, object?> { ["v"] = "tag001", ["title"] = "Tag Test", ["tags"] = new [] { "z" } }
-        }));
+        await File.WriteAllTextAsync(vidsPath, System.Text.Json.JsonSerializer.Serialize(new [] { new Dictionary<string, object?> { ["v"] = "tag001", ["title"] = "Tag Test", ["tags"] = new [] { "z" } } }));
 
         var factory = _factory.WithWebHostBuilder(builder =>
         {
