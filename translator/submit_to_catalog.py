@@ -274,8 +274,11 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
             sub_url = f"{catalog_base.rstrip('/')}/api/submissions/videos"
             title = choose_title(item, base_dir=base_dir, vid=vid)
             if not title:
-                _print(f"WARN: No translated title found for {vid}; using fallback.")
-                title = f"Video {vid}"
+                _print(
+                    f"WARN: No translated English title found for {vid}; skipping submission."
+                )
+                ok_all = False
+                continue
             # Coerce tags to list[str]
             raw_tags = item.get("tags") or []
             tags: List[str] = []
