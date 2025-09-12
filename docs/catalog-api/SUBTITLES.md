@@ -46,3 +46,7 @@ Serve and store subtitles in our infra with versioning. Start simple on filesyst
 
 - `DATA_SUBTITLES_ROOT`: Root folder for stored subtitles (default `/app/data/subtitles`).
 - `UPLOADS_MAX_SUBTITLE_BYTES`: Max accepted upload size in bytes (default `1048576`).
+
+## Notes on Videos Store
+- On approval, the Catalog API updates the primary videos store to include the first‑party `subtitleUrl`.
+- The legacy `videos.json` file is only used as an optional bootstrap source on startup and is not written at runtime.

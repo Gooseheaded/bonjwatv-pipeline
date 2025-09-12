@@ -22,6 +22,5 @@ Local Development
 
 Notes
 
-- In dev, catalog-api reads ../webapp/data/videos.json. Later, translator will publish data artifacts that catalog-api imports or serves.
-- The webapp can be configured to read from the API via the DATA_CATALOG_URL environment variable, with a local JSON fallback for development.
-
+- Catalog API owns the primary videos store. It can optionally import from a legacy `videos.json` at startup if the primary store is empty.
+- The webapp reads catalog data exclusively from the API (no local `videos.json`). Configure via `CATALOG_API_BASE_URL` (preferred) or `DATA_CATALOG_URL`.
