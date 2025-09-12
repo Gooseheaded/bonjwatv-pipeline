@@ -105,6 +105,48 @@ def test_transcribe_audio_openai(tmp_path, mock_imports):
     assert call_kwargs["response_format"] == "srt"
 
 
+def test_transcribe_audio_openai_chunking(tmp_path, monkeypatch, mock_imports):
+    # Create a big "audio" file to exceed threshold
+    audio = tmp_path / "big.mp3"
+    audio.write_bytes(b"0" * (25_000_000))
+    output_srt = tmp_path / "out.srt"
+
+    # Monkeypatch segmenter to avoid calling ffmpeg; return two chunk paths
+    chunks_dir = tmp_path / "chunks"
+    chunks_dir.mkdir()
+    c1 = chunks_dir / "chunk_000.mp3"
+    c2 = chunks_dir / "chunk_001.mp3"
+    c1.write_text("dummy", encoding="utf-8")
+    c2.write_text("dummy", encoding="utf-8")
+
+    def fake_segment(path, out_dir, segment_time=600, bitrate="64k"):
+        return [str(c1), str(c2)]
+
+    monkeypatch.setattr("transcribe_audio._ffmpeg_segment", fake_segment)
+
+    # Mock OpenAI to return simple SRT per chunk with timestamps starting at 0
+    mock_client = mock_imports
+    mock_client.audio.transcriptions.create.side_effect = [
+        "1\n00:00:00,500 --> 00:00:01,000\nA\n\n",
+        "1\n00:00:00,000 --> 00:00:00,500\nB\n\n",
+    ]
+
+    ok = run_transcribe_audio(
+        audio_path=str(audio),
+        output_subtitle=str(output_srt),
+        provider="openai",
+        api_model="whisper-1",
+        language="ko",
+        max_upload_bytes=1,  # force chunking by using tiny threshold
+        segment_time=1,
+    )
+    assert ok is True
+    data = output_srt.read_text(encoding="utf-8")
+    # Expect two lines, renumbered 1..2 and shifted offsets
+    assert "1\n00:00:00,500 --> 00:00:01,000\nA" in data
+    assert "2\n00:00:01,000 --> 00:00:01,500\nB" in data
+
+
 def test_transcribe_audio_missing_file(tmp_path):
     ok = run_transcribe_audio(
         audio_path="no_such.mp3", output_subtitle=str(tmp_path / "out.srt")

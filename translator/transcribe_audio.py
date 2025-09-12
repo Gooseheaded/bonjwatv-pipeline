@@ -3,6 +3,9 @@ import logging
 import os
 
 from dotenv import load_dotenv
+import subprocess
+import tempfile
+import re
 
 from normalize_srt import run_normalize_srt
 
@@ -67,6 +70,70 @@ def transcribe_audio_local(
             f.write(f"{i}\n{start} --> {end}\n{segment['text'].strip()}\n\n")
 
 
+def _parse_srt(srt_text: str):
+    pattern = re.compile(
+        r"(\d+)\s+(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\s+([\s\S]*?)(?=\n\n|\Z)",
+        re.MULTILINE,
+    )
+    blocks = []
+    for m in pattern.finditer(srt_text):
+        blocks.append(
+            (
+                int(m.group(1)),
+                m.group(2),
+                m.group(3),
+                m.group(4).strip(),
+            )
+        )
+    return blocks
+
+
+def _time_to_seconds(ts: str) -> float:
+    h, m, rest = ts.split(":")
+    s, ms = rest.split(",")
+    return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
+
+
+def _shift_timestamp(ts: str, offset_sec: float) -> str:
+    return format_timestamp(_time_to_seconds(ts) + offset_sec)
+
+
+def _shift_srt(srt_text: str, offset_sec: float) -> str:
+    blocks = _parse_srt(srt_text)
+    out_lines = []
+    for i, (_, start, end, text) in enumerate(blocks, start=1):
+        out_lines.append(str(i))
+        out_lines.append(f"{_shift_timestamp(start, offset_sec)} --> {_shift_timestamp(end, offset_sec)}")
+        out_lines.append(text)
+        out_lines.append("")
+    return "\n".join(out_lines) + "\n"
+
+
+def _ffmpeg_segment(audio_path: str, out_dir: str, segment_time: int = 600, bitrate: str = "64k") -> list:
+    os.makedirs(out_dir, exist_ok=True)
+    out_pattern = os.path.join(out_dir, "chunk_%03d.mp3")
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        audio_path,
+        "-ac",
+        "1",
+        "-b:a",
+        bitrate,
+        "-f",
+        "segment",
+        "-segment_time",
+        str(segment_time),
+        "-reset_timestamps",
+        "1",
+        out_pattern,
+    ]
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    chunks = [os.path.join(out_dir, f) for f in sorted(os.listdir(out_dir)) if f.startswith("chunk_")]
+    return chunks
+
+
 def run_transcribe_audio(
     audio_path: str,
     output_subtitle: str,
@@ -74,6 +141,8 @@ def run_transcribe_audio(
     model_size: str = "large",
     language: str = "ko",
     api_model: str = "whisper-1",
+    max_upload_bytes: int = 24_500_000,
+    segment_time: int = 600,
 ) -> bool:
     """Transcribe an audio file and normalize the resulting SRT file."""
     try:
@@ -82,18 +151,56 @@ def run_transcribe_audio(
             return False
 
         if provider == "openai":
-            # Call OpenAI API with response_format="srt" and write the returned text
+            # If file is large, segment to keep each upload comfortably below API limit
+            size = os.path.getsize(audio_path)
             openai = importlib.import_module("openai")
             client = openai.OpenAI()
-            with open(audio_path, "rb") as f:
-                srt_text = client.audio.transcriptions.create(
-                    model=api_model, file=f, language=language, response_format="srt"
-                )
             os.makedirs(os.path.dirname(output_subtitle), exist_ok=True)
-            with open(output_subtitle, "w", encoding="utf-8") as out:
-                out.write(srt_text)
-            logging.info(f"Subtitles saved to {output_subtitle}")
-            return True
+            if size <= max_upload_bytes:
+                with open(audio_path, "rb") as f:
+                    srt_text = client.audio.transcriptions.create(
+                        model=api_model,
+                        file=f,
+                        language=language,
+                        response_format="srt",
+                    )
+                with open(output_subtitle, "w", encoding="utf-8") as out:
+                    out.write(srt_text)
+                logging.info(f"Subtitles saved to {output_subtitle}")
+                return True
+            else:
+                logging.info(
+                    "Audio size %d exceeds threshold %d; segmenting for chunked transcription",
+                    size,
+                    max_upload_bytes,
+                )
+                with tempfile.TemporaryDirectory(prefix="stt_chunks_") as tmpdir:
+                    try:
+                        chunks = _ffmpeg_segment(audio_path, tmpdir, segment_time=segment_time)
+                    except Exception as e:
+                        logging.error(f"Failed to segment audio: {e}")
+                        return False
+                    merged_srt_lines = []
+                    # Offset equals index * segment_time seconds
+                    for idx, ch in enumerate(chunks):
+                        with open(ch, "rb") as f:
+                            part_srt = client.audio.transcriptions.create(
+                                model=api_model,
+                                file=f,
+                                language=language,
+                                response_format="srt",
+                            )
+                        offset = idx * float(segment_time)
+                        shifted = _shift_srt(part_srt, offset)
+                        merged_srt_lines.append(shifted)
+                    with open(output_subtitle, "w", encoding="utf-8") as out:
+                        # Renumber while concatenating
+                        full = "".join(merged_srt_lines)
+                        blocks = _parse_srt(full)
+                        for i, (_, start, end, text) in enumerate(blocks, start=1):
+                            out.write(f"{i}\n{start} --> {end}\n{text}\n\n")
+                logging.info(f"Subtitles saved to {output_subtitle}")
+                return True
         elif provider == "local":
             transcribe_audio_local(audio_path, output_subtitle, model_size, language)
         else:

@@ -159,6 +159,18 @@ ruff check .
   cp pipeline-config.example.json pipeline-config.json
   # edit spreadsheet, worksheet, and service_account_file
   ```
+
+### YouTube Download (yt-dlp) Auth
+- If YouTube returns 403/bot checks, provide cookies to yt-dlp with either:
+  - `YTDLP_COOKIES=/path/to/cookies.txt` (export from your browser)
+  - or `YTDLP_COOKIES_BROWSER=chrome` (or `firefox`, `brave`, `edge`) for automatic cookie pickup
+  The downloader uses a mobile user agent and Android player client by default to reduce challenges.
+
+### Transcription Limits and Chunking (OpenAI)
+- OpenAI Whisper uploads have a size cap (~25 MB). The pipeline automatically:
+  - Re-encodes large audio to mono ~64 kbps and segments into ~10-minute chunks; each chunk is transcribed separately and timestamps are merged.
+  - You can tune thresholds via `run_transcribe_audio(..., max_upload_bytes=..., segment_time=...)` in code.
+  - Local Whisper fallback is available but disabled by default when `provider="openai"`.
   The `steps` array defines the pipeline order. Allowed values:
   - Global: `read_youtube_urls`, `build_videos_json`, `google_sheet_read`, `google_sheet_write`, `manifest_builder`
   - Per-video: `fetch_video_metadata`, `translate_title`, `download_audio`, `isolate_vocals`, `transcribe_audio`, `normalize_srt`, `translate_subtitles`, `upload_subtitles`

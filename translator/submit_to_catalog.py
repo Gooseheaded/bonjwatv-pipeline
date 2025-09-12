@@ -22,6 +22,37 @@ import urllib.error
 import re
 
 
+def _is_trivial_srt(file_path: str) -> bool:
+    """Return True if the SRT looks like a stub or too small to be meaningful.
+
+    Heuristics:
+    - File size < 128 bytes
+    - Fewer than 3 subtitle blocks
+    - Only a single short line like "Hello!"
+    """
+    try:
+        size = os.path.getsize(file_path)
+        if size < 128:
+            return True
+        text = open(file_path, encoding="utf-8", errors="ignore").read()
+        # Count blocks
+        blocks = re.findall(
+            r"\n?\d+\s+\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\s+[\s\S]*?(?=\n\n|\Z)",
+            text,
+            flags=re.MULTILINE,
+        )
+        if len(blocks) < 3:
+            return True
+        # Extremely short total content
+        payload = re.sub(r"\d+\s+\d{2}:\d{2}:\d{2},\d{3} --> .*", "", text)
+        payload = re.sub(r"\s+", " ", payload).strip()
+        if len(payload) < 64:
+            return True
+        return False
+    except Exception:
+        return True
+
+
 def _print(msg: str) -> None:
     print(msg, flush=True)
 
@@ -177,33 +208,39 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
             # Try to reconstruct from cached chunks first
             reconstructed = None
             try:
-                reconstructed = _reconstruct_en_from_cache(os.path.join(base_dir, ".cache"), vid, subtitles_dir)
+                reconstructed = _reconstruct_en_from_cache(
+                    os.path.join(base_dir, ".cache"), vid, subtitles_dir
+                )
             except Exception:
                 reconstructed = None
             if reconstructed:
-                _print(f"INFO: reconstructed English SRT from cache for {vid}: {reconstructed}")
+                _print(
+                    f"INFO: reconstructed English SRT from cache for {vid}: {reconstructed}"
+                )
+                en_srt = reconstructed
             else:
-                # Auto-scaffold a minimal SRT to keep the flow moving
-                try:
-                    os.makedirs(subtitles_dir, exist_ok=True)
-                    stub = "1\n00:00:01,000 --> 00:00:02,000\nHello!\n"
-                    with open(en_srt, "w", encoding="utf-8") as f:
-                        f.write(stub)
-                    _print(f"INFO: created stub subtitle for {vid}: {en_srt}")
-                except Exception as e:
-                    _print(f"WARN: subtitle not found for {vid}: {en_srt} (and failed to create stub: {e})")
-                    ok_all = False
-                    continue
-        else:
-            # If file exists but appears to be the stub, attempt reconstruction from cache
-            try:
-                size = os.path.getsize(en_srt)
-                if size < 64:
-                    reconstructed = _reconstruct_en_from_cache(os.path.join(base_dir, ".cache"), vid, subtitles_dir)
-                    if reconstructed:
-                        _print(f"INFO: replaced stub with reconstructed English SRT for {vid}: {reconstructed}")
-            except Exception:
-                pass
+                _print(
+                    f"WARN: English subtitles not found for {vid}; skipping submission (no stub created)."
+                )
+                ok_all = False
+                continue
+        # Validate non-trivial subtitles
+        if _is_trivial_srt(en_srt):
+            # Try to replace with reconstruction if possible
+            reconstructed = _reconstruct_en_from_cache(
+                os.path.join(base_dir, ".cache"), vid, subtitles_dir
+            )
+            if reconstructed and not _is_trivial_srt(reconstructed):
+                en_srt = reconstructed
+                _print(
+                    f"INFO: replaced trivial English SRT with reconstructed for {vid}: {reconstructed}"
+                )
+            else:
+                _print(
+                    f"WARN: English subtitles for {vid} appear invalid/trivial; skipping submission."
+                )
+                ok_all = False
+                continue
 
         # 1) Upload SRT
         try:
