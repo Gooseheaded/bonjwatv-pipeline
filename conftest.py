@@ -1,8 +1,9 @@
 import pathlib
 
 
-def pytest_ignore_collect(path, config):
-    p = pathlib.Path(str(path))
+def pytest_ignore_collect(collection_path, config):
+    # Accept both py.path.local (pytest<9) and pathlib.Path (pytest>=9)
+    p = pathlib.Path(str(collection_path))
     # Ignore duplicate/copy repos and virtualenvs
     for part in p.parts:
         if part.startswith("bonjwatv-pipeline"):
@@ -10,4 +11,3 @@ def pytest_ignore_collect(path, config):
         if part in {".venv", "dist"}:
             return True
     return False
-
