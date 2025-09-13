@@ -9,6 +9,7 @@ namespace bwkt_webapp.Pages.Admin
         public JsonElement Submission { get; private set; }
         public string? SubtitleText { get; private set; }
         public bool? IsUpdate { get; private set; } = false; // default to New on failures
+        public string? ExistingSubtitleText { get; private set; }
 
         public void OnGet(string id)
         {
@@ -89,6 +90,38 @@ namespace bwkt_webapp.Pages.Admin
                     }
                 }
                 catch { SubtitleText = null; }
+
+                // If this submission is an Update, attempt to fetch the existing current subtitles for diff
+                try
+                {
+                    if (IsUpdate == true && !string.IsNullOrWhiteSpace(vid))
+                    {
+                        // Prefer the subtitleUrl from the video detail (includes version)
+                        try
+                        {
+                            var vjson = http.GetStringAsync($"{apiBase}/videos/{vid}").GetAwaiter().GetResult();
+                            using var vdoc = JsonDocument.Parse(vjson);
+                            var root = vdoc.RootElement;
+                            var su = root.TryGetProperty("subtitleUrl", out var suEl) ? suEl.GetString() : null;
+                            if (!string.IsNullOrWhiteSpace(su))
+                            {
+                                ExistingSubtitleText = http.GetStringAsync(su!).GetAwaiter().GetResult();
+                            }
+                        }
+                        catch { /* fall back to v1 below */ }
+
+                        if (string.IsNullOrWhiteSpace(ExistingSubtitleText))
+                        {
+                            try
+                            {
+                                // Fallback to v1 first-party subtitle
+                                ExistingSubtitleText = http.GetStringAsync($"{apiBase}/subtitles/{vid}/1.srt").GetAwaiter().GetResult();
+                            }
+                            catch { ExistingSubtitleText = null; }
+                        }
+                    }
+                }
+                catch { ExistingSubtitleText = null; }
             }
             catch { IsUpdate = false; }
         }

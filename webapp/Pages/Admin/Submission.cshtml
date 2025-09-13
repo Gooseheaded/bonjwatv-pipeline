@@ -102,3 +102,36 @@ else
         </div>
     </div>
 }
+
+@* Subtitle diff section for updates *@
+@if (Model.IsAdmin && Model.IsUpdate == true && !string.IsNullOrWhiteSpace(Model.SubtitleText) && !string.IsNullOrWhiteSpace(Model.ExistingSubtitleText))
+{
+    <h3 class="mt-4">Subtitle Diff</h3>
+    <p class="text-muted">Existing (left) vs Submission (right)</p>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label">Existing subtitles</label>
+            <textarea id="diff-left" class="form-control" readonly style="max-height: 320px; min-height: 240px; overflow: auto; font-family: monospace; font-size: 0.9rem;">@Model.ExistingSubtitleText</textarea>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Submission subtitles</label>
+            <textarea id="diff-right" class="form-control" readonly style="max-height: 320px; min-height: 240px; overflow: auto; font-family: monospace; font-size: 0.9rem;">@Model.SubtitleText</textarea>
+        </div>
+    </div>
+    <script>
+        (function(){
+            const l = document.getElementById('diff-left');
+            const r = document.getElementById('diff-right');
+            if (!l || !r) return;
+            function sync(from, to) {
+                const maxFrom = from.scrollHeight - from.clientHeight;
+                const maxTo = to.scrollHeight - to.clientHeight;
+                const ratio = maxFrom > 0 ? (from.scrollTop / maxFrom) : 0;
+                to.scrollTop = ratio * maxTo;
+            }
+            let ignore = false;
+            l.addEventListener('scroll', function(){ if (ignore) return; ignore = true; sync(l, r); ignore = false; });
+            r.addEventListener('scroll', function(){ if (ignore) return; ignore = true; sync(r, l); ignore = false; });
+        })();
+    </script>
+}
