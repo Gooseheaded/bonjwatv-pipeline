@@ -17,9 +17,9 @@ def test_skips_when_no_translated_title(tmp_path, monkeypatch, capsys):
     # Provide a valid English SRT so only title is the blocker
     # Provide a non-trivial SRT (>=3 blocks) so only missing title causes skip
     (subs_dir / "en_abc123.srt").write_text(
-        "1\n00:00:01,000 --> 00:00:02,000\nHello world\n\n"
-        "2\n00:00:02,000 --> 00:00:03,000\nMore text\n\n"
-        "3\n00:00:03,000 --> 00:00:04,000\nEven more\n\n",
+        "1\n00:00:01,000 --> 00:00:02,000\nHello world, these are meaningful words for testing.\n\n"
+        "2\n00:00:02,000 --> 00:00:03,000\nMore text appears here to exceed size thresholds.\n\n"
+        "3\n00:00:03,000 --> 00:00:04,000\nEven more lines to make content sufficiently long.\n\n",
         encoding="utf-8",
     )
 
