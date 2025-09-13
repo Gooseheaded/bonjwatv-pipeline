@@ -51,8 +51,12 @@ namespace bwkt_webapp.Pages.Admin
                         var existsResp = http.GetAsync($"{apiBase}/videos/{vid}").GetAwaiter().GetResult();
                         IsUpdate = existsResp.IsSuccessStatusCode;
                     }
+                    else
+                    {
+                        IsUpdate = null;
+                    }
                 }
-                catch { IsUpdate = null; }
+                catch { IsUpdate = false; }
 
                 // Attempt to load subtitle preview:
                 // 1) Prefer API admin preview (handles staged or external)
