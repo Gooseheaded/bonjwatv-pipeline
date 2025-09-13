@@ -114,7 +114,10 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
                     webBuilder.UseKestrel().UseUrls(BaseUrl);
                     webBuilder.Configure(app =>
                     {
-                        app.MapGet("/api/admin/submissions", async ctx =>
+                        app.UseRouting();
+                        app.UseEndpoints(endpoints =>
+                        {
+                            endpoints.MapGet("/api/admin/submissions", async ctx =>
                         {
                             // Return two items: one new, one update
                             var items = new[]
@@ -128,7 +131,7 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
                             ctx.Response.ContentType = "application/json";
                             await ctx.Response.WriteAsync(json);
                         });
-                        app.MapGet("/api/admin/submissions/{id}", async (HttpContext ctx, string id) =>
+                            endpoints.MapGet("/api/admin/submissions/{id}", async (HttpContext ctx, string id) =>
                         {
                             if (id == "sub-new-1")
                             {
@@ -148,7 +151,7 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
                             }
                             ctx.Response.StatusCode = 404;
                         });
-                        app.MapGet("/api/videos/{id}", async (HttpContext ctx, string id) =>
+                            endpoints.MapGet("/api/videos/{id}", async (HttpContext ctx, string id) =>
                         {
                             if (id == "exists123")
                             {
@@ -160,7 +163,8 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
                                 ctx.Response.StatusCode = 404;
                             }
                         });
-                        app.MapGet("/api/admin/submissions/{id}/subtitle", ctx => { ctx.Response.StatusCode = 404; return Task.CompletedTask; });
+                            endpoints.MapGet("/api/admin/submissions/{id}/subtitle", ctx => { ctx.Response.StatusCode = 404; return Task.CompletedTask; });
+                        });
                     });
                 })
                 .Build();
