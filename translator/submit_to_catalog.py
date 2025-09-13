@@ -189,23 +189,42 @@ def _reconstruct_en_from_cache(cache_dir: str, vid: str, subtitles_dir: str) -> 
 
 def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -> bool:
     def _fetch_hashes(ids: list[str]) -> dict[str, Optional[str]]:
-        try:
-            if not ids:
-                return {}
-            # Build query: support repeated ids
-            from urllib.parse import urlencode
-            query = urlencode([("ids", vid) for vid in ids])
-            url = f"{catalog_base.rstrip('/')}/api/subtitles/hashes?{query}"
-            with urllib.request.urlopen(url) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                # Ensure keys exist for all ids
-                out: dict[str, Optional[str]] = {}
-                for vid in ids:
-                    val = data.get(vid)
-                    out[vid] = val if isinstance(val, str) else (None if val is None else None)
-                return out
-        except Exception:
+        """Fetch remote subtitle hashes in batches to avoid long URLs.
+
+        Returns { videoId: sha256 | None } for the requested IDs. Missing
+        entries or failures resolve to None. Duplicates are de-duped.
+        """
+        if not ids:
             return {}
+        from urllib.parse import urlencode
+        base = catalog_base.rstrip('/')
+        # De-dupe while preserving order
+        unique: list[str] = []
+        seen: set[str] = set()
+        for vid in ids:
+            s = str(vid)
+            if s not in seen:
+                seen.add(s)
+                unique.append(s)
+        out: dict[str, Optional[str]] = {vid: None for vid in unique}
+        CHUNK = 100
+        for i in range(0, len(unique), CHUNK):
+            chunk = unique[i:i+CHUNK]
+            try:
+                query = urlencode([("ids", vid) for vid in chunk])
+                url = f"{base}/api/subtitles/hashes?{query}"
+                with urllib.request.urlopen(url) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    for vid in chunk:
+                        val = data.get(vid)
+                        if isinstance(val, str):
+                            out[vid] = val
+                        elif val is None:
+                            out[vid] = None
+            except Exception:
+                # Leave this chunk's entries as None on failure
+                continue
+        return out
 
     def _sha256_file(path: str) -> Optional[str]:
         try:
