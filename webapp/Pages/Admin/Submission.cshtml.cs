@@ -8,7 +8,7 @@ namespace bwkt_webapp.Pages.Admin
         public bool IsAdmin { get; private set; }
         public JsonElement Submission { get; private set; }
         public string? SubtitleText { get; private set; }
-        public bool? IsUpdate { get; private set; }
+        public bool? IsUpdate { get; private set; } = false; // default to New on failures
 
         public void OnGet(string id)
         {
@@ -90,7 +90,7 @@ namespace bwkt_webapp.Pages.Admin
                 }
                 catch { SubtitleText = null; }
             }
-            catch { }
+            catch { IsUpdate = false; }
         }
 
         private static string? DeriveApiBase()
