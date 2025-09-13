@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import time
 
 import build_videos_json
 import download_audio
@@ -153,6 +154,7 @@ def main():  # noqa: C901
     for s in steps:
         if s == "google_sheet_read":
             logging.info("START google_sheet_read")
+            _t0 = time.monotonic()
             if not google_sheet_read.run_google_sheet_read(
                 spreadsheet=config.get("spreadsheet", ""),
                 worksheet=config.get("worksheet", ""),
@@ -160,18 +162,19 @@ def main():  # noqa: C901
                 service_account_file=config.get("service_account_file", ""),
             ):
                 logging.error("google_sheet_read failed, aborting pipeline")
-                logging.info("END google_sheet_read FAIL")
+                logging.info("END google_sheet_read FAIL (%.1fs)", time.monotonic() - _t0)
                 sys.exit(1)
-            logging.info("END google_sheet_read OK")
+            logging.info("END google_sheet_read OK (%.1fs)", time.monotonic() - _t0)
         elif s == "read_youtube_urls":
             logging.info("START read_youtube_urls")
+            _t0 = time.monotonic()
             if not read_youtube_urls.run_read_youtube_urls(
                 urls_file=config.get("urls_file", ""), output=video_list_file
             ):
                 logging.error("read_youtube_urls failed, aborting pipeline")
-                logging.info("END read_youtube_urls FAIL")
+                logging.info("END read_youtube_urls FAIL (%.1fs)", time.monotonic() - _t0)
                 sys.exit(1)
-            logging.info("END read_youtube_urls OK")
+            logging.info("END read_youtube_urls OK (%.1fs)", time.monotonic() - _t0)
         elif s in allowed_per_video:
             break
 
@@ -199,36 +202,40 @@ def main():  # noqa: C901
 
             if s == "fetch_video_metadata":
                 logging.info("START fetch_video_metadata video=%s", vid)
+                _t0 = time.monotonic()
                 if not fetch_video_metadata.run_fetch_video_metadata(
                     video_id=vid, output_dir=video_metadata_dir
                 ):
-                    logging.error("END fetch_video_metadata video=%s FAIL", vid)
+                    logging.error("END fetch_video_metadata video=%s FAIL (%.1fs)", vid, time.monotonic() - _t0)
                     break
-                logging.info("END fetch_video_metadata video=%s OK", vid)
+                logging.info("END fetch_video_metadata video=%s OK (%.1fs)", vid, time.monotonic() - _t0)
                 step_executed = True
             elif s == "download_audio":
                 logging.info("START download_audio video=%s", vid)
+                _t0 = time.monotonic()
                 if not download_audio.run_download_audio(
                     url=v.get("youtube_url", f"https://www.youtube.com/watch?v={vid}"),
                     video_id=vid,
                     output_dir=audio_dir,
                 ):
-                    logging.error("END download_audio video=%s FAIL", vid)
+                    logging.error("END download_audio video=%s FAIL (%.1fs)", vid, time.monotonic() - _t0)
                     break
-                logging.info("END download_audio video=%s OK", vid)
+                logging.info("END download_audio video=%s OK (%.1fs)", vid, time.monotonic() - _t0)
                 step_executed = True
             elif s == "isolate_vocals":
                 logging.info("START isolate_vocals video=%s", vid)
+                _t0 = time.monotonic()
                 audio_path = os.path.join(audio_dir, f"{vid}.mp3")
                 if not isolate_vocals.run_isolate_vocals(
                     input_file=audio_path, output_dir=vocals_dir
                 ):
-                    logging.error("END isolate_vocals video=%s FAIL", vid)
+                    logging.error("END isolate_vocals video=%s FAIL (%.1fs)", vid, time.monotonic() - _t0)
                     break
-                logging.info("END isolate_vocals video=%s OK", vid)
+                logging.info("END isolate_vocals video=%s OK (%.1fs)", vid, time.monotonic() - _t0)
                 step_executed = True
             elif s == "transcribe_audio":
                 logging.info("START transcribe_audio video=%s", vid)
+                _t0 = time.monotonic()
                 # Prefer isolated vocals if available; fall back to original audio
                 vocals_path = os.path.join(vocals_dir, vid, "vocals.wav")
                 input_audio = (
@@ -255,22 +262,24 @@ def main():  # noqa: C901
                         else None
                     ),
                 ):
-                    logging.error("END transcribe_audio video=%s FAIL", vid)
+                    logging.error("END transcribe_audio video=%s FAIL (%.1fs)", vid, time.monotonic() - _t0)
                     break
-                logging.info("END transcribe_audio video=%s OK", vid)
+                logging.info("END transcribe_audio video=%s OK (%.1fs)", vid, time.monotonic() - _t0)
                 step_executed = True
             elif s == "normalize_srt":
                 logging.info("START normalize_srt video=%s", vid)
+                _t0 = time.monotonic()
                 kr_srt = os.path.join(subtitles_dir, f"kr_{vid}.srt")
                 if not normalize_srt.run_normalize_srt(
                     input_file=kr_srt, output_file=kr_srt
                 ):
-                    logging.error("END normalize_srt video=%s FAIL", vid)
+                    logging.error("END normalize_srt video=%s FAIL (%.1fs)", vid, time.monotonic() - _t0)
                     break
-                logging.info("END normalize_srt video=%s OK", vid)
+                logging.info("END normalize_srt video=%s OK (%.1fs)", vid, time.monotonic() - _t0)
                 step_executed = True
             elif s == "translate_subtitles":
                 logging.info("START translate_subtitles video=%s", vid)
+                _t0 = time.monotonic()
                 kr_srt = os.path.join(subtitles_dir, f"kr_{vid}.srt")
                 en_srt = os.path.join(subtitles_dir, f"en_{vid}.srt")
                 if not translate_subtitles.run_translate_subtitles(
@@ -279,28 +288,30 @@ def main():  # noqa: C901
                     slang_file=slang_file,
                     cache_dir=cache_dir,
                 ):
-                    logging.error("END translate_subtitles video=%s FAIL", vid)
+                    logging.error("END translate_subtitles video=%s FAIL (%.1fs)", vid, time.monotonic() - _t0)
                     break
-                logging.info("END translate_subtitles video=%s OK", vid)
+                logging.info("END translate_subtitles video=%s OK (%.1fs)", vid, time.monotonic() - _t0)
                 step_executed = True
             elif s == "translate_title":
                 logging.info("START translate_title video=%s", vid)
+                _t0 = time.monotonic()
                 if not translate_title.run_translate_title(
                     video_id=vid, metadata_dir=video_metadata_dir, cache_dir=cache_dir
                 ):
-                    logging.error("END translate_title video=%s FAIL", vid)
+                    logging.error("END translate_title video=%s FAIL (%.1fs)", vid, time.monotonic() - _t0)
                     break
-                logging.info("END translate_title video=%s OK", vid)
+                logging.info("END translate_title video=%s OK (%.1fs)", vid, time.monotonic() - _t0)
                 step_executed = True
             elif s == "upload_subtitles":
                 logging.info("START upload_subtitles video=%s", vid)
+                _t0 = time.monotonic()
                 en_srt = os.path.join(subtitles_dir, f"en_{vid}.srt")
                 if not upload_subtitles.run_upload_subtitles(
                     input_file=en_srt, cache_dir=cache_dir
                 ):
-                    logging.error("END upload_subtitles video=%s FAIL", vid)
+                    logging.error("END upload_subtitles video=%s FAIL (%.1fs)", vid, time.monotonic() - _t0)
                     break
-                logging.info("END upload_subtitles video=%s OK", vid)
+                logging.info("END upload_subtitles video=%s OK (%.1fs)", vid, time.monotonic() - _t0)
                 step_executed = True
 
             if step_executed:
@@ -317,6 +328,7 @@ def main():  # noqa: C901
     for s in steps:
         if s == "google_sheet_write":
             logging.info("START google_sheet_write")
+            _t0 = time.monotonic()
             if not google_sheet_write.run_google_sheet_write(
                 video_list_file=video_list_file,
                 cache_dir=cache_dir,
@@ -326,9 +338,10 @@ def main():  # noqa: C901
                 service_account_file=config.get("service_account_file", ""),
             ):
                 logging.error("google_sheet_write failed")
-            logging.info("END google_sheet_write OK")
+            logging.info("END google_sheet_write OK (%.1fs)", time.monotonic() - _t0)
         elif s == "build_videos_json":
             logging.info("START build_videos_json")
+            _t0 = time.monotonic()
             if not build_videos_json.run_build_videos_json(
                 video_list_file=video_list_file,
                 metadata_dir=video_metadata_dir,
@@ -336,9 +349,10 @@ def main():  # noqa: C901
                 output=enriched_videos,
             ):
                 logging.error("build_videos_json failed")
-            logging.info("END build_videos_json OK")
+            logging.info("END build_videos_json OK (%.1fs)", time.monotonic() - _t0)
         elif s == "manifest_builder":
             logging.info("START manifest_builder")
+            _t0 = time.monotonic()
             manifest_out = os.path.join(website_dir, "subtitles.json")
             # Use enriched videos list if it has been built in this run
             videos_input = (
@@ -351,7 +365,7 @@ def main():  # noqa: C901
                 details_dir=video_metadata_dir,
             ):
                 logging.error("manifest_builder failed")
-            logging.info("END manifest_builder OK")
+            logging.info("END manifest_builder OK (%.1fs)", time.monotonic() - _t0)
 
     logging.info("RUN END")
 
