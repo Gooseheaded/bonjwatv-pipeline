@@ -80,6 +80,10 @@ else if (Model.IsAdmin)
                 <td>@s.SubmittedBy</td>
                 <td class="text-nowrap">
                     <a class="btn btn-sm btn-primary" asp-page="/Admin/Submission" asp-route-id="@s.Id">Open</a>
+                    <form class="d-inline" method="post" action="/admin/submissions/@s.Id/reject">
+                        <input type="hidden" name="reason" value="Rejected via Admin index" />
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Reject</button>
+                    </form>
                 </td>
             </tr>
         }
