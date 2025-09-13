@@ -225,6 +225,9 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
 
     headers = {"X-Api-Key": api_key}
     ok_all = True
+    skipped_identical = 0
+    skipped_invalid = 0
+    submitted_count = 0
     base_dir = os.path.dirname(os.path.abspath(videos_json))
     # Preflight: fetch remote hashes for all candidate IDs up front
     video_ids: list[str] = []
@@ -259,6 +262,17 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
                 )
                 ok_all = False
                 continue
+        # Preflight: skip upload if hash matches existing
+        try:
+            local_hash = _sha256_file(en_srt)
+            remote_hash = remote_hashes.get(str(vid)) if remote_hashes else None
+            if local_hash and isinstance(remote_hash, str) and local_hash.lower() == remote_hash.lower():
+                _print(f"INFO: skipping {vid} — English SRT identical to server (hash match)")
+                skipped_identical += 1
+                continue
+        except Exception:
+            pass
+
         # Validate non-trivial subtitles
         if _is_trivial_srt(en_srt):
             # Try to replace with reconstruction if possible
@@ -274,18 +288,9 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
                 _print(
                     f"WARN: English subtitles for {vid} appear invalid/trivial; skipping submission."
                 )
+                skipped_invalid += 1
                 ok_all = False
                 continue
-
-        # Preflight: skip upload if hash matches existing
-        try:
-            local_hash = _sha256_file(en_srt)
-            remote_hash = remote_hashes.get(str(vid)) if remote_hashes else None
-            if local_hash and isinstance(remote_hash, str) and local_hash.lower() == remote_hash.lower():
-                _print(f"INFO: skipping {vid} — English SRT identical to server (hash match)")
-                continue
-        except Exception:
-            pass
 
         # 1) Upload SRT
         try:
@@ -340,6 +345,8 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
             resp = http_post_json(sub_url, payload, headers=headers)
             sid = resp.get("submission_id")
             status = resp.get("status")
+            if sid:
+                submitted_count += 1
             _print(f"Submitted {vid}: submission_id={sid} status={status}")
         except urllib.error.HTTPError as he:
             if he.code == 403:
@@ -352,6 +359,9 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
             ok_all = False
             continue
 
+    _print(
+        f"SUMMARY: submitted={submitted_count} skipped_identical={skipped_identical} skipped_invalid={skipped_invalid}"
+    )
     return ok_all
 
 

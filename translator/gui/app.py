@@ -207,7 +207,7 @@ class App(tk.Tk):
         # Attribution
         attr_label = ttk.Label(
             main,
-            text="BWKT Subtitle Pipeline v250905 by Gooseheaded",
+            text="BWKT Subtitle Pipeline v250913 by Gooseheaded",
             foreground="gray",
         )
         attr_label.grid(sticky="se", padx=4, pady=(8, 0))

@@ -170,11 +170,12 @@ def run_transcribe_audio(
                     "OpenAI transcription skipped: quota previously exceeded; skipping remaining transcriptions this run."
                 )
                 return False
-            # If file is large, segment to keep each upload comfortably below API limit
+
             size = os.path.getsize(audio_path)
             openai = importlib.import_module("openai")
             client = openai.OpenAI()
             os.makedirs(os.path.dirname(output_subtitle), exist_ok=True)
+
             def _transcribe_file_with_retry(fobj, attempts: int = 5):
                 delay = 0.5
                 for i in range(attempts):
@@ -187,7 +188,11 @@ def run_transcribe_audio(
                         )
                     except Exception as ex:
                         txt = str(ex)
-                        if "insufficient_quota" in txt or " 429" in txt or "quota" in txt:
+                        if (
+                            "insufficient_quota" in txt
+                            or " 429" in txt
+                            or "quota" in txt
+                        ):
                             logging.error(
                                 "OpenAI transcription quota exceeded detected; skipping further transcriptions this run. (%s)",
                                 txt,
@@ -221,12 +226,14 @@ def run_transcribe_audio(
                 )
                 with tempfile.TemporaryDirectory(prefix="stt_chunks_") as tmpdir:
                     try:
-                        chunks = _ffmpeg_segment(audio_path, tmpdir, segment_time=segment_time)
+                        chunks = _ffmpeg_segment(
+                            audio_path, tmpdir, segment_time=segment_time
+                        )
                     except Exception as e:
                         logging.error(f"Failed to segment audio: {e}")
                         return False
+
                     merged_srt_lines = []
-                    # Offset equals index * segment_time seconds
                     for idx, ch in enumerate(chunks):
                         try:
                             with open(ch, "rb") as f:
@@ -243,34 +250,26 @@ def run_transcribe_audio(
                         offset = idx * float(segment_time)
                         shifted = _shift_srt(part_srt, offset)
                         merged_srt_lines.append(shifted)
+
                     with open(output_subtitle, "w", encoding="utf-8") as out:
-                        # Renumber while concatenating
                         full = "".join(merged_srt_lines)
                         blocks = _parse_srt(full)
                         for i, (_, start, end, text) in enumerate(blocks, start=1):
                             out.write(f"{i}\n{start} --> {end}\n{text}\n\n")
                 logging.info(f"Subtitles saved to {output_subtitle}")
                 return True
-_quota_blocked = False
 
-
-def _mark_quota_exceeded():
-    global _quota_blocked
-    _quota_blocked = True
-
-
-def quota_blocked() -> bool:
-    return _quota_blocked
         elif provider == "local":
-            transcribe_audio_local(audio_path, output_subtitle, model_size, language)
+            transcribe_audio_local(
+                audio_path, output_subtitle, model_size, language
+            )
+            # Normalize only for local to preserve API SRT formatting
+            run_normalize_srt(output_subtitle, output_subtitle)
+            logging.info(f"Subtitles saved to {output_subtitle}")
+            return True
         else:
             logging.error(f"Unsupported transcription provider: {provider}")
             return False
-
-        # Post-process the raw SRT to normalize and collapse duplicates (local only)
-        run_normalize_srt(output_subtitle, output_subtitle)
-        logging.info(f"Subtitles saved to {output_subtitle}")
-        return True
     except Exception as e:
         logging.error(f"Transcription failed for {audio_path}: {e}")
         return False

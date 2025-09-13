@@ -10,8 +10,8 @@ import translator.submit_to_catalog as sub
 def test_preflight_skips_identical(tmp_path, monkeypatch, capsys):
     vids = tmp_path / "videos.json"
     items = [
-        {"v": "same1", "title": "X"},
-        {"v": "diff1", "title": "Y"},
+        {"v": "same1", "title": "X", "title_en": "X en"},
+        {"v": "diff1", "title": "Y", "title_en": "Y en"},
     ]
     vids.write_text(json.dumps(items), encoding="utf-8")
     subs = tmp_path / "subs"
@@ -19,9 +19,25 @@ def test_preflight_skips_identical(tmp_path, monkeypatch, capsys):
     # same1: local content A
     a = (subs / "en_same1.srt")
     a.write_text("1\n00:00:01,000 --> 00:00:02,000\nHello A\n\n", encoding="utf-8")
-    # diff1: local content B
+    # diff1: local content B (make it non-trivial: >=3 blocks, some content)
     b = (subs / "en_diff1.srt")
-    b.write_text("1\n00:00:01,000 --> 00:00:02,000\nHello B\n\n", encoding="utf-8")
+    b.write_text(
+        """
+1
+00:00:01,000 --> 00:00:02,000
+Hello B one
+
+2
+00:00:02,000 --> 00:00:03,000
+Hello B two
+
+3
+00:00:03,000 --> 00:00:04,500
+This is a longer third line of content to exceed thresholds.
+
+""".strip() + "\n",
+        encoding="utf-8",
+    )
 
     # Hash of A
     import hashlib
@@ -59,4 +75,3 @@ def test_preflight_skips_identical(tmp_path, monkeypatch, capsys):
     assert ok is True
     # Upload/submit should be called only once (for diff1)
     assert "skipping same1" in out.lower()
-
