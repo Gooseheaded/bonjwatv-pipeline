@@ -201,8 +201,7 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         }
 
         // Request hashes for known id and unknown id
-        var body = JsonContent.Create(new { videoIds = new[] { "abc123", "nope999" } });
-        var resp = await client.PostAsync("/api/subtitles/hashes", body);
+        var resp = await client.GetAsync("/api/subtitles/hashes?ids=abc123&ids=nope999");
         resp.EnsureSuccessStatusCode();
         var map = await resp.Content.ReadFromJsonAsync<Dictionary<string, JsonElement>>();
         Assert.NotNull(map);

@@ -178,57 +178,49 @@ app.MapGet("/api/videos/{id}", (
 }).WithOpenApi(o => { o.Summary = "Get a single video by id"; return o; });
 
 // Batch subtitle hashes for given video IDs (hash of currently referenced first-party subtitle)
-app.MapPost("/api/subtitles/hashes", async (HttpRequest req, VideoRepository repo) =>
+app.MapGet("/api/subtitles/hashes", async (HttpRequest req, VideoRepository repo) =>
 {
-    try
+    // Accept ids via repeated query params (?ids=a&ids=b) or comma-separated (?ids=a,b)
+    var raw = req.Query["ids"]; // may be empty, repeated, or single comma-separated
+    var ids = new List<string>();
+    foreach (var val in raw)
     {
-        using var doc = await System.Text.Json.JsonDocument.ParseAsync(req.Body);
-        var root = doc.RootElement;
-        var ids = new List<string>();
-        if (root.ValueKind == System.Text.Json.JsonValueKind.Object && root.TryGetProperty("videoIds", out var arr) && arr.ValueKind == System.Text.Json.JsonValueKind.Array)
-        {
-            ids.AddRange(arr.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)));
-        }
-        else if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
-        {
-            ids.AddRange(root.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)));
-        }
-        var result = new Dictionary<string, object?>();
-        var videos = repo.All();
-        foreach (var id in ids)
-        {
-            var vid = videos.FirstOrDefault(v => string.Equals(v.Id, id, StringComparison.OrdinalIgnoreCase));
-            if (vid == null || string.IsNullOrWhiteSpace(vid.SubtitleUrl)) { result[id] = null; continue; }
-            // Expect /api/subtitles/{id}/{version}.srt
-            var su = vid.SubtitleUrl!.Trim();
-            int ver = 0;
-            try
-            {
-                var parts = su.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                // ... subtitles, {id}, {version}.srt
-                var last = parts.LastOrDefault() ?? string.Empty;
-                if (last.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)) last = last.Substring(0, last.Length - 4);
-                if (int.TryParse(last, out var vnum)) ver = vnum;
-            }
-            catch { ver = 0; }
-            if (ver <= 0) { result[id] = null; continue; }
-            try
-            {
-                var path = Path.Combine(SubtitlesRoot(), SanitizeId(id), $"v{ver}.srt");
-                if (!File.Exists(path)) { result[id] = null; continue; }
-                var bytes = await File.ReadAllBytesAsync(path);
-                var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-                result[id] = hash;
-            }
-            catch { result[id] = null; }
-        }
-        return Results.Json(result);
+        if (string.IsNullOrWhiteSpace(val)) continue;
+        ids.AddRange(val.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
     }
-    catch
+    if (ids.Count == 0) return Results.BadRequest(new { error = "Provide ids via ?ids=abc&ids=def or ?ids=abc,def" });
+
+    var result = new Dictionary<string, object?>();
+    var videos = repo.All();
+    foreach (var id in ids)
     {
-        return Results.BadRequest(new { error = "Invalid request body. Provide { \"videoIds\": [\"id\", ...] } or an array of IDs." });
+        var vid = videos.FirstOrDefault(v => string.Equals(v.Id, id, StringComparison.OrdinalIgnoreCase));
+        if (vid == null || string.IsNullOrWhiteSpace(vid.SubtitleUrl)) { result[id] = null; continue; }
+        // Expect /api/subtitles/{id}/{version}.srt
+        var su = vid.SubtitleUrl!.Trim();
+        int ver = 0;
+        try
+        {
+            var parts = su.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var last = parts.LastOrDefault() ?? string.Empty;
+            if (last.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)) last = last[..^4];
+            if (int.TryParse(last, out var vnum)) ver = vnum;
+        }
+        catch { ver = 0; }
+        if (ver <= 0) { result[id] = null; continue; }
+        try
+        {
+            var path = Path.Combine(SubtitlesRoot(), SanitizeId(id), $"v{ver}.srt");
+            if (!File.Exists(path)) { result[id] = null; continue; }
+            var bytes = await File.ReadAllBytesAsync(path);
+            var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
+            result[id] = hash;
+        }
+        catch { result[id] = null; }
     }
+    return Results.Json(result);
 }).WithOpenApi(o => { o.Summary = "Get SHA256 hashes of current subtitles for provided video IDs"; return o; });
+
 
 app.MapGet("/api/videos/{id}/ratings", (string id, int? version, HttpContext ctx, RatingsRepository repo) =>
 {
