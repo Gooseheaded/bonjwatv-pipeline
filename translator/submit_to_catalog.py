@@ -122,16 +122,14 @@ def _load_cached_title_en(base_dir: str, vid: str) -> Optional[str]:
 
 
 def choose_title(item: Dict[str, Any], base_dir: Optional[str], vid: str) -> str:
-    # Prefer enriched fields
-    t = (
-        item.get("EN Title")
-        or item.get("title_en")
-        or item.get("title")
-        or ""
-    )
+    """Return a translated English title if available; otherwise empty.
+
+    Accept only explicit English fields (EN Title/title_en) or cached title_en.
+    Do NOT fall back to the original 'title' to avoid stub/foreign-language titles.
+    """
+    t = item.get("EN Title") or item.get("title_en") or ""
     if t:
         return t
-    # Fallback: consult local cache if available (run-root/.cache/title_{vid}.json)
     if base_dir:
         cached = _load_cached_title_en(base_dir, vid)
         if cached:
