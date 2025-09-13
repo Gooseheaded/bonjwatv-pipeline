@@ -171,6 +171,7 @@ ruff check .
   - Re-encodes large audio to mono ~64 kbps and segments into ~10-minute chunks; each chunk is transcribed separately and timestamps are merged.
   - You can tune thresholds via `run_transcribe_audio(..., max_upload_bytes=..., segment_time=...)` in code.
   - Local Whisper fallback is available but disabled by default when `provider="openai"`.
+  - Transcription requests include retry with exponential backoff to handle transient 5xx errors. If a chunk repeatedly fails, the video is skipped (no partial outputs or stubs).
 
 ### Submission Requirements
 - A translated English title is required for submissions.

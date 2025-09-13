@@ -152,3 +152,46 @@ def test_transcribe_audio_missing_file(tmp_path):
         audio_path="no_such.mp3", output_subtitle=str(tmp_path / "out.srt")
     )
     assert ok is False
+def test_transcribe_audio_openai_retries_success(tmp_path, mock_imports):
+    audio = tmp_path / "audio.mp3"
+    audio.write_text("", encoding="utf-8")
+    output_srt = tmp_path / "out.srt"
+
+    mock_client = mock_imports
+    # Fail twice, then succeed
+    mock_client.audio.transcriptions.create.side_effect = [
+        Exception("500"),
+        Exception("500"),
+        "1\n00:00:00,500 --> 00:00:01,000\nOK\n\n",
+    ]
+
+    ok = run_transcribe_audio(
+        audio_path=str(audio),
+        output_subtitle=str(output_srt),
+        provider="openai",
+        api_model="whisper-1",
+        language="ko",
+    )
+    assert ok is True
+    assert output_srt.exists()
+    assert "OK" in output_srt.read_text(encoding="utf-8")
+
+
+def test_transcribe_audio_openai_retries_fail(tmp_path, mock_imports):
+    audio = tmp_path / "audio.mp3"
+    audio.write_text("", encoding="utf-8")
+    output_srt = tmp_path / "out.srt"
+
+    mock_client = mock_imports
+    # Always fail
+    mock_client.audio.transcriptions.create.side_effect = [Exception("500")] * 6
+
+    ok = run_transcribe_audio(
+        audio_path=str(audio),
+        output_subtitle=str(output_srt),
+        provider="openai",
+        api_model="whisper-1",
+        language="ko",
+    )
+    assert ok is False
+    assert not output_srt.exists()

@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import subprocess
 import tempfile
 import re
+import time
 
 from normalize_srt import run_normalize_srt
 
@@ -156,14 +157,32 @@ def run_transcribe_audio(
             openai = importlib.import_module("openai")
             client = openai.OpenAI()
             os.makedirs(os.path.dirname(output_subtitle), exist_ok=True)
+            def _transcribe_file_with_retry(fobj, attempts: int = 5):
+                delay = 0.5
+                for i in range(attempts):
+                    try:
+                        return client.audio.transcriptions.create(
+                            model=api_model,
+                            file=fobj,
+                            language=language,
+                            response_format="srt",
+                        )
+                    except Exception as ex:
+                        if i == attempts - 1:
+                            raise
+                        logging.warning(
+                            "OpenAI transcription error (%s); retrying in %.1fs (%d/%d)",
+                            ex,
+                            delay,
+                            i + 1,
+                            attempts,
+                        )
+                        time.sleep(delay)
+                        delay = min(delay * 2, 10.0)
+
             if size <= max_upload_bytes:
                 with open(audio_path, "rb") as f:
-                    srt_text = client.audio.transcriptions.create(
-                        model=api_model,
-                        file=f,
-                        language=language,
-                        response_format="srt",
-                    )
+                    srt_text = _transcribe_file_with_retry(f)
                 with open(output_subtitle, "w", encoding="utf-8") as out:
                     out.write(srt_text)
                 logging.info(f"Subtitles saved to {output_subtitle}")
@@ -183,13 +202,18 @@ def run_transcribe_audio(
                     merged_srt_lines = []
                     # Offset equals index * segment_time seconds
                     for idx, ch in enumerate(chunks):
-                        with open(ch, "rb") as f:
-                            part_srt = client.audio.transcriptions.create(
-                                model=api_model,
-                                file=f,
-                                language=language,
-                                response_format="srt",
+                        try:
+                            with open(ch, "rb") as f:
+                                part_srt = _transcribe_file_with_retry(f)
+                        except Exception as e:
+                            logging.error(
+                                "Transcription failed for chunk %d/%d (%s): %s",
+                                idx + 1,
+                                len(chunks),
+                                ch,
+                                e,
                             )
+                            return False
                         offset = idx * float(segment_time)
                         shifted = _shift_srt(part_srt, offset)
                         merged_srt_lines.append(shifted)
