@@ -112,6 +112,7 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
                 .ConfigureWebHost(webBuilder =>
                 {
                     webBuilder.UseKestrel().UseUrls(BaseUrl);
+                    webBuilder.ConfigureServices(services => { services.AddRouting(); });
                     webBuilder.Configure(app =>
                     {
                         app.UseRouting();
