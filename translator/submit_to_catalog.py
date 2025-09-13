@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 import urllib.request
 import urllib.error
 import re
+import hashlib
 
 
 def _is_trivial_srt(file_path: str) -> bool:
@@ -187,6 +188,34 @@ def _reconstruct_en_from_cache(cache_dir: str, vid: str, subtitles_dir: str) -> 
 
 
 def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -> bool:
+    def _fetch_hashes(ids: list[str]) -> dict[str, Optional[str]]:
+        try:
+            if not ids:
+                return {}
+            # Build query: support repeated ids
+            from urllib.parse import urlencode
+            query = urlencode([("ids", vid) for vid in ids])
+            url = f"{catalog_base.rstrip('/')}/api/subtitles/hashes?{query}"
+            with urllib.request.urlopen(url) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                # Ensure keys exist for all ids
+                out: dict[str, Optional[str]] = {}
+                for vid in ids:
+                    val = data.get(vid)
+                    out[vid] = val if isinstance(val, str) else (None if val is None else None)
+                return out
+        except Exception:
+            return {}
+
+    def _sha256_file(path: str) -> Optional[str]:
+        try:
+            with open(path, "rb") as f:
+                h = hashlib.sha256()
+                for chunk in iter(lambda: f.read(8192), b""):
+                    h.update(chunk)
+                return h.hexdigest()
+        except Exception:
+            return None
     try:
         with open(videos_json, encoding="utf-8") as f:
             items = json.load(f)
@@ -197,6 +226,14 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
     headers = {"X-Api-Key": api_key}
     ok_all = True
     base_dir = os.path.dirname(os.path.abspath(videos_json))
+    # Preflight: fetch remote hashes for all candidate IDs up front
+    video_ids: list[str] = []
+    for it in items:
+        vid = it.get("v") or it.get("videoId") or it.get("id")
+        if vid:
+            video_ids.append(str(vid))
+    remote_hashes = _fetch_hashes(video_ids)
+
     for item in items:
         vid = item.get("v") or item.get("videoId") or item.get("id")
         if not vid:
@@ -239,6 +276,16 @@ def run(catalog_base: str, api_key: str, videos_json: str, subtitles_dir: str) -
                 )
                 ok_all = False
                 continue
+
+        # Preflight: skip upload if hash matches existing
+        try:
+            local_hash = _sha256_file(en_srt)
+            remote_hash = remote_hashes.get(str(vid)) if remote_hashes else None
+            if local_hash and isinstance(remote_hash, str) and local_hash.lower() == remote_hash.lower():
+                _print(f"INFO: skipping {vid} — English SRT identical to server (hash match)")
+                continue
+        except Exception:
+            pass
 
         # 1) Upload SRT
         try:
