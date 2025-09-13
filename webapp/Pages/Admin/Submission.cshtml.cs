@@ -37,6 +37,23 @@ namespace bwkt_webapp.Pages.Admin
                 using var doc = JsonDocument.Parse(json);
                 Submission = doc.RootElement.Clone();
 
+                // Determine new/update type as early as possible (do not return early)
+                var payload = Submission.TryGetProperty("payload", out var p) ? p : default;
+                string? vid = null;
+                if (payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("youtube_id", out var y))
+                {
+                    vid = y.GetString();
+                }
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(vid))
+                    {
+                        var existsResp = http.GetAsync($"{apiBase}/videos/{vid}").GetAwaiter().GetResult();
+                        IsUpdate = existsResp.IsSuccessStatusCode;
+                    }
+                }
+                catch { IsUpdate = null; }
+
                 // Attempt to load subtitle preview:
                 // 1) Prefer API admin preview (handles staged or external)
                 // 2) Fallback to first-party via youtube_id; 3) Fallback to external subtitle_url
@@ -47,37 +64,23 @@ namespace bwkt_webapp.Pages.Admin
                     {
                         var previewUrl = $"{apiBase}/admin/submissions/{id}/subtitle";
                         var text = http.GetStringAsync(previewUrl).GetAwaiter().GetResult();
-                        if (!string.IsNullOrWhiteSpace(text)) { SubtitleText = text; return; }
+                        if (!string.IsNullOrWhiteSpace(text)) { SubtitleText = text; }
                     }
                     catch { /* fall through to legacy fallbacks */ }
 
-                    var payload = Submission.TryGetProperty("payload", out var p) ? p : default;
-                    string? vid = null;
-                    if (payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("youtube_id", out var y))
-                    {
-                        vid = y.GetString();
-                    }
-                    // Determine new/update type
-                    try
+                    if (string.IsNullOrWhiteSpace(SubtitleText))
                     {
                         if (!string.IsNullOrWhiteSpace(vid))
                         {
-                            using var chk = new HttpClient();
-                            var existsResp = chk.GetAsync($"{apiBase}/videos/{vid}").GetAwaiter().GetResult();
-                            IsUpdate = existsResp.IsSuccessStatusCode;
+                            SubtitleText = http.GetStringAsync($"{apiBase}/subtitles/{vid}/1.srt").GetAwaiter().GetResult();
                         }
-                    }
-                    catch { IsUpdate = null; }
-                    if (!string.IsNullOrWhiteSpace(vid))
-                    {
-                        SubtitleText = http.GetStringAsync($"{apiBase}/subtitles/{vid}/1.srt").GetAwaiter().GetResult();
-                    }
-                    else if (payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("subtitle_url", out var su))
-                    {
-                        var ext = su.GetString();
-                        if (!string.IsNullOrWhiteSpace(ext))
+                        else if (payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("subtitle_url", out var su))
                         {
-                            SubtitleText = http.GetStringAsync(ext!).GetAwaiter().GetResult();
+                            var ext = su.GetString();
+                            if (!string.IsNullOrWhiteSpace(ext))
+                            {
+                                SubtitleText = http.GetStringAsync(ext!).GetAwaiter().GetResult();
+                            }
                         }
                     }
                 }
