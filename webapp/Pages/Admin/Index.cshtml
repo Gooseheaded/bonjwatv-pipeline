@@ -4,11 +4,18 @@
     ViewData["Title"] = "Admin";
     var ok = Request.Query["ok"].FirstOrDefault();
     var status = Request.Query["status"].FirstOrDefault();
+    var approvedVid = Request.Query["v"].FirstOrDefault();
 }
 
 <h1>Admin</h1>
 
-@if (ok == "1")
+@if (ok == "1" && status == "approved" && !string.IsNullOrEmpty(approvedVid))
+{
+    <div class="alert alert-success">
+        Submission approved. <a class="alert-link" asp-page="/Watch" asp-route-v="@approvedVid">Watch now</a>.
+    </div>
+}
+else if (ok == "1")
 {
     <div class="alert alert-success">Submission @status.</div>
 }

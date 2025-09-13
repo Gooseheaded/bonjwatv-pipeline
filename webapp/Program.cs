@@ -419,6 +419,23 @@ app.MapPost("/admin/submissions/{id}/approve", async (string id, HttpContext ctx
     if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
     using var http = new HttpClient();
     var url = $"{apiBase}/admin/submissions/{id}";
+    // Fetch youtube_id before approving, so we can link to Watch after success
+    string? youtubeId = null;
+    try
+    {
+        var pre = await http.GetAsync(url);
+        if (pre.IsSuccessStatusCode)
+        {
+            var json = await pre.Content.ReadAsStringAsync();
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("payload", out var payload) && payload.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (payload.TryGetProperty("youtube_id", out var y)) youtubeId = y.GetString();
+            }
+        }
+    }
+    catch { /* non-fatal */ }
     using var msg = new HttpRequestMessage(HttpMethod.Patch, url)
     {
         Content = new StringContent("{\"action\":\"approve\"}", System.Text.Encoding.UTF8, "application/json")
@@ -426,6 +443,10 @@ app.MapPost("/admin/submissions/{id}/approve", async (string id, HttpContext ctx
     var resp = await http.SendAsync(msg);
     if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
     // Always redirect back to Admin page (broad UI) with banner params
+    if (!string.IsNullOrWhiteSpace(youtubeId))
+    {
+        return Results.Redirect($"/Admin?ok=1&status=approved&v={Uri.EscapeDataString(youtubeId!)}");
+    }
     return Results.Redirect("/Admin?ok=1&status=approved");
 });
 
