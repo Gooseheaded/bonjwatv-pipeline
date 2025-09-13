@@ -50,6 +50,13 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
                     options.DefaultChallengeScheme = "Test";
                 })
                 .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
+                services.PostConfigureAll<Microsoft.AspNetCore.Authentication.AuthenticationOptions>(opts =>
+                {
+                    opts.DefaultAuthenticateScheme = "Test";
+                    opts.DefaultChallengeScheme = "Test";
+                    opts.DefaultScheme = "Test";
+                });
+
             });
             
         });
