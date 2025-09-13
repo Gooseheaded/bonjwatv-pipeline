@@ -44,8 +44,12 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
         {
             builder.ConfigureTestServices(services =>
             {
-                services.AddAuthentication("Test")
-                    .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
+                services.AddAuthentication(options =>
+                {
+                    options.DefaultAuthenticateScheme = "Test";
+                    options.DefaultChallengeScheme = "Test";
+                })
+                .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
             });
         });
         return authed;
