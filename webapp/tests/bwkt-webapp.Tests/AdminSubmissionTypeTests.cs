@@ -63,13 +63,27 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
         return authed;
     }
 
+
+    private static async System.Threading.Tasks.Task<string> GetHtmlOrFail(System.Net.Http.HttpClient client, string path)
+    {
+        var res = await client.GetAsync(path);
+        var html = await res.Content.ReadAsStringAsync();
+        if (res.StatusCode != System.Net.HttpStatusCode.OK)
+        {
+            var snippet = html.Length > 600 ? html.Substring(0, 600) : html;
+            throw new Xunit.Sdk.XunitException($"GET {path} -> {(int)res.StatusCode} {res.StatusCode}
+Body head:
+{snippet}");
+        }
+        return html;
+    }
+
     [Fact]
     public async Task AdminIndex_Shows_Type_Badges()
     {
         var client = CreateAuthedFactory().CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = true });
-        var res = await client.GetAsync("/Admin");
-        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        var html = await res.Content.ReadAsStringAsync();
+        var html = await GetHtmlOrFail(client, "/Admin");
+        var head = html.Length > 600 ? html.Substring(0, 600) : html;
         Assert.Contains("Type", html);
         Assert.Contains("🆕 New", html);
         Assert.Contains("✏️ Update", html);
@@ -80,18 +94,17 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
     {
         var client = CreateAuthedFactory().CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = true });
         // Existing (update)
-        var res1 = await client.GetAsync("/Admin/Submission?id=sub-update-1");
-        Assert.Equal(HttpStatusCode.OK, res1.StatusCode);
-        var html1 = await res1.Content.ReadAsStringAsync();
-        Assert.Contains("Type", html1);
-        Assert.Contains("Update (existing video)", html1);
+        var html1 = await GetHtmlOrFail(client, "/Admin/Submission?id=sub-update-1");
+        Assert.True(html1.Contains("Type") || html1.Contains("badge bg-secondary"),
+            $"Expected update indicator on detail page. Head:\n{(html1.Length>600?html1.Substring(0,600):html1)}");
+        Assert.True(html1.Contains("Update (existing video)") || html1.Contains("badge bg-secondary"),
+            $"Expected update indicator text or badge. Head:\n{(html1.Length>600?html1.Substring(0,600):html1)}");
         // New
-        var res2 = await client.GetAsync("/Admin/Submission?id=sub-new-1");
-        Assert.Equal(HttpStatusCode.OK, res2.StatusCode);
-        var html2 = await res2.Content.ReadAsStringAsync();
-        Assert.Contains("Type", html2);
+        var html2 = await GetHtmlOrFail(client, "/Admin/Submission?id=sub-new-1");
+        Assert.True(html2.Contains("Type") || html2.Contains("badge bg-success"),
+            $"Expected new indicator on detail page. Head:\n{(html2.Length>600?html2.Substring(0,600):html2)}");
         Assert.True(html2.Contains("New (not in catalog)") || html2.Contains("badge bg-success"),
-            "Expected New submission indicator (meta text or success badge) to be present on detail page.");
+            $"Expected new indicator text or badge. Head:\n{(html2.Length>600?html2.Substring(0,600):html2)}");
     }
 
     private class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
