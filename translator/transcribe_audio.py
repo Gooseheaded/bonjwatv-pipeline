@@ -11,6 +11,19 @@ import time
 from normalize_srt import run_normalize_srt
 
 
+# Global run-scoped flag to short-circuit STT when API quota is exceeded
+_quota_blocked = False
+
+
+def _mark_quota_exceeded():
+    global _quota_blocked
+    _quota_blocked = True
+
+
+def quota_blocked() -> bool:
+    return _quota_blocked
+
+
 def format_timestamp(seconds: float) -> str:
     """Format a seconds float into an SRT timestamp string (HH:MM:SS,mmm)."""
     ms = round((seconds - int(seconds)) * 1000)
