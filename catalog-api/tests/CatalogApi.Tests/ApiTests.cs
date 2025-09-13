@@ -175,6 +175,52 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task SubtitleHashes_Returns_Hash_Or_Null()
+    {
+        var client = _factory.CreateClient();
+        // Upload and approve a subtitle for abc123 so it becomes first-party and referenced
+        var srt = "1\n00:00:01,000 --> 00:00:02,000\nHello!\n";
+        using (var form = new MultipartFormDataContent())
+        {
+            form.Add(new StringContent("abc123"), "videoId");
+            form.Add(new StringContent("1"), "version");
+            form.Add(new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(srt)), "file", "sub.srt");
+            var upReq = new HttpRequestMessage(HttpMethod.Post, "/api/uploads/subtitles") { Content = form };
+            upReq.Headers.Add("X-Api-Key", "TOKEN1");
+            var post = await client.SendAsync(upReq);
+            post.EnsureSuccessStatusCode();
+            var key = (await post.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("storage_key").GetString();
+            using var submitReq = new HttpRequestMessage(HttpMethod.Post, "/api/submissions/videos");
+            submitReq.Headers.Add("X-Api-Key", "TOKEN1");
+            submitReq.Content = JsonContent.Create(new { youtube_id = "abc123", title = "Alpha", subtitle_storage_key = key });
+            var submit = await client.SendAsync(submitReq);
+            submit.EnsureSuccessStatusCode();
+            var sid = (await submit.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("submission_id").GetString();
+            var approve = await client.PatchAsync($"/api/admin/submissions/{sid}", JsonContent.Create(new { action = "approve" }));
+            approve.EnsureSuccessStatusCode();
+        }
+
+        // Request hashes for known id and unknown id
+        var body = JsonContent.Create(new { videoIds = new[] { "abc123", "nope999" } });
+        var resp = await client.PostAsync("/api/subtitles/hashes", body);
+        resp.EnsureSuccessStatusCode();
+        var map = await resp.Content.ReadFromJsonAsync<Dictionary<string, JsonElement>>();
+        Assert.NotNull(map);
+        Assert.True(map!.ContainsKey("abc123"));
+        var hashEl = map["abc123"];
+        Assert.Equal(JsonValueKind.String, hashEl.ValueKind);
+        var hash = hashEl.GetString();
+        Assert.False(string.IsNullOrWhiteSpace(hash));
+        // Basic property: sha256 hex of the bytes
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var expected = Convert.ToHexString(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(srt))).ToLowerInvariant();
+        Assert.Equal(expected, hash);
+        // Unknown should be null
+        Assert.True(map.ContainsKey("nope999"));
+        Assert.Equal(JsonValueKind.Null, map["nope999"].ValueKind);
+    }
+
+    [Fact]
     public async Task Submissions_Create_List_Detail_Approve()
     {
         var client = _factory.CreateClient();
