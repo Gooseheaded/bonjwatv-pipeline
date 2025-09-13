@@ -8,6 +8,7 @@ sys.path.insert(0, os.getcwd())
 import pytest
 
 from transcribe_audio import format_timestamp, run_transcribe_audio
+import transcribe_audio as stt
 
 
 class DummyModel:
@@ -195,3 +196,39 @@ def test_transcribe_audio_openai_retries_fail(tmp_path, mock_imports):
     )
     assert ok is False
     assert not output_srt.exists()
+
+
+def test_transcribe_audio_openai_insufficient_quota_short_circuit(tmp_path, mock_imports, monkeypatch):
+    audio = tmp_path / "audio.mp3"
+    audio.write_text("", encoding="utf-8")
+    out1 = tmp_path / "out1.srt"
+    out2 = tmp_path / "out2.srt"
+
+    mock_client = mock_imports
+    # First attempt triggers quota error (429 insufficient_quota)
+    mock_client.audio.transcriptions.create.side_effect = [
+        Exception("Error code: 429 - {\"error\": {\"code\": \"insufficient_quota\"}}")
+    ]
+
+    ok1 = run_transcribe_audio(
+        audio_path=str(audio),
+        output_subtitle=str(out1),
+        provider="openai",
+        api_model="whisper-1",
+        language="ko",
+    )
+    assert ok1 is False
+    assert stt.quota_blocked() is True
+
+    # Subsequent call should short-circuit without calling API again
+    calls_before = mock_client.audio.transcriptions.create.call_count
+    ok2 = run_transcribe_audio(
+        audio_path=str(audio),
+        output_subtitle=str(out2),
+        provider="openai",
+        api_model="whisper-1",
+        language="ko",
+    )
+    calls_after = mock_client.audio.transcriptions.create.call_count
+    assert ok2 is False
+    assert calls_after == calls_before

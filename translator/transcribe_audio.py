@@ -152,6 +152,11 @@ def run_transcribe_audio(
             return False
 
         if provider == "openai":
+            if quota_blocked():
+                logging.warning(
+                    "OpenAI transcription skipped: quota previously exceeded; skipping remaining transcriptions this run."
+                )
+                return False
             # If file is large, segment to keep each upload comfortably below API limit
             size = os.path.getsize(audio_path)
             openai = importlib.import_module("openai")
@@ -168,6 +173,14 @@ def run_transcribe_audio(
                             response_format="srt",
                         )
                     except Exception as ex:
+                        txt = str(ex)
+                        if "insufficient_quota" in txt or " 429" in txt or "quota" in txt:
+                            logging.error(
+                                "OpenAI transcription quota exceeded detected; skipping further transcriptions this run. (%s)",
+                                txt,
+                            )
+                            _mark_quota_exceeded()
+                            raise
                         if i == attempts - 1:
                             raise
                         logging.warning(
@@ -225,6 +238,16 @@ def run_transcribe_audio(
                             out.write(f"{i}\n{start} --> {end}\n{text}\n\n")
                 logging.info(f"Subtitles saved to {output_subtitle}")
                 return True
+_quota_blocked = False
+
+
+def _mark_quota_exceeded():
+    global _quota_blocked
+    _quota_blocked = True
+
+
+def quota_blocked() -> bool:
+    return _quota_blocked
         elif provider == "local":
             transcribe_audio_local(audio_path, output_subtitle, model_size, language)
         else:

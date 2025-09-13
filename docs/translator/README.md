@@ -172,6 +172,7 @@ ruff check .
   - You can tune thresholds via `run_transcribe_audio(..., max_upload_bytes=..., segment_time=...)` in code.
   - Local Whisper fallback is available but disabled by default when `provider="openai"`.
   - Transcription requests include retry with exponential backoff to handle transient 5xx errors. If a chunk repeatedly fails, the video is skipped (no partial outputs or stubs).
+  - If the API reports `insufficient_quota` (HTTP 429), the pipeline marks transcription as blocked for the remainder of the run and skips further STT calls to avoid repeated failures.
 
 ### Submission Requirements
 - A translated English title is required for submissions.
