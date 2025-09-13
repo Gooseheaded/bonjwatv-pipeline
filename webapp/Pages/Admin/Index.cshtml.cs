@@ -73,7 +73,19 @@ namespace bwkt_webapp.Pages.Admin
                 {
                     foreach (var el in items.EnumerateArray())
                     {
-                        Pending.Add(ParseSubmission(el));
+                        var item = ParseSubmission(el);
+                        // Determine if this submission updates an existing video (by youtube_id)
+                        bool isUpdate = false;
+                        try
+                        {
+                            if (!string.IsNullOrWhiteSpace(item.YoutubeId))
+                            {
+                                var check = http.GetAsync($"{apiBase}/videos/{item.YoutubeId}").GetAwaiter().GetResult();
+                                isUpdate = check.IsSuccessStatusCode;
+                            }
+                        }
+                        catch { isUpdate = false; }
+                        Pending.Add(item with { IsUpdate = isUpdate });
                     }
                 }
             }
@@ -141,7 +153,10 @@ namespace bwkt_webapp.Pages.Admin
 
         public enum RatingValue { red = 0, yellow = 1, green = 2 }
         public record RatingEvent(string VideoId, int Version, string UserId, string? UserName, RatingValue Value, DateTimeOffset CreatedAt);
-        public record SubmissionItem(string Id, string Status, DateTimeOffset SubmittedAt, string? SubmittedBy, string? YoutubeId, string? Title);
+        public record SubmissionItem(string Id, string Status, DateTimeOffset SubmittedAt, string? SubmittedBy, string? YoutubeId, string? Title)
+        {
+            public bool IsUpdate { get; init; }
+        }
         public record HiddenItem(string Id, string Title, string? Reason, string? HiddenAt);
     }
 }

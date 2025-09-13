@@ -33,10 +33,26 @@ else
 
     <div class="card">
         <div class="card-body">
-            <h5 class="card-title">@title (@youtubeId)</h5>
+            <h5 class="card-title">
+                @title (@youtubeId)
+                @if (Model.IsUpdate == true)
+                {
+                    <span class="badge bg-secondary ms-2" title="Updates existing video">✏️ Update</span>
+                }
+                else if (Model.IsUpdate == false)
+                {
+                    <span class="badge bg-success ms-2" title="New video (not in catalog)">🆕 New</span>
+                }
+            </h5>
             @if (!string.IsNullOrEmpty(creator)) { <h6 class="card-subtitle mb-2 text-muted">By @creator</h6> }
             @if (!string.IsNullOrEmpty(description)) { <p class="card-text">@description</p> }
             <dl class="row">
+                <dt class="col-sm-3">Type</dt>
+                <dd class="col-sm-9">
+                    @if (Model.IsUpdate == true) { <span>✏️ Update (existing video)</span> }
+                    else if (Model.IsUpdate == false) { <span>🆕 New (not in catalog)</span> }
+                    else { <span class="text-muted">(unknown)</span> }
+                </dd>
                 <dt class="col-sm-3">Submitted At</dt>
                 <dd class="col-sm-9">@submittedAt.ToString("u")</dd>
                 <dt class="col-sm-3">Submitted By</dt>

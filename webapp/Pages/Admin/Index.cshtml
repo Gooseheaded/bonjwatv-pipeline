@@ -73,6 +73,7 @@ else if (Model.IsAdmin)
                 <th>When (UTC)</th>
                 <th>Video Id</th>
                 <th>Title</th>
+                <th>Type</th>
                 <th>Submitted By</th>
                 <th></th>
             </tr>
@@ -84,6 +85,16 @@ else if (Model.IsAdmin)
                 <td>@s.SubmittedAt.ToString("u")</td>
                 <td>@s.YoutubeId</td>
                 <td>@s.Title</td>
+                <td>
+                    @if (s.IsUpdate)
+                    {
+                        <span class="badge bg-secondary" title="Updates existing video">✏️ Update</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-success" title="New video (not in catalog)">🆕 New</span>
+                    }
+                </td>
                 <td>@s.SubmittedBy</td>
                 <td class="text-nowrap">
                     <a class="btn btn-sm btn-primary" asp-page="/Admin/Submission" asp-route-id="@s.Id">Open</a>

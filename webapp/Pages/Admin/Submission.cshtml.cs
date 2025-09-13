@@ -8,6 +8,7 @@ namespace bwkt_webapp.Pages.Admin
         public bool IsAdmin { get; private set; }
         public JsonElement Submission { get; private set; }
         public string? SubtitleText { get; private set; }
+        public bool? IsUpdate { get; private set; }
 
         public void OnGet(string id)
         {
@@ -36,15 +37,37 @@ namespace bwkt_webapp.Pages.Admin
                 using var doc = JsonDocument.Parse(json);
                 Submission = doc.RootElement.Clone();
 
-                // Attempt to load subtitle preview: prefer first-party via youtube_id; fallback to external subtitle_url
+                // Attempt to load subtitle preview:
+                // 1) Prefer API admin preview (handles staged or external)
+                // 2) Fallback to first-party via youtube_id; 3) Fallback to external subtitle_url
                 try
                 {
+                    // Try admin preview endpoint first
+                    try
+                    {
+                        var previewUrl = $"{apiBase}/admin/submissions/{id}/subtitle";
+                        var text = http.GetStringAsync(previewUrl).GetAwaiter().GetResult();
+                        if (!string.IsNullOrWhiteSpace(text)) { SubtitleText = text; return; }
+                    }
+                    catch { /* fall through to legacy fallbacks */ }
+
                     var payload = Submission.TryGetProperty("payload", out var p) ? p : default;
                     string? vid = null;
                     if (payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("youtube_id", out var y))
                     {
                         vid = y.GetString();
                     }
+                    // Determine new/update type
+                    try
+                    {
+                        if (!string.IsNullOrWhiteSpace(vid))
+                        {
+                            using var chk = new HttpClient();
+                            var existsResp = chk.GetAsync($"{apiBase}/videos/{vid}").GetAwaiter().GetResult();
+                            IsUpdate = existsResp.IsSuccessStatusCode;
+                        }
+                    }
+                    catch { IsUpdate = null; }
                     if (!string.IsNullOrWhiteSpace(vid))
                     {
                         SubtitleText = http.GetStringAsync($"{apiBase}/subtitles/{vid}/1.srt").GetAwaiter().GetResult();
