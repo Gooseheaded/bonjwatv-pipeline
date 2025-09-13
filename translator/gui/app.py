@@ -183,11 +183,15 @@ class App(tk.Tk):
         # Run + progress
         runrow = ttk.Frame(main)
         runrow.grid(sticky="ew", pady=(0, 8))
-        runrow.columnconfigure(1, weight=1)
+        runrow.columnconfigure(2, weight=1)
         self.run_btn = ttk.Button(runrow, text="RUN", command=self.on_run)
         self.run_btn.grid(row=0, column=0, padx=(0, 12))
+        # Elapsed time (stopwatch) between RUN and progress bar
+        self.elapsed_var = tk.StringVar(value="00:00")
+        self.elapsed_label = ttk.Label(runrow, textvariable=self.elapsed_var)
+        self.elapsed_label.grid(row=0, column=1, padx=(0, 12))
         self.progress = ttk.Progressbar(runrow, mode="determinate")
-        self.progress.grid(row=0, column=1, sticky="ew")
+        self.progress.grid(row=0, column=2, sticky="ew")
 
         # Log
         self.log = tk.Text(main, height=10, wrap="word", state="disabled")
@@ -220,6 +224,9 @@ class App(tk.Tk):
         self.update_derived_paths()
         self.refresh_states()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+        # Stopwatch state
+        self._timer_running = False
+        self._run_started_at: datetime | None = None
 
     # ----- Vars / settings
     def _make_vars(self) -> dict[str, tk.Variable]:
@@ -414,6 +421,24 @@ class App(tk.Tk):
 
         cfg_path = build_cfg()
 
+        def _start_timer():
+            self._run_started_at = datetime.now()
+            self._timer_running = True
+            self.elapsed_var.set("00:00")
+            def tick():
+                if not self._timer_running or self._run_started_at is None:
+                    return
+                delta = datetime.now() - self._run_started_at
+                total_sec = int(delta.total_seconds())
+                mm = total_sec // 60
+                ss = total_sec % 60
+                self.elapsed_var.set(f"{mm:02d}:{ss:02d}")
+                self.after(500, tick)
+            self.after(500, tick)
+
+        def _stop_timer():
+            self._timer_running = False
+
         def run_orchestrator():
             env = os.environ.copy()
             api_key = self.vars["api_key"].get().strip()
@@ -484,6 +509,8 @@ class App(tk.Tk):
                     errors="replace",
                     env=env,
                 )
+                # Start the stopwatch when the process launches
+                self.after(0, _start_timer)
             except Exception as e:
                 self.after(
                     0,
@@ -517,7 +544,8 @@ class App(tk.Tk):
                         break
                 proc.wait()
             finally:
-                pass
+                # Stop the stopwatch when the process ends
+                self.after(0, _stop_timer)
 
         # --- Controller Execution ---
         self.set_ui_running(True)
