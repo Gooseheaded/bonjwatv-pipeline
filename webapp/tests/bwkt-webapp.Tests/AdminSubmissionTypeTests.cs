@@ -71,7 +71,7 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
         if (res.StatusCode != System.Net.HttpStatusCode.OK)
         {
             var snippet = html.Length > 600 ? html.Substring(0, 600) : html;
-            throw new Xunit.Sdk.XunitException($"GET {path} -> {(int)res.StatusCode} {res.StatusCode}
+            throw new Xunit.Sdk.XunitException($@"GET {path} -> {(int)res.StatusCode} {res.StatusCode}
 Body head:
 {snippet}");
         }
