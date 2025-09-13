@@ -15,8 +15,11 @@ def test_skips_when_no_translated_title(tmp_path, monkeypatch, capsys):
     subs_dir = tmp_path / "subs"
     subs_dir.mkdir()
     # Provide a valid English SRT so only title is the blocker
+    # Provide a non-trivial SRT (>=3 blocks) so only missing title causes skip
     (subs_dir / "en_abc123.srt").write_text(
-        "1\n00:00:01,000 --> 00:00:02,000\nHello world\n\n2\n00:00:02,000 --> 00:00:03,000\nMore text\n\n",
+        "1\n00:00:01,000 --> 00:00:02,000\nHello world\n\n"
+        "2\n00:00:02,000 --> 00:00:03,000\nMore text\n\n"
+        "3\n00:00:03,000 --> 00:00:04,000\nEven more\n\n",
         encoding="utf-8",
     )
 
@@ -28,4 +31,3 @@ def test_skips_when_no_translated_title(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert rc is False
     assert "no translated english title" in out.lower()
-
