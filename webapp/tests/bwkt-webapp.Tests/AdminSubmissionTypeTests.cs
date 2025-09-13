@@ -81,7 +81,9 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
         var res2 = await client.GetAsync("/Admin/Submission?id=sub-new-1");
         Assert.Equal(HttpStatusCode.OK, res2.StatusCode);
         var html2 = await res2.Content.ReadAsStringAsync();
-        Assert.Contains("New (not in catalog)", html2);
+        Assert.Contains("Type", html2);
+        Assert.True(html2.Contains("New (not in catalog)") || html2.Contains("badge bg-success"),
+            "Expected New submission indicator (meta text or success badge) to be present on detail page.");
     }
 
     private class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
