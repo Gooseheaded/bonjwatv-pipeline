@@ -51,6 +51,20 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
                 })
                 .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
             });
+            builder.Configure(app =>
+            {
+                app.Use(async (ctx, next) =>
+                {
+                    var claims = new[]
+                    {
+                        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "TEST_ADMIN"),
+                        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "Test Admin")
+                    };
+                    ctx.User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(claims, "Test"));
+                    await next();
+                });
+            });
+
         });
         return authed;
     }
