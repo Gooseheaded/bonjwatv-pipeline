@@ -71,13 +71,13 @@ public class AdminSubmissionTypeTests : IClassFixture<TestWebAppFactory>, IDispo
         var res1 = await client.GetAsync("/Admin/Submission?id=sub-update-1");
         Assert.Equal(HttpStatusCode.OK, res1.StatusCode);
         var html1 = await res1.Content.ReadAsStringAsync();
-        Assert.Contains("✏️ Update", html1);
         Assert.Contains("Type", html1);
+        Assert.Contains("Update (existing video)", html1);
         // New
         var res2 = await client.GetAsync("/Admin/Submission?id=sub-new-1");
         Assert.Equal(HttpStatusCode.OK, res2.StatusCode);
         var html2 = await res2.Content.ReadAsStringAsync();
-        Assert.Contains("🆕 New", html2);
+        Assert.Contains("New (not in catalog)", html2);
     }
 
     private class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
