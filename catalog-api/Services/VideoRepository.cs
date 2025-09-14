@@ -34,6 +34,9 @@ public class VideoItem
 
     [JsonPropertyName("hiddenAt")]
     public string? HiddenAt { get; set; }
+
+    [JsonPropertyName("durationSeconds")]
+    public int? DurationSeconds { get; set; }
 }
 
 public class VideoRepository : IDisposable
@@ -42,6 +45,8 @@ public class VideoRepository : IDisposable
     private readonly JsonSerializerOptions _opts = new() { PropertyNameCaseInsensitive = true };
     private List<VideoItem> _cache = new();
     private FileSystemWatcher? _watcher;
+    private DateTime _lastWriteSeenUtc = DateTime.MinValue;
+    private readonly object _sync = new();
 
     public VideoRepository(IConfiguration config, IWebHostEnvironment env, ILogger<VideoRepository> logger)
     {
@@ -123,15 +128,20 @@ public class VideoRepository : IDisposable
     {
         try
         {
-            if (File.Exists(_storePath))
+            lock (_sync)
             {
-                var json = File.ReadAllText(_storePath);
-                var list = JsonSerializer.Deserialize<List<VideoItem>>(json, _opts) ?? new();
-                _cache = list;
-            }
-            else
-            {
-                _cache = new();
+                if (File.Exists(_storePath))
+                {
+                    var json = File.ReadAllText(_storePath);
+                    var list = JsonSerializer.Deserialize<List<VideoItem>>(json, _opts) ?? new();
+                    _cache = list;
+                    try { _lastWriteSeenUtc = File.GetLastWriteTimeUtc(_storePath); } catch { }
+                }
+                else
+                {
+                    _cache = new();
+                    _lastWriteSeenUtc = DateTime.MinValue;
+                }
             }
         }
         catch
@@ -140,7 +150,27 @@ public class VideoRepository : IDisposable
         }
     }
 
-    public IReadOnlyList<VideoItem> All() => _cache;
+    private void EnsureFresh()
+    {
+        try
+        {
+            if (File.Exists(_storePath))
+            {
+                var ts = File.GetLastWriteTimeUtc(_storePath);
+                if (ts > _lastWriteSeenUtc)
+                {
+                    Load();
+                }
+            }
+        }
+        catch { }
+    }
+
+    public IReadOnlyList<VideoItem> All()
+    {
+        EnsureFresh();
+        return _cache;
+    }
 
     public void Dispose() => _watcher?.Dispose();
 }

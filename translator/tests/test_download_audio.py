@@ -29,7 +29,22 @@ def test_download_creates_file(tmp_path, monkeypatch):
 
     class DummyYDL:
         def __init__(self, opts):
-            pass
+            self.opts = opts
+
+        def extract_info(self, url, download=False):
+            # Return a minimal formats list (audio-only available)
+            return {
+                "formats": [
+                    {
+                        "format_id": "140",
+                        "ext": "m4a",
+                        "vcodec": "none",
+                        "acodec": "mp4a.40.2",
+                        "abr": 128,
+                        "tbr": 128,
+                    }
+                ]
+            }
 
         def download(self, urls):
             calls.append(urls)

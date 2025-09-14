@@ -11,6 +11,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<VideoRepository>();
 builder.Services.AddScoped<RatingsRepository>();
 builder.Services.AddScoped<SubmissionsRepository>();
+builder.Services.AddScoped<CreatorMappingsRepository>();
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -55,6 +56,7 @@ app.MapGet("/readyz", () =>
 app.MapGet("/api/videos", (
     [Microsoft.AspNetCore.Mvc.FromServices] VideoRepository repo,
     [Microsoft.AspNetCore.Mvc.FromServices] RatingsRepository ratings,
+    [Microsoft.AspNetCore.Mvc.FromServices] CreatorMappingsRepository mappings,
     string? q,
     string? race,
     int? page,
@@ -70,9 +72,15 @@ app.MapGet("/api/videos", (
     {
         var tokens = q.Split((char[])null!, StringSplitOptions.RemoveEmptyEntries);
         query = query.Where(v => tokens.All(t =>
-            (v.Title?.Contains(t, StringComparison.OrdinalIgnoreCase) ?? false) ||
-            (v.Tags != null && v.Tags.Any(tag => tag.Equals(t, StringComparison.OrdinalIgnoreCase)))
-        ));
+        {
+            var inTitle = v.Title?.Contains(t, StringComparison.OrdinalIgnoreCase) ?? false;
+            var inTags = v.Tags != null && v.Tags.Any(tag => tag.Equals(t, StringComparison.OrdinalIgnoreCase));
+            var inCreator = v.Creator?.Contains(t, StringComparison.OrdinalIgnoreCase) ?? false;
+            // Resolve token via mappings to support searching by original names (e.g., Korean)
+            var resolved = mappings.Resolve(t);
+            var inCreatorResolved = !string.IsNullOrWhiteSpace(resolved) && (v.Creator?.Contains(resolved, StringComparison.OrdinalIgnoreCase) ?? false);
+            return inTitle || inTags || inCreator || inCreatorResolved;
+        }));
     }
 
     // Race filter: z|t|p
@@ -399,12 +407,17 @@ string? ParseSubmitterFromToken(string? token)
     return null;
 }
 
-app.MapPost("/api/submissions/videos", (HttpContext ctx, SubmissionsRepository repo, VideoSubmissionPayload body) =>
+app.MapPost("/api/submissions/videos", (HttpContext ctx, SubmissionsRepository repo, CreatorMappingsRepository mappings, VideoSubmissionPayload body) =>
 {
     if (!IsIngestAuthorized(ctx)) return Results.StatusCode(403);
     if (string.IsNullOrWhiteSpace(body.YoutubeId) || string.IsNullOrWhiteSpace(body.Title)) return Results.BadRequest("Missing required fields");
     var token = ctx.Request.Headers["X-Api-Key"].FirstOrDefault();
     var who = ParseSubmitterFromToken(token) ?? (token ?? "unknown");
+    // Apply creator canonicalization at ingest
+    var original = body.Creator;
+    body.CreatorOriginal = original;
+    var resolved = mappings.Resolve(original);
+    body.CreatorCanonical = !string.IsNullOrWhiteSpace(resolved) ? resolved : original;
     var s = repo.CreateVideo(who, body);
     return Results.Json(new { submission_id = s.Id, status = s.Status });
 }).WithOpenApi(o => { o.Summary = "Submit a new video for review"; return o; });
@@ -514,17 +527,20 @@ app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, S
                 // Compute first‑party serving URL
                 var internalUrl = $"/api/subtitles/{SanitizeId(vid)}/{version}.srt";
                 // Upsert in primary videos store (decoupled from legacy videos.json)
+                // Choose canonical creator if available
+                var creatorForStore = s.Payload.CreatorCanonical ?? s.Payload.Creator ?? string.Empty;
                 UpsertVideoIntoCatalogJson(
                     VideosStorePath(),
                     vid,
                     s.Payload.Title,
-                    s.Payload.Creator,
+                    creatorForStore,
                     s.Payload.Description,
                     s.Payload.Tags,
                     s.Payload.ReleaseDate,
                     internalUrl,
                     s.SubmittedBy,
-                    s.SubmittedAt
+                    s.SubmittedAt,
+                    s.Payload.CreatorOriginal ?? s.Payload.Creator
                 );
             }
         }
@@ -586,6 +602,23 @@ app.MapPatch("/api/admin/videos/{id}/hide", async (string id, HttpRequest req) =
     return Results.Ok(new { ok = true });
 }).WithOpenApi(o => { o.Summary = "Hide a video with reason"; return o; });
 
+app.MapPatch("/api/admin/videos/{id}/duration", async (string id, HttpRequest req) =>
+{
+    using var sr = new StreamReader(req.Body);
+    var body = await sr.ReadToEndAsync();
+    if (string.IsNullOrWhiteSpace(body)) return Results.BadRequest("Missing body");
+    try
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        var val = root.TryGetProperty("durationSeconds", out var d) ? d.GetInt32() : 0;
+        if (val <= 0) return Results.BadRequest("Invalid durationSeconds");
+        SetDuration(VideosStorePath(), id, val);
+        return Results.Ok(new { ok = true });
+    }
+    catch { return Results.BadRequest("Invalid JSON"); }
+}).WithOpenApi(o => { o.Summary = "Set or update video runtime duration (seconds)"; return o; });
+
 app.MapPatch("/api/admin/videos/{id}/show", (string id) =>
 {
     HideOrShowVideo(VideosStorePath(), id, hide: false, reason: null);
@@ -646,6 +679,49 @@ app.MapPatch("/api/admin/videos/{id}/tags", async (string id, HttpRequest req) =
     }
 }).WithOpenApi(o => { o.Summary = "Add/remove/set tags for a video (admin)"; return o; });
 
+// ----- Creator Mappings admin endpoints -----
+
+app.MapGet("/api/admin/creators/mappings", (CreatorMappingsRepository repo, string? q, int? page, int? pageSize) =>
+{
+    var pg = Math.Max(1, page ?? 1);
+    var ps = Math.Clamp(pageSize ?? 50, 1, 200);
+    var (items, total) = repo.List(q, pg, ps);
+    return Results.Json(new { items, totalCount = total, page = pg, pageSize = ps });
+}).WithOpenApi(o => { o.Summary = "List creator mappings"; return o; });
+
+app.MapPost("/api/admin/creators/mappings", (CreatorMappingsRepository repo, NewMappingDto body) =>
+{
+    var (created, err) = repo.Create(body.Source ?? string.Empty, body.Canonical ?? string.Empty, "admin");
+    if (err == "conflict") return Results.Conflict(new { error = err });
+    if (created == null) return Results.BadRequest(new { error = err ?? "invalid" });
+    return Results.Json(created, statusCode: 201);
+}).WithOpenApi(o => { o.Summary = "Create a new creator mapping"; return o; });
+
+app.MapPut("/api/admin/creators/mappings/{id}", (string id, CreatorMappingsRepository repo, NewMappingDto body) =>
+{
+    var (updated, err) = repo.Update(id, body.Source ?? string.Empty, body.Canonical ?? string.Empty, "admin");
+    if (err == "not_found") return Results.NotFound();
+    if (err == "conflict") return Results.Conflict(new { error = err });
+    if (updated == null) return Results.BadRequest(new { error = err ?? "invalid" });
+    return Results.Json(updated);
+}).WithOpenApi(o => { o.Summary = "Update a creator mapping"; return o; });
+
+app.MapDelete("/api/admin/creators/mappings/{id}", (string id, CreatorMappingsRepository repo) =>
+{
+    var ok = repo.Delete(id);
+    return ok ? Results.NoContent() : Results.NotFound();
+}).WithOpenApi(o => { o.Summary = "Delete a creator mapping"; return o; });
+
+app.MapPost("/api/admin/creators/mappings/reapply", (CreatorMappingsRepository repo) =>
+{
+    var videosPath = VideosStorePath();
+    var submissionsPath = app.Configuration["Data:SubmissionsPath"] ?? app.Configuration["DATA_SUBMISSIONS_PATH"] ?? "data/submissions.json";
+    submissionsPath = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, submissionsPath));
+    var updatedVideos = ReapplyCreatorMappingsToVideos(videosPath, repo);
+    var updatedSubs = ReapplyCreatorMappingsToSubmissions(submissionsPath, repo);
+    return Results.Json(new { updated_videos = updatedVideos, updated_submissions = updatedSubs });
+}).WithOpenApi(o => { o.Summary = "Reapply creator mappings to existing videos and pending submissions"; return o; });
+
 app.Run();
 
 // ----- Helpers (must remain before type declarations) -----
@@ -669,7 +745,7 @@ static string? NormalizeRace(string? value)
     };
 }
 
-static void UpsertVideoIntoCatalogJson(string jsonPath, string youtubeId, string title, string? creator, string? description, string[]? tags, string? releaseDate, string subtitleUrl, string? submitter, DateTimeOffset submittedAt)
+static void UpsertVideoIntoCatalogJson(string jsonPath, string youtubeId, string title, string? creatorCanonical, string? description, string[]? tags, string? releaseDate, string subtitleUrl, string? submitter, DateTimeOffset submittedAt, string? creatorOriginal = null)
 {
     try
     {
@@ -710,7 +786,8 @@ static void UpsertVideoIntoCatalogJson(string jsonPath, string youtubeId, string
         }
         existing["v"] = youtubeId;
         if (!string.IsNullOrWhiteSpace(title)) existing["title"] = title;
-        if (!string.IsNullOrWhiteSpace(creator)) existing["creator"] = creator;
+        if (!string.IsNullOrWhiteSpace(creatorCanonical)) existing["creator"] = creatorCanonical;
+        if (!string.IsNullOrWhiteSpace(creatorOriginal)) existing["creatorOriginal"] = creatorOriginal;
         if (!string.IsNullOrWhiteSpace(description)) existing["description"] = description;
         if (tags != null && tags.Length > 0) existing["tags"] = tags;
         if (!string.IsNullOrWhiteSpace(releaseDate)) existing["releaseDate"] = releaseDate;
@@ -721,7 +798,7 @@ static void UpsertVideoIntoCatalogJson(string jsonPath, string youtubeId, string
         var normalized = list.Select(x =>
         {
             var o = new Dictionary<string, object?>();
-            foreach (var k in new[] { "v", "title", "creator", "description", "tags", "releaseDate", "subtitleUrl", "submitter", "submissionDate" })
+            foreach (var k in new[] { "v", "title", "creator", "creatorOriginal", "description", "tags", "releaseDate", "subtitleUrl", "submitter", "submissionDate" })
             {
                 if (x.ContainsKey(k)) o[k] = x[k];
             }
@@ -735,6 +812,133 @@ static void UpsertVideoIntoCatalogJson(string jsonPath, string youtubeId, string
         // swallow in this minimal implementation; could log
     }
 }
+
+static int ReapplyCreatorMappingsToVideos(string jsonPath, CreatorMappingsRepository repo)
+{
+    try
+    {
+        if (!File.Exists(jsonPath)) return 0;
+        var json = File.ReadAllText(jsonPath);
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return 0;
+        var list = new List<Dictionary<string, object?>>();
+        foreach (var el in doc.RootElement.EnumerateArray())
+        {
+            if (el.ValueKind != JsonValueKind.Object) continue;
+            var obj = new Dictionary<string, object?>();
+            foreach (var prop in el.EnumerateObject())
+            {
+                obj[prop.Name] = prop.Value.ValueKind switch
+                {
+                    JsonValueKind.String => prop.Value.GetString(),
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    JsonValueKind.Array => prop.Value.EnumerateArray().Select(x => x.GetString()).ToArray(),
+                    _ => null
+                };
+            }
+            list.Add(obj);
+        }
+        int changes = 0;
+        foreach (var v in list)
+        {
+            var original = Convert.ToString(v.TryGetValue("creatorOriginal", out var co) ? co : v.TryGetValue("creator", out var c) ? c : null);
+            if (string.IsNullOrWhiteSpace(original)) continue;
+            var canonical = repo.Resolve(original) ?? original;
+            var current = Convert.ToString(v.TryGetValue("creator", out var cur) ? cur : null);
+            if (!string.Equals(current, canonical, StringComparison.Ordinal))
+            {
+                v["creator"] = canonical;
+                v["creatorOriginal"] = original;
+                changes++;
+            }
+        }
+        var opts = new JsonSerializerOptions { WriteIndented = true };
+        var normalized = list.Select(x =>
+        {
+            var o = new Dictionary<string, object?>();
+            foreach (var k in new[] { "v", "title", "creator", "creatorOriginal", "description", "tags", "releaseDate", "subtitleUrl", "submitter", "submissionDate" })
+            {
+                if (x.ContainsKey(k)) o[k] = x[k];
+            }
+            return o;
+        }).ToList();
+        File.WriteAllText(jsonPath, System.Text.Json.JsonSerializer.Serialize(normalized, opts));
+        return changes;
+    }
+    catch { return 0; }
+}
+
+static int ReapplyCreatorMappingsToSubmissions(string jsonPath, CreatorMappingsRepository repo)
+{
+    try
+    {
+        if (!File.Exists(jsonPath)) return 0;
+        var json = File.ReadAllText(jsonPath);
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.TryGetProperty("Items", out var items) && items.ValueKind == JsonValueKind.Array)
+        {
+            int changes = 0;
+            var arr = new List<JsonElement>();
+            // We'll rebuild with mutable dictionaries
+            var list = new List<Dictionary<string, object?>>();
+            foreach (var el in items.EnumerateArray())
+            {
+                var obj = new Dictionary<string, object?>();
+                foreach (var prop in el.EnumerateObject())
+                {
+                    if (prop.Name == "payload" && prop.Value.ValueKind == JsonValueKind.Object)
+                    {
+                        var payload = new Dictionary<string, object?>();
+                        foreach (var p in prop.Value.EnumerateObject())
+                        {
+                            payload[p.Name] = p.Value.ValueKind switch
+                            {
+                                JsonValueKind.String => p.Value.GetString(),
+                                JsonValueKind.True => true,
+                                JsonValueKind.False => false,
+                                JsonValueKind.Array => p.Value.EnumerateArray().Select(x => x.GetString()).ToArray(),
+                                _ => null
+                            };
+                        }
+                        var original = Convert.ToString(payload.TryGetValue("creator_original", out var co) ? co : payload.TryGetValue("creator", out var c) ? c : null);
+                        if (!string.IsNullOrWhiteSpace(original))
+                        {
+                            var canonical = repo.Resolve(original) ?? original;
+                            var current = Convert.ToString(payload.TryGetValue("creator_canonical", out var cc) ? cc : null);
+                            if (!string.Equals(current, canonical, StringComparison.Ordinal))
+                            {
+                                payload["creator_original"] = original;
+                                payload["creator_canonical"] = canonical;
+                                changes++;
+                            }
+                        }
+                        obj["payload"] = payload;
+                    }
+                    else
+                    {
+                        obj[prop.Name] = prop.Value.ValueKind switch
+                        {
+                            JsonValueKind.String => prop.Value.GetString(),
+                            JsonValueKind.True => true,
+                            JsonValueKind.False => false,
+                            JsonValueKind.Array => prop.Value.EnumerateArray().Select(x => x.GetString()).ToArray(),
+                            _ => null
+                        };
+                    }
+                }
+                list.Add(obj);
+            }
+            var root = new Dictionary<string, object?> { ["Items"] = list };
+            var opts = new JsonSerializerOptions { WriteIndented = false };
+            File.WriteAllText(jsonPath, System.Text.Json.JsonSerializer.Serialize(root, opts));
+            return changes;
+        }
+        return 0;
+    }
+    catch { return 0; }
+}
+
 static async Task<string?> EnsureSubtitleStoredAsync(string subtitlesRoot, string videoId, int version, string? storageKey, string? externalUrl)
 {
     var root = subtitlesRoot;
@@ -908,29 +1112,32 @@ static void HideOrShowVideo(string jsonPath, string id, bool hide, string? reaso
     {
         var full = Path.GetFullPath(jsonPath);
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-        var list = new List<Dictionary<string, object?>>();
-        if (File.Exists(full))
+        lock (StoreSync.Lock)
         {
-            var json = File.ReadAllText(full);
-            try { list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new(); }
-            catch { list = new(); }
+            var list = new List<Dictionary<string, object?>>();
+            if (File.Exists(full))
+            {
+                var json = File.ReadAllText(full);
+                try { list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new(); }
+                catch { list = new(); }
+            }
+            var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
+            if (item == null) return;
+            if (hide)
+            {
+                item["hidden"] = true;
+                if (!string.IsNullOrWhiteSpace(reason)) item["hiddenReason"] = reason;
+                item["hiddenAt"] = DateTimeOffset.UtcNow.ToString("u");
+            }
+            else
+            {
+                item.Remove("hidden");
+                item.Remove("hiddenReason");
+                item.Remove("hiddenAt");
+            }
+            var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
         }
-        var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
-        if (item == null) return;
-        if (hide)
-        {
-            item["hidden"] = true;
-            if (!string.IsNullOrWhiteSpace(reason)) item["hiddenReason"] = reason;
-            item["hiddenAt"] = DateTimeOffset.UtcNow.ToString("u");
-        }
-        else
-        {
-            item.Remove("hidden");
-            item.Remove("hiddenReason");
-            item.Remove("hiddenAt");
-        }
-        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
     }
     catch { }
 }
@@ -941,11 +1148,14 @@ static void DeleteVideo(string jsonPath, string id)
     {
         var full = Path.GetFullPath(jsonPath);
         if (!File.Exists(full)) return;
-        var json = File.ReadAllText(full);
-        var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
-        var next = list.Where(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) != id).ToList();
-        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(next, opts));
+        lock (StoreSync.Lock)
+        {
+            var json = File.ReadAllText(full);
+            var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
+            var next = list.Where(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) != id).ToList();
+            var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(next, opts));
+        }
     }
     catch { }
 }
@@ -956,14 +1166,37 @@ static void SetTags(string jsonPath, string id, IEnumerable<string> tags)
     {
         var full = Path.GetFullPath(jsonPath);
         if (!File.Exists(full)) return;
-        var json = File.ReadAllText(full);
-        var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
-        var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
-        if (item == null) return;
-        var unique = tags.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        item["tags"] = unique;
-        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
+        lock (StoreSync.Lock)
+        {
+            var json = File.ReadAllText(full);
+            var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
+            var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
+            if (item == null) return;
+            var unique = tags.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            item["tags"] = unique;
+            var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
+        }
+    }
+    catch { }
+}
+
+static void SetDuration(string jsonPath, string id, int durationSeconds)
+{
+    try
+    {
+        var full = Path.GetFullPath(jsonPath);
+        if (!File.Exists(full)) return;
+        lock (StoreSync.Lock)
+        {
+            var json = File.ReadAllText(full);
+            var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
+            var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
+            if (item == null) return;
+            item["durationSeconds"] = durationSeconds;
+            var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
+        }
     }
     catch { }
 }
@@ -974,37 +1207,40 @@ static void AddTag(string jsonPath, string id, string tag)
     {
         var full = Path.GetFullPath(jsonPath);
         if (!File.Exists(full)) return;
-        var json = File.ReadAllText(full);
-        var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
-        var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
-        if (item == null) return;
-        
-        var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (item.TryGetValue("tags", out var tagsValue) && tagsValue != null)
+        lock (StoreSync.Lock)
         {
-            if (tagsValue is JsonElement tagsElement && tagsElement.ValueKind == JsonValueKind.Array)
+            var json = File.ReadAllText(full);
+            var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
+            var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
+            if (item == null) return;
+            
+            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (item.TryGetValue("tags", out var tagsValue) && tagsValue != null)
             {
-                foreach (var el in tagsElement.EnumerateArray())
+                if (tagsValue is JsonElement tagsElement && tagsElement.ValueKind == JsonValueKind.Array)
                 {
-                    var s = el.GetString();
-                    if (!string.IsNullOrWhiteSpace(s)) existing.Add(s);
+                    foreach (var el in tagsElement.EnumerateArray())
+                    {
+                        var s = el.GetString();
+                        if (!string.IsNullOrWhiteSpace(s)) existing.Add(s);
+                    }
+                }
+                else if (tagsValue is IEnumerable<object> objEnumerable)
+                {
+                     foreach (var o in objEnumerable)
+                     {
+                        var s = Convert.ToString(o);
+                        if (!string.IsNullOrWhiteSpace(s)) existing.Add(s);
+                     }
                 }
             }
-            else if (tagsValue is IEnumerable<object> objEnumerable)
-            {
-                 foreach (var o in objEnumerable)
-                 {
-                    var s = Convert.ToString(o);
-                    if (!string.IsNullOrWhiteSpace(s)) existing.Add(s);
-                 }
-            }
+            
+            existing.Add(tag);
+            item["tags"] = existing.ToArray();
+            
+            var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
         }
-
-        existing.Add(tag);
-        item["tags"] = existing.ToArray();
-        
-        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
     }
     catch { }
 }
@@ -1015,37 +1251,40 @@ static void RemoveTag(string jsonPath, string id, string tag)
     {
         var full = Path.GetFullPath(jsonPath);
         if (!File.Exists(full)) return;
-        var json = File.ReadAllText(full);
-        var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
-        var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
-        if (item == null) return;
-
-        var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (item.TryGetValue("tags", out var tagsValue) && tagsValue != null)
+        lock (StoreSync.Lock)
         {
-            if (tagsValue is JsonElement tagsElement && tagsElement.ValueKind == JsonValueKind.Array)
+            var json = File.ReadAllText(full);
+            var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
+            var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
+            if (item == null) return;
+
+            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (item.TryGetValue("tags", out var tagsValue) && tagsValue != null)
             {
-                foreach (var el in tagsElement.EnumerateArray())
+                if (tagsValue is JsonElement tagsElement && tagsElement.ValueKind == JsonValueKind.Array)
                 {
-                    var s = el.GetString();
-                    if (!string.IsNullOrWhiteSpace(s)) existing.Add(s);
+                    foreach (var el in tagsElement.EnumerateArray())
+                    {
+                        var s = el.GetString();
+                        if (!string.IsNullOrWhiteSpace(s)) existing.Add(s);
+                    }
+                }
+                else if (tagsValue is IEnumerable<object> objEnumerable)
+                {
+                     foreach (var o in objEnumerable)
+                     {
+                        var s = Convert.ToString(o);
+                        if (!string.IsNullOrWhiteSpace(s)) existing.Add(s);
+                     }
                 }
             }
-            else if (tagsValue is IEnumerable<object> objEnumerable)
-            {
-                 foreach (var o in objEnumerable)
-                 {
-                    var s = Convert.ToString(o);
-                    if (!string.IsNullOrWhiteSpace(s)) existing.Add(s);
-                 }
-            }
+            
+            existing.RemoveWhere(s => string.Equals(s, tag, StringComparison.OrdinalIgnoreCase));
+            item["tags"] = existing.ToArray();
+            
+            var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
         }
-
-        existing.RemoveWhere(s => string.Equals(s, tag, StringComparison.OrdinalIgnoreCase));
-        item["tags"] = existing.ToArray();
-
-        var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
     }
     catch { }
 }
@@ -1067,6 +1306,13 @@ internal record VideoDto(
     int Green
 );
 
+// Centralized lock for serializing read-modify-write operations on the videos store file.
+internal static class StoreSync
+{
+    public static readonly object Lock = new object();
+}
+
 internal record RatingRequest([property: JsonConverter(typeof(JsonStringEnumConverter))] RatingValue Value, int Version);
 
 public partial class Program { }
+public record NewMappingDto([property: JsonPropertyName("source")] string? Source, [property: JsonPropertyName("canonical")] string? Canonical, [property: JsonPropertyName("notes")] string? Notes);

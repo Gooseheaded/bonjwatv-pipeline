@@ -115,6 +115,7 @@ namespace bwkt_webapp.Services
                 baseQuery = baseQuery.Where(v =>
                     tokens.All(token =>
                         v.Title.Contains(token, StringComparison.OrdinalIgnoreCase)
+                        || (!string.IsNullOrWhiteSpace(v.Creator) && v.Creator.Contains(token, StringComparison.OrdinalIgnoreCase))
                         || (v.Tags?.Any(tag =>
                             string.Equals(tag, token, StringComparison.OrdinalIgnoreCase)
                             || string.Equals(TagBadge.Get(tag).Text, token, StringComparison.OrdinalIgnoreCase)

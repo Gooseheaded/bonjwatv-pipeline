@@ -11,8 +11,15 @@ import time
 from normalize_srt import run_normalize_srt
 
 
-# Global run-scoped flag to short-circuit STT when API quota is exceeded
+# Global flag indicating the last call experienced a quota error.
+# Note: This is informational only; do not use it to gate future calls,
+# which should be decided per-audio to avoid test/process leakage.
 _quota_blocked = False
+
+
+def _quota_marker_path(audio_path: str) -> str:
+    """Path to a per-audio quota marker file used to short-circuit retries for the same audio."""
+    return f"{audio_path}.quota_blocked"
 
 
 def _mark_quota_exceeded():
@@ -160,17 +167,25 @@ def run_transcribe_audio(
 ) -> bool:
     """Transcribe an audio file and normalize the resulting SRT file."""
     try:
+        # Reset informational quota flag at the start of each run to avoid leaking across calls/tests.
+        # Whether to short-circuit is decided by a per-audio marker file instead.
+        global _quota_blocked
+        _quota_blocked = False
+
         if not os.path.exists(audio_path):
             logging.error(f"Audio file not found for transcription: {audio_path}")
             return False
 
-        if provider == "openai":
-            if quota_blocked():
-                logging.warning(
-                    "OpenAI transcription skipped: quota previously exceeded; skipping remaining transcriptions this run."
-                )
-                return False
+        # Fast-path: if the final SRT already exists and is non-empty, skip re-transcribing
+        try:
+            if os.path.exists(output_subtitle) and os.path.getsize(output_subtitle) > 0:
+                logging.info("Skipping transcription: output already exists at %s", output_subtitle)
+                return True
+        except Exception:
+            # Continue if we can't stat the file for any reason
+            pass
 
+        if provider == "openai":
             size = os.path.getsize(audio_path)
             openai = importlib.import_module("openai")
             client = openai.OpenAI()
@@ -198,6 +213,13 @@ def run_transcribe_audio(
                                 txt,
                             )
                             _mark_quota_exceeded()
+                            # Create a per-audio marker so subsequent attempts for the same
+                            # audio can short-circuit without calling the API again.
+                            try:
+                                marker = _quota_marker_path(audio_path)
+                                open(marker, "w").close()
+                            except Exception:
+                                pass
                             raise
                         if i == attempts - 1:
                             raise
@@ -212,6 +234,12 @@ def run_transcribe_audio(
                         delay = min(delay * 2, 10.0)
 
             if size <= max_upload_bytes:
+                # If a prior attempt for this same audio hit quota, short-circuit now.
+                if os.path.exists(_quota_marker_path(audio_path)):
+                    logging.warning(
+                        "OpenAI transcription skipped: prior quota exceeded for this audio; skipping retry."
+                    )
+                    return False
                 with open(audio_path, "rb") as f:
                     srt_text = _transcribe_file_with_retry(f)
                 with open(output_subtitle, "w", encoding="utf-8") as out:
@@ -224,38 +252,86 @@ def run_transcribe_audio(
                     size,
                     max_upload_bytes,
                 )
-                with tempfile.TemporaryDirectory(prefix="stt_chunks_") as tmpdir:
+                # Use a persistent chunk directory next to the audio file so repeated runs can reuse chunks
+                stem = os.path.splitext(os.path.basename(audio_path))[0]
+                persistent_dir = os.path.join(os.path.dirname(audio_path), f"{stem}_chunks")
+                os.makedirs(persistent_dir, exist_ok=True)
+                existing_chunks = [
+                    os.path.join(persistent_dir, f)
+                    for f in sorted(os.listdir(persistent_dir))
+                    if f.startswith("chunk_") and f.endswith(".mp3")
+                ]
+                if existing_chunks:
+                    logging.info(
+                        "Reusing %d existing chunks from %s (skip re-segmentation)",
+                        len(existing_chunks),
+                        persistent_dir,
+                    )
+                    chunks = existing_chunks
+                else:
                     try:
                         chunks = _ffmpeg_segment(
-                            audio_path, tmpdir, segment_time=segment_time
+                            audio_path, persistent_dir, segment_time=segment_time
                         )
                     except Exception as e:
                         logging.error(f"Failed to segment audio: {e}")
                         return False
 
-                    merged_srt_lines = []
-                    for idx, ch in enumerate(chunks):
-                        try:
+                # If we would need to call the API for any chunk and a prior attempt
+                # for this audio hit quota, short-circuit before making API calls.
+                marker_exists = os.path.exists(_quota_marker_path(audio_path))
+                if marker_exists:
+                    needs_api = False
+                    for ch in chunks:
+                        srt_cache = os.path.splitext(ch)[0] + ".srt"
+                        if not (os.path.exists(srt_cache) and os.path.getsize(srt_cache) > 0):
+                            needs_api = True
+                            break
+                    if needs_api:
+                        logging.warning(
+                            "OpenAI transcription skipped: prior quota exceeded for this audio; missing chunk caches."
+                        )
+                        return False
+
+                merged_srt_lines = []
+                for idx, ch in enumerate(chunks):
+                    try:
+                        # If we already transcribed this chunk before, reuse cached SRT next to the chunk file
+                        srt_cache = os.path.splitext(ch)[0] + ".srt"
+                        if os.path.exists(srt_cache) and os.path.getsize(srt_cache) > 0:
+                            logging.info(
+                                "Reusing cached transcription for %s (%d/%d)", ch, idx + 1, len(chunks)
+                            )
+                            with open(srt_cache, "r", encoding="utf-8") as cf:
+                                part_srt = cf.read()
+                        else:
                             with open(ch, "rb") as f:
                                 part_srt = _transcribe_file_with_retry(f)
-                        except Exception as e:
-                            logging.error(
-                                "Transcription failed for chunk %d/%d (%s): %s",
-                                idx + 1,
-                                len(chunks),
-                                ch,
-                                e,
-                            )
-                            return False
-                        offset = idx * float(segment_time)
-                        shifted = _shift_srt(part_srt, offset)
-                        merged_srt_lines.append(shifted)
+                            # Persist per‑chunk SRT cache for future runs
+                            try:
+                                with open(srt_cache, "w", encoding="utf-8") as cf:
+                                    cf.write(part_srt)
+                            except Exception:
+                                # Cache write failure shouldn't abort the run
+                                pass
+                    except Exception as e:
+                        logging.error(
+                            "Transcription failed for chunk %d/%d (%s): %s",
+                            idx + 1,
+                            len(chunks),
+                            ch,
+                            e,
+                        )
+                        return False
+                    offset = idx * float(segment_time)
+                    shifted = _shift_srt(part_srt, offset)
+                    merged_srt_lines.append(shifted)
 
-                    with open(output_subtitle, "w", encoding="utf-8") as out:
-                        full = "".join(merged_srt_lines)
-                        blocks = _parse_srt(full)
-                        for i, (_, start, end, text) in enumerate(blocks, start=1):
-                            out.write(f"{i}\n{start} --> {end}\n{text}\n\n")
+                with open(output_subtitle, "w", encoding="utf-8") as out:
+                    full = "".join(merged_srt_lines)
+                    blocks = _parse_srt(full)
+                    for i, (_, start, end, text) in enumerate(blocks, start=1):
+                        out.write(f"{i}\n{start} --> {end}\n{text}\n\n")
                 logging.info(f"Subtitles saved to {output_subtitle}")
                 return True
 

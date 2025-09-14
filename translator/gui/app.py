@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import tkinter as tk
+import threading
 from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
 from typing import Callable
@@ -10,6 +11,7 @@ from typing import Callable
 from gui.controller import PipelineController
 from gui.settings import load_settings, save_settings
 from run_paths import compute_run_paths
+import yt_dlp
 
 
 def timestamp() -> str:
@@ -91,6 +93,22 @@ class App(tk.Tk):
         self.api_entry.grid(row=2, column=1, sticky="ew")
         ttk.Button(inputs, text="show/hide", command=self.toggle_api).grid(
             row=2, column=2, padx=(8, 8)
+        )
+
+        # yt-dlp cookies source (optional)
+        ttk.Label(inputs, text="YouTube cookies (browser)").grid(
+            row=4, column=1, sticky="w", padx=(8, 8)
+        )
+        self.cookies_browser_combo = ttk.Combobox(
+            inputs,
+            textvariable=self.vars["ytdlp_cookies_browser"],
+            values=["", "chrome", "chromium", "brave", "edge", "firefox", "safari"],
+            width=12,
+            state="readonly",
+        )
+        self.cookies_browser_combo.grid(row=4, column=1, sticky="e", pady=4)
+        ttk.Button(inputs, text="Test cookies", command=self.test_cookies).grid(
+            row=4, column=2, padx=(8, 8), pady=4, sticky="w"
         )
 
         # Derived path hint
@@ -186,8 +204,8 @@ class App(tk.Tk):
         runrow.columnconfigure(2, weight=1)
         self.run_btn = ttk.Button(runrow, text="RUN", command=self.on_run)
         self.run_btn.grid(row=0, column=0, padx=(0, 12))
-        # Elapsed time (stopwatch) between RUN and progress bar
-        self.elapsed_var = tk.StringVar(value="00:00")
+        # Elapsed time (stopwatch) between RUN and progress bar (HH:MM:SS)
+        self.elapsed_var = tk.StringVar(value="00:00:00")
         self.elapsed_label = ttk.Label(runrow, textvariable=self.elapsed_var)
         self.elapsed_label.grid(row=0, column=1, padx=(0, 12))
         self.progress = ttk.Progressbar(runrow, mode="determinate")
@@ -234,6 +252,7 @@ class App(tk.Tk):
         v: dict[str, tk.Variable] = {
             "videos_path": tk.StringVar(value="my_videos.txt"),
             "api_key": tk.StringVar(value=""),
+            "ytdlp_cookies_browser": tk.StringVar(value=""),
             "do_download": tk.BooleanVar(value=True),
             "do_isolate": tk.BooleanVar(value=True),
             "do_transcribe": tk.BooleanVar(value=True),
@@ -331,6 +350,33 @@ class App(tk.Tk):
         if hasattr(self, "catalog_token_btn"):
             set_state(self.catalog_token_btn, submit_enabled)
 
+    def test_cookies(self):
+        """Quickly test if yt-dlp can load cookies from the selected browser."""
+        browser = self.vars["ytdlp_cookies_browser"].get().strip()
+        if not browser:
+            messagebox.showinfo("Cookies test", "No browser selected. Pick a browser first.")
+            return
+
+        def worker():
+            try:
+                opts = {
+                    "quiet": True,
+                    "no_warnings": True,
+                    "cookiesfrombrowser": (browser,),
+                    "retries": 0,
+                    "socket_timeout": 5,
+                }
+                ydl = yt_dlp.YoutubeDL(opts)
+                # Use yt-dlp's small public test video; metadata-only
+                ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
+                self.after(0, lambda: messagebox.showinfo("Cookies test", f"Success: Loaded cookies from '{browser}'."))
+            except Exception as ex:
+                msg = str(ex)
+                hint = "\n\nTips: Close the browser (to release locks) or try a different browser.)"
+                self.after(0, lambda: messagebox.showwarning("Cookies test", f"Failed to load cookies from '{browser}'.\n{msg}{hint}"))
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def on_run(self):  # noqa: C901
         """Build a run config and launch the orchestrator subprocess."""
         videos_file = self.vars["videos_path"].get()
@@ -424,15 +470,16 @@ class App(tk.Tk):
         def _start_timer():
             self._run_started_at = datetime.now()
             self._timer_running = True
-            self.elapsed_var.set("00:00")
+            self.elapsed_var.set("00:00:00")
             def tick():
                 if not self._timer_running or self._run_started_at is None:
                     return
                 delta = datetime.now() - self._run_started_at
                 total_sec = int(delta.total_seconds())
-                mm = total_sec // 60
+                hh = total_sec // 3600
+                mm = (total_sec % 3600) // 60
                 ss = total_sec % 60
-                self.elapsed_var.set(f"{mm:02d}:{ss:02d}")
+                self.elapsed_var.set(f"{hh:02d}:{mm:02d}:{ss:02d}")
                 self.after(500, tick)
             self.after(500, tick)
 
@@ -444,6 +491,15 @@ class App(tk.Tk):
             api_key = self.vars["api_key"].get().strip()
             if api_key:
                 env["OPENAI_API_KEY"] = api_key
+            # Pass cookies browser selection to yt-dlp (download step)
+            cookies_browser = self.vars["ytdlp_cookies_browser"].get().strip()
+            if cookies_browser:
+                # Prefer GUI-selected browser cookies over any cookiefile
+                env["YTDLP_COOKIES_BROWSER"] = cookies_browser
+                env.pop("YTDLP_COOKIES", None)
+            else:
+                # Ensure browser cookie usage is disabled if not selected
+                env.pop("YTDLP_COOKIES_BROWSER", None)
 
             # Determine the correct command to run pipeline_orchestrator.py
             if hasattr(sys, "_MEIPASS"):

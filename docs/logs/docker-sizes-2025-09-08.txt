@@ -628,3 +628,15 @@ Next: copy to server and run run.sh there, or use scripts/deploy-to-server.sh us
 -rw-r--r-- 1 root root 130M Sep  8 10:49 /home/gctrindade/programming/bwkt-webapp/dist/bwkt-docker-20250908-104902.tar.gz
 
 Done. Output written to: docs/logs/docker-sizes-2025-09-08.txt
+Image Size and Bundle Measurement — 2025-09-08 21:37:05 UTC
+
+## Docker versions
+Docker version 28.3.3, build 980b856816
+Docker Compose version 2.39.2
+
+## Rebuild (clean cache)
++ docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
+time="2025-09-08T15:37:06-06:00" level=warning msg="The \"LEGACY_SUBTITLE_API_TOKEN\" variable is not set. Defaulting to a blank string."
+time="2025-09-08T15:37:06-06:00" level=warning msg="The \"LEGACY_SUBTITLE_API_TOKEN\" variable is not set. Defaulting to a blank string."
+time="2025-09-08T15:37:06-06:00" level=warning msg="Docker Compose is configured to build using Bake, but buildx isn't installed"
+permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Head "http://%2Fvar%2Frun%2Fdocker.sock/_ping": dial unix /var/run/docker.sock: socket: operation not permitted

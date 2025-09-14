@@ -330,6 +330,23 @@ app.MapGet("/admin/videos/{id}", async (string id, HttpContext ctx) =>
     return Results.Stream(stream, ct);
 });
 
+// Admin proxy: set video durationSeconds
+app.MapPatch("/admin/videos/{id}/duration", async (string id, HttpRequest req, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    using var sr = new StreamReader(req.Body);
+    var body = await sr.ReadToEndAsync();
+    using var http = new HttpClient();
+    using var msg = new HttpRequestMessage(HttpMethod.Patch, $"{apiBase}/admin/videos/{id}/duration")
+    {
+        Content = new StringContent(string.IsNullOrWhiteSpace(body) ? "{}" : body, System.Text.Encoding.UTF8, "application/json")
+    };
+    var resp = await http.SendAsync(msg);
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    return Results.Ok(new { ok = true });
+});
+
 app.MapPost("/admin/videos/{id}/hide", async (string id, HttpRequest req, HttpContext ctx) =>
 {
     if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);

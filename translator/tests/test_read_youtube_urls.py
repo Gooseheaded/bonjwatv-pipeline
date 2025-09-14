@@ -19,6 +19,7 @@ def test_read_youtube_urls_builds_minimal_json(tmp_path):
     urls.write_text(
         "\n".join(
             [
+                "# This is a comment and should be ignored",
                 "https://www.youtube.com/watch?v=abcDEF123",
                 "https://youtu.be/abcDEF123",  # duplicate id
                 "https://www.youtube.com/shorts/XYZ_987",

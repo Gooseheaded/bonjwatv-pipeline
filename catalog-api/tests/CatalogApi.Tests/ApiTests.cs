@@ -74,6 +74,62 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Search_By_Creator_Canonical_And_Original_Works()
+    {
+        // Use a dedicated factory to control paths and seed mappings
+        var solutionDir = FindSolutionDirectory();
+        var projectDir = Path.Combine(solutionDir, "catalog-api");
+        var tmp = Directory.CreateTempSubdirectory();
+        var vidsPath = Path.Combine(tmp.FullName, "videos.json");
+        await File.WriteAllTextAsync(vidsPath, "[]");
+        var ratingsPath = Path.Combine(tmp.FullName, "ratings.json");
+        var subsRoot = Path.Combine(tmp.FullName, "subtitles");
+        var submissionsPath = Path.Combine(tmp.FullName, "submissions.json");
+        var mappingsPath = Path.Combine(tmp.FullName, "creator-mappings.json");
+
+        var factory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseContentRoot(projectDir);
+            builder.ConfigureAppConfiguration((ctx, cfg) =>
+            {
+                var dict = new Dictionary<string, string?>
+                {
+                    ["Data:VideosStorePath"] = vidsPath,
+                    ["Data:RatingsPath"] = ratingsPath,
+                    ["Data:SubtitlesRoot"] = subsRoot,
+                    ["Data:SubmissionsPath"] = submissionsPath,
+                    ["Data:CreatorMappingsPath"] = mappingsPath,
+                    ["API_INGEST_TOKENS"] = "TOK2"
+                };
+                cfg.AddInMemoryCollection(dict!);
+            });
+        });
+
+        var client = factory.CreateClient();
+
+        // Create mapping: original -> canonical
+        var create = await client.PostAsJsonAsync("/api/admin/creators/mappings", new { source = "파도튜브[PADOTUBE]", canonical = "Pado" });
+        create.EnsureSuccessStatusCode();
+
+        // Create a submission with original creator; approve to write to videos store with canonical
+        using var submitReq = new HttpRequestMessage(HttpMethod.Post, "/api/submissions/videos");
+        submitReq.Headers.Add("X-Api-Key", "TOK2");
+        submitReq.Content = JsonContent.Create(new { youtube_id = "padotube1", title = "Pado VOD", creator = "파도튜브[PADOTUBE]" });
+        var submit = await client.SendAsync(submitReq);
+        submit.EnsureSuccessStatusCode();
+        var sid = (await submit.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("submission_id").GetString();
+        var approve = await client.PatchAsync($"/api/admin/submissions/{sid}", JsonContent.Create(new { action = "approve" }));
+        approve.EnsureSuccessStatusCode();
+
+        // Search by canonical creator
+        var res1 = await client.GetFromJsonAsync<JsonElement>("/api/videos?q=Pado&pageSize=100");
+        Assert.True(res1.GetProperty("items").EnumerateArray().Any(el => el.GetProperty("id").GetString() == "padotube1"));
+        // Search by original creator (mapping resolution)
+        var res2 = await client.GetFromJsonAsync<JsonElement>("/api/videos?q=%ED%8C%8C%EB%8F%84%ED%8A%9C%EB%B8%8C%5BPADOTUBE%5D&pageSize=100");
+        Assert.True(res2.GetProperty("items").EnumerateArray().Any(el => el.GetProperty("id").GetString() == "padotube1"));
+    }
+
+    [Fact]
     public async Task Health_Returns_Ok()
     {
         var client = _factory.CreateClient();
@@ -454,6 +510,72 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         get.EnsureSuccessStatusCode();
         var text = await get.Content.ReadAsStringAsync();
         Assert.Contains("KEEP", text);
+    }
+
+    [Fact]
+    public async Task Hiding_Multiple_Videos_Accumulates_In_Hidden_List()
+    {
+        // Arrange a temp store with two videos
+        var tmpRoot = Directory.CreateTempSubdirectory();
+        var vidsPath = Path.Combine(tmpRoot.FullName, "videos.json");
+        var ratingsPath = Path.Combine(tmpRoot.FullName, "ratings.json");
+        var subsRoot = Path.Combine(tmpRoot.FullName, "subtitles");
+        var submissionsPath = Path.Combine(tmpRoot.FullName, "submissions.json");
+        await File.WriteAllTextAsync(vidsPath, "[ {\"v\":\"a\",\"title\":\"Alpha\"}, {\"v\":\"b\",\"title\":\"Beta\"} ]");
+
+        var factory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((ctx, cfg) =>
+            {
+                var dict = new Dictionary<string, string?>
+                {
+                    ["Data:JsonPath"] = vidsPath,
+                    ["Data:VideosStorePath"] = vidsPath,
+                    ["Data:RatingsPath"] = ratingsPath,
+                    ["Data:SubtitlesRoot"] = subsRoot,
+                    ["Data:SubmissionsPath"] = submissionsPath,
+                    ["API_INGEST_TOKENS"] = "TOKHIDE"
+                };
+                cfg.AddInMemoryCollection(dict!);
+            });
+        });
+
+        var client = factory.CreateClient();
+
+        // Initially nothing hidden
+        var initial = await client.GetFromJsonAsync<JsonElement>("/api/admin/videos/hidden");
+        Assert.Equal(JsonValueKind.Array, initial.ValueKind);
+        Assert.Equal(0, initial.GetArrayLength());
+
+        // Hide first video
+        using (var msg1 = new HttpRequestMessage(HttpMethod.Patch, "/api/admin/videos/a/hide")
+        {
+            Content = JsonContent.Create(new { reason = "t1" })
+        })
+        {
+            var r1 = await client.SendAsync(msg1);
+            r1.EnsureSuccessStatusCode();
+        }
+
+        var afterOne = await client.GetFromJsonAsync<JsonElement>("/api/admin/videos/hidden");
+        Assert.Equal(1, afterOne.GetArrayLength());
+        Assert.Contains(afterOne.EnumerateArray(), el => el.GetProperty("id").GetString() == "a");
+
+        // Hide second video
+        using (var msg2 = new HttpRequestMessage(HttpMethod.Patch, "/api/admin/videos/b/hide")
+        {
+            Content = JsonContent.Create(new { reason = "t2" })
+        })
+        {
+            var r2 = await client.SendAsync(msg2);
+            r2.EnsureSuccessStatusCode();
+        }
+
+        var afterTwo = await client.GetFromJsonAsync<JsonElement>("/api/admin/videos/hidden");
+        Assert.Equal(2, afterTwo.GetArrayLength());
+        var ids = afterTwo.EnumerateArray().Select(el => el.GetProperty("id").GetString() ?? "").ToArray();
+        Assert.Contains("a", ids);
+        Assert.Contains("b", ids);
     }
 
     [Fact]

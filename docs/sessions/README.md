@@ -3,7 +3,8 @@
 Time-ordered session notes capturing decisions, changes, and next steps. Prefer newest-first for quick context.
 
 ## Sessions
-
+- [2025-09-14](session-2025-09-14.md)
+- [2025-09-13 — Creator mappings](session-2025-09-13-creator-mappings.md)
 - [2025-09-13](session-2025-09-13.md)
 - [2025-09-12](session-2025-09-12.md)
 - [2025-09-10](session-2025-09-10.md)

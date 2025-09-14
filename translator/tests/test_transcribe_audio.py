@@ -232,3 +232,109 @@ def test_transcribe_audio_openai_insufficient_quota_short_circuit(tmp_path, mock
     calls_after = mock_client.audio.transcriptions.create.call_count
     assert ok2 is False
     assert calls_after == calls_before
+
+
+def test_transcribe_audio_openai_reuse_existing_chunks_skips_segment(tmp_path, mock_imports, monkeypatch):
+    # Create a big audio to trigger chunking
+    audio = tmp_path / "big.mp3"
+    audio.write_bytes(b"0" * (25_000_000))
+    output_srt = tmp_path / "out.srt"
+
+    # Precreate persistent chunks next to audio so we reuse them
+    chunks_dir = tmp_path / "big_chunks"
+    chunks_dir.mkdir()
+    c1 = chunks_dir / "chunk_000.mp3"
+    c2 = chunks_dir / "chunk_001.mp3"
+    c1.write_bytes(b"dummy")
+    c2.write_bytes(b"dummy")
+
+    # Track if ffmpeg segmenter gets called (it should not)
+    called = {"v": False}
+
+    def fake_segment(path, out_dir, segment_time=600, bitrate="64k"):
+        called["v"] = True
+        return [str(c1), str(c2)]
+
+    monkeypatch.setattr("transcribe_audio._ffmpeg_segment", fake_segment)
+
+    # Mock API to return simple srt for each chunk
+    mock_client = mock_imports
+    mock_client.audio.transcriptions.create.side_effect = [
+        "1\n00:00:00,000 --> 00:00:00,500\nX\n\n",
+        "1\n00:00:00,500 --> 00:00:01,000\nY\n\n",
+    ]
+
+    ok = run_transcribe_audio(
+        audio_path=str(audio),
+        output_subtitle=str(output_srt),
+        provider="openai",
+        api_model="whisper-1",
+        language="ko",
+        max_upload_bytes=1,
+        segment_time=1,
+    )
+    assert ok is True
+    assert called["v"] is False  # did not call segmenter
+    assert output_srt.exists()
+
+
+def test_transcribe_audio_openai_reuse_chunk_srt_cache_skips_api(tmp_path, mock_imports):
+    # Create big audio and matching persistent chunk directory with cached SRTs
+    audio = tmp_path / "big2.mp3"
+    audio.write_bytes(b"0" * (25_000_000))
+    output_srt = tmp_path / "out2.srt"
+    chunks_dir = tmp_path / "big2_chunks"
+    chunks_dir.mkdir()
+    c1 = chunks_dir / "chunk_000.mp3"
+    c2 = chunks_dir / "chunk_001.mp3"
+    s1 = chunks_dir / "chunk_000.srt"
+    s2 = chunks_dir / "chunk_001.srt"
+    c1.write_bytes(b"dummy")
+    c2.write_bytes(b"dummy")
+    s1.write_text("1\n00:00:00,000 --> 00:00:00,500\nA\n\n", encoding="utf-8")
+    s2.write_text("1\n00:00:00,500 --> 00:00:01,000\nB\n\n", encoding="utf-8")
+
+    mock_client = mock_imports
+
+    ok = run_transcribe_audio(
+        audio_path=str(audio),
+        output_subtitle=str(output_srt),
+        provider="openai",
+        api_model="whisper-1",
+        language="ko",
+        max_upload_bytes=1,
+        segment_time=1,
+    )
+    assert ok is True
+    # With per-chunk srt caches present, we shouldn't hit the API
+    assert mock_client.audio.transcriptions.create.call_count == 0
+    data = output_srt.read_text(encoding="utf-8")
+    assert "A" in data and "B" in data
+
+
+def test_transcribe_audio_skip_when_output_exists(tmp_path, mock_imports, monkeypatch):
+    audio = tmp_path / "skip.mp3"
+    audio.write_text("", encoding="utf-8")
+    output_srt = tmp_path / "out_existing.srt"
+    output_srt.write_text("1\n00:00:00,000 --> 00:00:00,500\nDONE\n\n", encoding="utf-8")
+
+    # Ensure neither segmenter nor API are used
+    called = {"v": False}
+
+    def fake_segment(path, out_dir, segment_time=600, bitrate="64k"):
+        called["v"] = True
+        return []
+
+    monkeypatch.setattr("transcribe_audio._ffmpeg_segment", fake_segment)
+    mock_client = mock_imports
+
+    ok = run_transcribe_audio(
+        audio_path=str(audio),
+        output_subtitle=str(output_srt),
+        provider="openai",
+        api_model="whisper-1",
+        language="ko",
+    )
+    assert ok is True
+    assert called["v"] is False
+    assert mock_client.audio.transcriptions.create.call_count == 0

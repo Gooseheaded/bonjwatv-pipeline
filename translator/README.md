@@ -14,6 +14,14 @@ https://youtu.be/XYZ_987
 EOF
 ```
 2) Copy the config and run (uses ordered steps including `read_youtube_urls`, `fetch_video_metadata`, `translate_title`, `build_videos_json`). The pipeline will create a per-run folder named after `urls.txt` (e.g., `metadata/urls`), and place `audio/`, `vocals/`, `subtitles/`, and `.cache/` inside it. It writes the minimal `videos.json` and an enriched `videos_enriched.json` used by downstream steps like the manifest.
+
+Tip: In `urls.txt`, you can comment out lines with `#` to temporarily skip videos. Blank lines are also ignored. Example:
+
+```
+# skip this one for now
+https://www.youtube.com/watch?v=abcDEF123
+https://youtu.be/XYZ_987
+```
 ```
 cp pipeline-config.example.json pipeline-config.json
 python pipeline_orchestrator.py --config pipeline-config.json

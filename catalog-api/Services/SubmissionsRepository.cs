@@ -134,10 +134,12 @@ public class VideoSubmissionPayload
     [JsonPropertyName("youtube_id")] public string YoutubeId { get; set; } = string.Empty;
     [JsonPropertyName("title")] public string Title { get; set; } = string.Empty;
     [JsonPropertyName("creator")] public string? Creator { get; set; }
+    // New fields for canonicalization
+    [JsonPropertyName("creator_original")] public string? CreatorOriginal { get; set; }
+    [JsonPropertyName("creator_canonical")] public string? CreatorCanonical { get; set; }
     [JsonPropertyName("description")] public string? Description { get; set; }
     [JsonPropertyName("tags")] public string[]? Tags { get; set; }
     [JsonPropertyName("release_date")] public string? ReleaseDate { get; set; }
     [JsonPropertyName("subtitle_storage_key")] public string? SubtitleStorageKey { get; set; }
     [JsonPropertyName("subtitle_url")] public string? SubtitleUrl { get; set; }
 }
-

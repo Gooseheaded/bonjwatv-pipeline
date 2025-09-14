@@ -11,10 +11,20 @@ namespace bwkt_webapp.Pages.Admin
         public List<SubmissionItem> Pending { get; private set; } = new();
         public List<HiddenItem> Hidden { get; private set; } = new();
 
+        // Debug metadata surfaced to the Admin page
+        public string? ApiBaseForDebug { get; private set; }
+        public string? DataCatalogUrlEnv { get; private set; }
+        public string? CatalogApiBaseEnv { get; private set; }
+        public DateTimeOffset PageGeneratedAtUtc { get; private set; } = DateTimeOffset.UtcNow;
+
         public void OnGet()
         {
             IsAdmin = CheckIsAdmin();
             if (!IsAdmin) return;
+            // Capture debug context for client-side logging
+            ApiBaseForDebug = DeriveApiBase();
+            DataCatalogUrlEnv = Environment.GetEnvironmentVariable("DATA_CATALOG_URL");
+            CatalogApiBaseEnv = Environment.GetEnvironmentVariable("CATALOG_API_BASE_URL");
             TryLoadRecent();
             TryLoadPending();
             TryLoadHidden();
