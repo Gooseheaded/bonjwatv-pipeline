@@ -76,3 +76,13 @@ else
         }
     });
 </script>
+<script>
+    (function(){
+        try {
+            if (window.gtag) {
+                var evt = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(new { query = Model.Query ?? "", race = Model.SelectedRace ?? "all", results_count = Model.TotalCount }));
+                window.gtag('event', 'search', evt);
+            }
+        } catch {}
+    })();
+</script>

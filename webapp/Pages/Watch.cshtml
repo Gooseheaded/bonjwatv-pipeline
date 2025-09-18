@@ -96,6 +96,7 @@ else
             const next = Math.max(6, current + deltaPx);
             subtitleEl.style.fontSize = next + 'px';
             localStorage.setItem('subtitleFontSize', next);
+            try { if (window.gtag) { window.gtag('event', 'subtitle_font_resize', { size_px: next }); } } catch {}
         }
 
         // Ratings wiring
@@ -164,7 +165,12 @@ else
         (function(){
             const YTState = { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5 };
             let timer = null;
+            let progressTimer = null;
+            let playedEventSent = false;
+            const quartiles = [25, 50, 75, 95];
+            const quartilesSent = new Set();
             function clearTimer(){ if (timer) { clearTimeout(timer); timer = null; } }
+            function clearProgress(){ if (progressTimer) { clearInterval(progressTimer); progressTimer = null; } }
             function startTimer(){
                 clearTimer();
                 timer = setTimeout(async () => {
@@ -189,15 +195,51 @@ else
                     } catch {}
                 }, 30000);
             }
-            window.bwktOnPlayerStateChange = function(state /*, player*/) {
+            function startProgress(player){
+                clearProgress();
+                progressTimer = setInterval(() => {
+                    try {
+                        const dur = (typeof player.getDuration === 'function') ? (player.getDuration() || 0) : 0;
+                        const cur = (typeof player.getCurrentTime === 'function') ? (player.getCurrentTime() || 0) : 0;
+                        if (dur > 0) {
+                            const pct = Math.max(0, Math.min(100, Math.floor((cur / dur) * 100)));
+                            for (const q of quartiles) {
+                                if (pct >= q && !quartilesSent.has(q)) {
+                                    quartilesSent.add(q);
+                                    try { if (window.gtag) { window.gtag('event', 'video_quartile', { video_id: videoId, quartile: q }); } } catch {}
+                                }
+                            }
+                        }
+                    } catch {}
+                }, 1000);
+            }
+            window.bwktOnPlayerStateChange = function(state, player) {
                 if (state === YTState.PLAYING) {
+                    if (!playedEventSent) {
+                        playedEventSent = true;
+                        try { if (window.gtag) { window.gtag('event', 'video_play', { video_id: videoId }); } } catch {}
+                    }
                     startTimer();
+                    startProgress(player);
+                } else if (state === YTState.PAUSED) {
+                    clearTimer();
+                    try {
+                        const dur = (typeof player.getDuration === 'function') ? (player.getDuration() || 0) : 0;
+                        const cur = (typeof player.getCurrentTime === 'function') ? (player.getCurrentTime() || 0) : 0;
+                        const pct = dur > 0 ? Math.round((cur / dur) * 100) : null;
+                        if (window.gtag) { window.gtag('event', 'video_pause', { video_id: videoId, progress_pct: pct }); }
+                    } catch {}
+                    clearProgress();
+                } else if (state === YTState.ENDED) {
+                    clearTimer();
+                    try { if (window.gtag) { window.gtag('event', 'video_complete', { video_id: videoId }); } } catch {}
+                    clearProgress();
                 } else {
                     clearTimer();
                 }
             };
             // Best-effort cleanup on page unload
-            window.addEventListener('beforeunload', clearTimer);
+            window.addEventListener('beforeunload', () => { clearTimer(); clearProgress(); });
         })();
     </script>
 }
