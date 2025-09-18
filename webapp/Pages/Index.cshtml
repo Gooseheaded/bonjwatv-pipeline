@@ -25,7 +25,8 @@ else
         @foreach (var v in Model.Videos)
         {
             <div class="col">
-                <div class="card h-100 position-relative">
+                <div class="card h-100 position-relative video-card" data-video-id="@v.VideoId">
+                    <span class="watched-badge d-none">WATCHED</span>
                     <a asp-page="/Watch" asp-route-v="@v.VideoId">
                         <img src="https://img.youtube.com/vi/@v.VideoId/hqdefault.jpg"
                              class="card-img-top" alt="@v.Title" />
@@ -73,3 +74,12 @@ else
     }
 }
 @* Ratings fetched inline from API list; no client JS needed *@
+<script src="~/js/watched.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        if (window.bwktWatched) {
+            try { await window.bwktWatched.hydrateFromServerIfStale(); } catch {}
+            window.bwktWatched.annotateCards();
+        }
+    });
+</script>

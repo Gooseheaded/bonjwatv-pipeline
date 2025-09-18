@@ -23,6 +23,21 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     });
 builder.Services.AddAuthorization();
 
+// Per-user "watched" store (server-side persistence under /app/data/watched)
+try
+{
+    var watchedDir = Path.Combine("/app/data", "watched");
+    Directory.CreateDirectory(watchedDir);
+    builder.Services.AddSingleton<IUserWatchStore>(sp => new FileUserWatchStore(watchedDir));
+}
+catch
+{
+    // Fallback to temp directory in dev if needed
+    var tmp = Path.Combine(Path.GetTempPath(), "bwkt-watched");
+    Directory.CreateDirectory(tmp);
+    builder.Services.AddSingleton<IUserWatchStore>(sp => new FileUserWatchStore(tmp));
+}
+
 // Persist Data Protection keys to disk so auth cookies survive restarts/redeploys
 try
 {
@@ -135,6 +150,45 @@ string? DeriveApiBase()
 }
 
 var apiBase = DeriveApiBase();
+
+// --- Watched endpoints (server-side persistence, client caches locally) ---
+static string GetOrCreateUserKey(HttpContext ctx)
+{
+    // Prefer authenticated Discord user id when available
+    var uid = ctx.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    if (!string.IsNullOrWhiteSpace(uid)) return $"u:{uid}";
+
+    // Anonymous cookie
+    const string cookieName = "bwkt.uid";
+    if (!ctx.Request.Cookies.TryGetValue(cookieName, out var anon) || string.IsNullOrWhiteSpace(anon))
+    {
+        anon = Guid.NewGuid().ToString("n");
+        ctx.Response.Cookies.Append(cookieName, anon, new CookieOptions
+        {
+            HttpOnly = true,
+            IsEssential = true,
+            Expires = DateTimeOffset.UtcNow.AddYears(2),
+            SameSite = SameSiteMode.Lax,
+            Secure = ctx.Request.IsHttps
+        });
+    }
+    return $"a:{anon}";
+}
+
+app.MapPost("/account/watched/{id}", async (string id, HttpContext ctx, IUserWatchStore store) =>
+{
+    if (string.IsNullOrWhiteSpace(id)) return Results.BadRequest();
+    var key = GetOrCreateUserKey(ctx);
+    await store.AddWatchedAsync(key, id);
+    return Results.Ok(new { ok = true });
+});
+
+app.MapGet("/account/watched", async (HttpContext ctx, IUserWatchStore store) =>
+{
+    var key = GetOrCreateUserKey(ctx);
+    var ids = await store.GetWatchedAsync(key);
+    return Results.Ok(new { ids });
+});
 
 app.MapGet("/ratings/{id}", async (string id, int? version, HttpContext ctx) =>
 {

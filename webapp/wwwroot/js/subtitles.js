@@ -72,7 +72,18 @@ function initSubtitles(srtUrl, playerId, containerId) {
         if (window.YT && YT.Player) {
             try {
                 // Instantiate YouTube player using existing iframe (enablejsapi=1)
-                player = new YT.Player(playerId, { events: { onReady: () => requestAnimationFrame(render) } });
+                player = new YT.Player(playerId, {
+                    events: {
+                        onReady: () => requestAnimationFrame(render),
+                        onStateChange: (e) => {
+                            try {
+                                if (typeof window !== 'undefined' && typeof window.bwktOnPlayerStateChange === 'function') {
+                                    window.bwktOnPlayerStateChange(e.data, player);
+                                }
+                            } catch { /* ignore */ }
+                        }
+                    }
+                });
             } catch (err) {
                 console.error('[subtitles] Error initializing YouTube player:', err);
                 if (container) container.innerText = 'Error initializing player: ' + err.message;

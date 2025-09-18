@@ -6,6 +6,17 @@
     <title>@ViewData["Title"] - bonjwa.tv</title>
     <meta name="theme-color" content="#f8f9fa" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#212529" />
+    @{ var gaId = Environment.GetEnvironmentVariable("GA_MEASUREMENT_ID"); }
+    @if (!string.IsNullOrWhiteSpace(gaId))
+    {
+        <script async src="https://www.googletagmanager.com/gtag/js?id=@gaId"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){ dataLayer.push(arguments); }
+            gtag('js', new Date());
+            gtag('config', '@gaId');
+        </script>
+    }
     <style>
         /* Prevent white flash on navigation by painting background early */
         html, body { background-color: #f8f9fa; }

@@ -72,6 +72,7 @@ else
     </div>
     <script src="https://www.youtube.com/iframe_api"></script>
     <script src="~/js/subtitles.js"></script>
+    <script src="~/js/watched.js"></script>
     <script>
         // Initialize subtitles after the YouTube IFrame API has loaded
         initSubtitles("@Model.Video.SubtitleUrl", "player", "subtitle-container");
@@ -158,5 +159,45 @@ else
             }));
 
         loadRatings();
+
+        // Watched marker: mark after 30s of continuous PLAYING
+        (function(){
+            const YTState = { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5 };
+            let timer = null;
+            function clearTimer(){ if (timer) { clearTimeout(timer); timer = null; } }
+            function startTimer(){
+                clearTimer();
+                timer = setTimeout(async () => {
+                    try {
+                        // Double-check: if player is still in PLAYING state, mark watched
+                        await fetch(`/account/watched/${videoId}`, { method: 'POST', credentials: 'same-origin' });
+                        // Analytics: record the watched event (30s)
+                        try {
+                            if (window.gtag) {
+                                window.gtag('event', 'video_watched_30s', {
+                                    video_id: videoId,
+                                    page_path: location.pathname,
+                                    page_title: document.title
+                                });
+                            }
+                        } catch {}
+                        if (window.bwktWatched && typeof window.bwktWatched.refreshFromServer === 'function') {
+                            await window.bwktWatched.refreshFromServer();
+                        } else if (window.bwktWatched && typeof window.bwktWatched.markWatched === 'function') {
+                            window.bwktWatched.markWatched(videoId);
+                        }
+                    } catch {}
+                }, 30000);
+            }
+            window.bwktOnPlayerStateChange = function(state /*, player*/) {
+                if (state === YTState.PLAYING) {
+                    startTimer();
+                } else {
+                    clearTimer();
+                }
+            };
+            // Best-effort cleanup on page unload
+            window.addEventListener('beforeunload', clearTimer);
+        })();
     </script>
 }
