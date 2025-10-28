@@ -20,7 +20,7 @@ Build and run (production)
   - docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 - What this does:
   - Builds images in Release mode (via build args) and starts both services.
-  - Webapp is published on host port 80 → container 8080.
+- Webapp is published on host port 8080 → container 8080 (reverse proxy listens on 80/443).
   - catalog-api is internal only (no host port).
   - Named volumes persist data:
     - `web-data` → webapp `/app/data` (e.g., app data/cache)
@@ -64,8 +64,13 @@ Bundle-based deploy (no registry, scripted)
   - Server still needs Docker + compose plugin installed.
   - Safety: run.sh backs up named volumes `web-data` and `api-data` to `backups/` before updating (set `SKIP_BACKUP=1` to skip).
   - Seeding: run.sh seeds `api-data/videos.json` from the bundle if missing. You can override the seed source at package time with `SEED_VIDEOS_FILE=/path/to/videos.json scripts/package-docker.sh`.
-  - Webapp listens on port 80; catalog-api is internal-only.
-  - .env preservation: deploy-to-server.sh preserves an existing `.env` in the target directory and restores it into the new `current/` bundle so your secrets/config aren’t overwritten.
+- Webapp listens on host port 8080; catalog-api is internal-only.
+- .env preservation: deploy-to-server.sh preserves an existing `.env` in the target directory and restores it into the new `current/` bundle so your secrets/config aren’t overwritten.
+
+Volume Migration Helpers
+- Export live volumes on the old host: `scripts/export-volumes.sh -o ~/bwkt-volume-backups`
+- Optionally copy the timestamped folder to the new host: add `-t user@new-host:/root/backups`
+- Restore on the new host: point to that folder, e.g. `scripts/import-volumes.sh -s /root/backups/volumes-YYYY-MM-DD-HHMMSS`
 
 TLS and domain
 - Easiest: run a reverse proxy (Caddy/Nginx) on the LXC that terminates TLS and forwards to `webapp:8080`.

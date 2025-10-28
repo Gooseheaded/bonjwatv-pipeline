@@ -98,7 +98,7 @@ docker run --rm \
   '
 
 echo "Starting (or updating) stack…"
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
 
 echo "Done. Webapp should be on port 80. Volumes preserved."
 RUN

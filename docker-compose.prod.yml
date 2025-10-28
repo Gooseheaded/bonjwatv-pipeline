@@ -10,7 +10,7 @@ services:
       - ADMIN_USER_IDS=${ADMIN_USER_IDS}
       - LEGACY_SUBTITLE_API_TOKEN=${LEGACY_SUBTITLE_API_TOKEN}
     ports:
-      - "80:8080"
+      - "8080:8080"
     restart: unless-stopped
     volumes:
       - web-data:/app/data

@@ -32,6 +32,12 @@ fi
 echo "Creating remote directory: $TARGET:$REMOTE_DIR"
 ssh "${SSH_OPTS[@]}" "$TARGET" "mkdir -p '$REMOTE_DIR'"
 
+echo "Checking remote directory is writable…"
+if ! ssh "${SSH_OPTS[@]}" "$TARGET" "touch '$REMOTE_DIR/.deploy-write-test' && rm '$REMOTE_DIR/.deploy-write-test'"; then
+  echo "ERROR: Remote directory $REMOTE_DIR is not writable. Choose a different path (e.g. /root/bwkt) and retry." >&2
+  exit 1
+fi
+
 echo "Uploading bundle: $BUNDLE → $TARGET:$REMOTE_DIR/"
 scp "${SSH_OPTS[@]}" "$BUNDLE" "$TARGET:$REMOTE_DIR/"
 
