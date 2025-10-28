@@ -24,13 +24,13 @@ else
                     <a asp-page="/Watch" asp-route-v="@v.VideoId">
                         <img src="https://img.youtube.com/vi/@v.VideoId/hqdefault.jpg" class="card-img-top" alt="@v.Title" />
                     </a>
-                    <div class="card-body">
+                    <div class="card-body video-card-body">
                         <h5 class="card-title">@v.Title</h5>
                         @if (!string.IsNullOrEmpty(v.Creator))
                         {
                             <h6 class="card-subtitle mb-2 text-muted">By @v.Creator</h6>
                         }
-                        <div class="d-flex justify-content-between align-items-center mt-2">
+                        <div class="video-card-footer d-flex justify-content-between align-items-center">
                             <div class="d-flex flex-wrap" style="gap: .25rem;">
                                 @foreach (var tag in v.Tags ?? Array.Empty<string>())
                                 {

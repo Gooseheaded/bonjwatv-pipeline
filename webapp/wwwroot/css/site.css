@@ -78,3 +78,13 @@ body {
   font-size: .75rem;
   border-radius: .25rem;
 }
+
+.video-card .video-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.video-card .video-card-footer {
+  margin-top: auto;
+}
