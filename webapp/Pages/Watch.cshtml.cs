@@ -14,6 +14,7 @@ namespace bwkt_webapp.Pages
         public int RedCount { get; private set; }
         public int YellowCount { get; private set; }
         public int GreenCount { get; private set; }
+        public int SubtitleVersion { get; private set; } = 1;
 
         public WatchModel(IVideoService videoService)
         {
@@ -27,6 +28,7 @@ namespace bwkt_webapp.Pages
             {
                 return NotFound();
             }
+            SubtitleVersion = Video.SubtitleVersion;
             TryLoadRatings(Video.VideoId);
             return Page();
         }

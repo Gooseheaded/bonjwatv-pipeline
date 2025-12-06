@@ -91,6 +91,42 @@ else if (Model.IsAdmin)
     <p>No pending submissions.</p>
 }
 
+<h2 class="mt-4">Pending Corrections</h2>
+@if (Model.IsAdmin && Model.PendingCorrections.Count > 0)
+{
+    <table class="table table-striped table-sm">
+        <thead>
+            <tr>
+                <th>When (UTC)</th>
+                <th>Video Id</th>
+                <th>Version</th>
+                <th>Submitted By</th>
+                <th>Notes</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var c in Model.PendingCorrections)
+        {
+            <tr>
+                <td>@c.SubmittedAt.ToString("u")</td>
+                <td>@c.VideoId</td>
+                <td>v@(c.SubtitleVersion)</td>
+                <td>@c.SubmittedBy</td>
+                <td>@(string.IsNullOrWhiteSpace(c.Notes) ? "-" : c.Notes)</td>
+                <td class="text-nowrap">
+                    <a class="btn btn-sm btn-primary" asp-page="/Admin/Submission" asp-route-id="@c.Id">Open</a>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+else if (Model.IsAdmin)
+{
+    <p>No pending corrections.</p>
+}
+
 <h2 class="mt-4">Hidden Videos</h2>
 @if (Model.IsAdmin && Model.Hidden.Count > 0)
 {

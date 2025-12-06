@@ -43,6 +43,17 @@ else
             <a class="btn btn-sm btn-outline-primary" asp-page="/Admin/Video" asp-route-id="@Model.Video.VideoId">Admin</a>
         </div>
     }
+    @if (Model.Video.SubtitleContributors?.Any() == true)
+    {
+        <div class="mb-2 small text-muted">
+            <strong>Subtitles:</strong>
+            @foreach (var c in Model.Video.SubtitleContributors.OrderBy(x => x.Version))
+            {
+                var date = c.SubmittedAt == DateTimeOffset.MinValue ? "" : c.SubmittedAt.ToString("yyyy-MM-dd");
+                <span class="me-2">v@(c.Version) by @(string.IsNullOrWhiteSpace(c.DisplayName) ? c.UserId : c.DisplayName) @if (!string.IsNullOrEmpty(date)) {<text>on @date</text>}</span>
+            }
+        </div>
+    }
     <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div class="d-flex align-items-center">
             <label class="form-label me-2 mb-0">Subtitle Font Size:</label>
@@ -69,10 +80,56 @@ else
                 <small>Submitted by @Model.Video.Submitter@if(!string.IsNullOrEmpty(Model.Video.SubmissionDate)){<text> on @Model.Video.SubmissionDate</text>}</small>
             }
         </div>
+        <div>
+            @if (User?.Identity?.IsAuthenticated ?? false)
+            {
+                <button id="open-correction"
+                        type="button"
+                        class="btn btn-outline-danger btn-sm"
+                        data-video-id="@Model.Video.VideoId"
+                        data-subtitle-version="@Model.SubtitleVersion">
+                    !!! Report Subtitle Issue
+                </button>
+            }
+            else
+            {
+                <small class="text-muted">Login to suggest subtitle corrections.</small>
+            }
+        </div>
+    </div>
+    <div class="modal fade" id="correctionModal" tabindex="-1" aria-labelledby="correctionModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="correctionModalLabel">Suggest Subtitle Correction</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">Captured timestamp: <span class="fw-semibold" id="correction-timestamp">--:--</span></p>
+                    <div id="correction-cues"></div>
+                    <div class="mb-3">
+                        <label for="correction-notes" class="form-label">Notes for reviewers (optional)</label>
+                        <textarea id="correction-notes" class="form-control" rows="3" maxlength="500" placeholder="Add extra context if needed"></textarea>
+                    </div>
+                    <div id="correction-success" class="alert alert-success d-none" role="alert"></div>
+                    <div id="correction-error" class="alert alert-danger d-none" role="alert"></div>
+                </div>
+                <div class="modal-footer">
+                    <form id="correction-form" class="w-100 d-flex justify-content-between align-items-center">
+                        <span class="text-muted small">Only edit the subtitle text—timings are frozen.</span>
+                        <div>
+                            <button type="button" class="btn btn-outline-secondary me-2" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-danger">Submit Correction</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
     <script src="https://www.youtube.com/iframe_api"></script>
     <script src="~/js/subtitles.js"></script>
     <script src="~/js/watched.js"></script>
+    <script src="~/js/corrections.js" asp-append-version="true"></script>
     <script>
         // Initialize subtitles after the YouTube IFrame API has loaded
         initSubtitles("@Model.Video.SubtitleUrl", "player", "subtitle-container");

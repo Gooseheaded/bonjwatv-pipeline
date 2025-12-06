@@ -26,6 +26,9 @@ public class VideoItem
     [JsonPropertyName("subtitleUrl")]
     public string? SubtitleUrl { get; set; }
 
+    [JsonPropertyName("subtitleContributors")]
+    public List<SubtitleContributor>? SubtitleContributors { get; set; }
+
     [JsonPropertyName("hidden")]
     public bool? Hidden { get; set; }
 
@@ -37,6 +40,21 @@ public class VideoItem
 
     [JsonPropertyName("durationSeconds")]
     public int? DurationSeconds { get; set; }
+}
+
+public class SubtitleContributor
+{
+    [JsonPropertyName("version")]
+    public int Version { get; set; }
+
+    [JsonPropertyName("userId")]
+    public string? UserId { get; set; }
+
+    [JsonPropertyName("displayName")]
+    public string? DisplayName { get; set; }
+
+    [JsonPropertyName("submittedAt")]
+    public string? SubmittedAt { get; set; }
 }
 
 public class VideoRepository : IDisposable

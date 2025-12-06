@@ -1,8 +1,12 @@
+using System.Collections.Generic;
 using System.Security.Claims;
+using System.Text.Json;
 using bwkt_webapp.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Extensions.Caching.Memory;
+using System.Net.Http.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +26,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.SlidingExpiration = true;
     });
 builder.Services.AddAuthorization();
+builder.Services.AddMemoryCache();
 
 // Per-user "watched" store (server-side persistence under /app/data/watched)
 try
@@ -150,6 +155,7 @@ string? DeriveApiBase()
 }
 
 var apiBase = DeriveApiBase();
+var correctionsToken = Environment.GetEnvironmentVariable("CATALOG_API_CORRECTIONS_TOKEN");
 
 // --- Watched endpoints (server-side persistence, client caches locally) ---
 static string GetOrCreateUserKey(HttpContext ctx)
@@ -175,6 +181,22 @@ static string GetOrCreateUserKey(HttpContext ctx)
     return $"a:{anon}";
 }
 
+static string? ValidateCorrectionRequest(CorrectionRequest body)
+{
+    if (body == null) return "invalid_payload";
+    if (string.IsNullOrWhiteSpace(body.VideoId)) return "missing_video_id";
+    if (body.SubtitleVersion <= 0) return "invalid_subtitle_version";
+    if (body.Cues == null || body.Cues.Count == 0) return "missing_cues";
+    foreach (var cue in body.Cues)
+    {
+        if (cue.Sequence <= 0) return "invalid_sequence";
+        if (string.IsNullOrWhiteSpace(cue.UpdatedText)) return "missing_updated_text";
+        if ((cue.UpdatedText?.Length ?? 0) > 1000 || (cue.OriginalText?.Length ?? 0) > 1000) return "cue_too_long";
+    }
+    if (!string.IsNullOrWhiteSpace(body.Notes) && body.Notes.Length > 500) return "notes_too_long";
+    return null;
+}
+
 app.MapPost("/account/watched/{id}", async (string id, HttpContext ctx, IUserWatchStore store) =>
 {
     if (string.IsNullOrWhiteSpace(id)) return Results.BadRequest();
@@ -189,6 +211,63 @@ app.MapGet("/account/watched", async (HttpContext ctx, IUserWatchStore store) =>
     var ids = await store.GetWatchedAsync(key);
     return Results.Ok(new { ids });
 });
+
+app.MapPost("/corrections", async (HttpContext ctx, IMemoryCache cache) =>
+{
+    if (string.IsNullOrWhiteSpace(apiBase) || string.IsNullOrWhiteSpace(correctionsToken))
+    {
+        return Results.StatusCode(503);
+    }
+    var userId = ctx.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    var displayName = ctx.User?.FindFirst(ClaimTypes.Name)?.Value ?? "User";
+    if (string.IsNullOrWhiteSpace(userId)) return Results.StatusCode(403);
+    var rateKey = $"correction-rate-{userId}";
+    if (cache.TryGetValue(rateKey, out _)) return Results.StatusCode(429);
+    var body = await ctx.Request.ReadFromJsonAsync<CorrectionRequest>();
+    if (body == null) return Results.BadRequest(new { error = "missing_body" });
+    var validation = ValidateCorrectionRequest(body);
+    if (validation != null) return Results.BadRequest(new { error = validation });
+    cache.Set(rateKey, true, TimeSpan.FromSeconds(10));
+    var payload = new
+    {
+        video_id = body.VideoId,
+        subtitle_version = body.SubtitleVersion,
+        timestamp_seconds = body.TimestampSeconds,
+        window_start_seconds = body.WindowStartSeconds,
+        window_end_seconds = body.WindowEndSeconds,
+        notes = string.IsNullOrWhiteSpace(body.Notes) ? null : body.Notes,
+        cues = body.Cues!.Select(c => new
+        {
+            sequence = c.Sequence,
+            start_seconds = c.StartSeconds,
+            end_seconds = c.EndSeconds,
+            original_text = c.OriginalText ?? string.Empty,
+            updated_text = c.UpdatedText ?? string.Empty
+        }).ToArray(),
+        submitted_by_user_id = userId,
+        submitted_by_display_name = displayName
+    };
+    using var http = new HttpClient();
+    var url = $"{apiBase}/submissions/subtitle-corrections";
+    using var reqMessage = new HttpRequestMessage(HttpMethod.Post, url);
+    reqMessage.Headers.Add("X-Api-Key", correctionsToken);
+    reqMessage.Content = JsonContent.Create(payload);
+    var resp = await http.SendAsync(reqMessage);
+    var text = await resp.Content.ReadAsStringAsync();
+    if (!resp.IsSuccessStatusCode)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            return Results.Json(doc.RootElement, statusCode: (int)resp.StatusCode);
+        }
+        catch
+        {
+            return Results.Json(new { error = text }, statusCode: (int)resp.StatusCode);
+        }
+    }
+    return Results.Content(text, "application/json");
+}).RequireAuthorization();
 
 app.MapGet("/ratings/{id}", async (string id, int? version, HttpContext ctx) =>
 {
@@ -540,5 +619,25 @@ app.MapPost("/admin/submissions/{id}/reject", async (string id, HttpRequest req,
 });
 
 app.Run();
+
+public class CorrectionRequest
+{
+    public string VideoId { get; set; } = string.Empty;
+    public int SubtitleVersion { get; set; }
+    public double TimestampSeconds { get; set; }
+    public double WindowStartSeconds { get; set; }
+    public double WindowEndSeconds { get; set; }
+    public string? Notes { get; set; }
+    public List<CorrectionCue> Cues { get; set; } = new();
+}
+
+public class CorrectionCue
+{
+    public int Sequence { get; set; }
+    public double StartSeconds { get; set; }
+    public double EndSeconds { get; set; }
+    public string? OriginalText { get; set; }
+    public string? UpdatedText { get; set; }
+}
 
 public partial class Program { }

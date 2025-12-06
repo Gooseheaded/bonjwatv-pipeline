@@ -2,13 +2,16 @@
 function parseSrt(data) {
     const cues = [];
     // Match index, allow two timestamp styles (HH:MM:SS,mmm or seconds.mmm), then text; support CRLF or LF
-    const pattern = /\d+\s+((?:\d{2}:\d{2}:\d{2},\d{3})|(?:\d+(?:\.\d+)?))\s*-->\s*((?:\d{2}:\d{2}:\d{2},\d{3})|(?:\d+(?:\.\d+)?))\s*([\s\S]*?)(?=(?:\r?\n){2}|$)/g;
+    const pattern = /(\d+)\s+((?:\d{2}:\d{2}:\d{2},\d{3})|(?:\d+(?:\.\d+)?))\s*-->\s*((?:\d{2}:\d{2}:\d{2},\d{3})|(?:\d+(?:\.\d+)?))\s*([\s\S]*?)(?=(?:\r?\n){2}|$)/g;
     let match;
     while ((match = pattern.exec(data)) !== null) {
+        const raw = match[4].trim();
         cues.push({
+            sequence: parseInt(match[1], 10),
             start: toSeconds(match[1]),
             end: toSeconds(match[2]),
-            text: match[3].trim().replace(/\r?\n/g, '<br>')
+            rawText: raw,
+            html: raw.replace(/\r?\n/g, '<br>')
         });
     }
     return cues;
@@ -47,6 +50,7 @@ function initSubtitles(srtUrl, playerId, containerId) {
     let player;
     let currentIndex = -1;
     const container = document.getElementById(containerId);
+    exposeApi();
 
     fetchText(srtUrl)
         .then(text => {
@@ -58,6 +62,7 @@ function initSubtitles(srtUrl, playerId, containerId) {
                     return;
                 }
                 waitForPlayerAPI();
+                exposeApi();
             } catch (err) {
                 console.error('[subtitles] Error parsing SRT:', err);
                 if (container) container.innerText = 'Error parsing subtitles: ' + err.message;
@@ -101,13 +106,38 @@ function initSubtitles(srtUrl, playerId, containerId) {
             if (idx !== currentIndex) {
                 currentIndex = idx;
                 if (idx >= 0) {
-                    container.innerHTML = '<span class="subtitle-text-bg">' + cues[idx].text + '</span>';
+                    container.innerHTML = '<span class="subtitle-text-bg">' + cues[idx].html + '</span>';
                 } else {
                     container.innerHTML = '';
                 }
             }
         }
         requestAnimationFrame(render);
+    }
+
+    function exposeApi() {
+        if (typeof window === 'undefined') return;
+        window.bwktSubtitles = {
+            getCurrentTime: () => {
+                try {
+                    return (player && typeof player.getCurrentTime === 'function') ? player.getCurrentTime() : 0;
+                } catch { return 0; }
+            },
+            getCuesAround: (seconds, rangeSeconds = 3) => {
+                if (!Array.isArray(cues) || !cues.length) return [];
+                const start = Math.max(0, seconds - rangeSeconds);
+                const end = seconds + rangeSeconds;
+                return cues
+                    .filter(c => seconds === undefined || (c.end >= start && c.start <= end))
+                    .map(c => ({
+                        sequence: c.sequence,
+                        start: c.start,
+                        end: c.end,
+                        text: c.rawText
+                    }));
+            },
+            getPlayer: () => player
+        };
     }
 }
 

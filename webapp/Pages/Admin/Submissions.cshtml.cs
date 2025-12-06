@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using System;
 using System.Text.Json;
 
 namespace bwkt_webapp.Pages.Admin
@@ -39,6 +40,11 @@ namespace bwkt_webapp.Pages.Admin
                 {
                     foreach (var el in items.EnumerateArray())
                     {
+                        var type = el.TryGetProperty("type", out var typeEl) ? typeEl.GetString() : "video";
+                        if (string.Equals(type, "subtitle_correction", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
                         Items.Add(ParseSubmission(el));
                     }
                 }

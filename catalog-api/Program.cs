@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Linq;
@@ -126,6 +127,7 @@ app.MapGet("/api/videos", (
         .Take(ps)
         .Select(v => {
             var sum = ratings.GetSummary(v.Id, 1, null);
+            var contributors = MapContributors(v.SubtitleContributors);
             return new VideoDto(
                 v.Id,
                 v.Title,
@@ -135,6 +137,7 @@ app.MapGet("/api/videos", (
                 v.ReleaseDate,
                 v.Id,
                 v.SubtitleUrl,
+                contributors,
                 sum.Red,
                 sum.Yellow,
                 sum.Green
@@ -169,6 +172,7 @@ app.MapGet("/api/videos/{id}", (
     var v = repo.All().FirstOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase) && x.Hidden != true);
     if (v == null) return Results.NotFound();
     var s = ratings.GetSummary(v.Id, 1, null);
+    var contributors = MapContributors(v.SubtitleContributors);
     var dto = new VideoDto(
         v.Id,
         v.Title,
@@ -178,6 +182,7 @@ app.MapGet("/api/videos/{id}", (
         v.ReleaseDate,
         v.Id,
         v.SubtitleUrl,
+        contributors,
         s.Red,
         s.Yellow,
         s.Green
@@ -382,6 +387,15 @@ bool IsIngestAuthorized(HttpContext ctx)
     return allow.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(header);
 }
 
+bool IsCorrectionsAuthorized(HttpContext ctx)
+{
+    var header = ctx.Request.Headers["X-Api-Key"].FirstOrDefault();
+    if (string.IsNullOrWhiteSpace(header)) return false;
+    var allow = app.Configuration["API_CORRECTION_TOKENS"];
+    if (string.IsNullOrWhiteSpace(allow)) return false;
+    return allow.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(header);
+}
+
 string? ParseSubmitterFromToken(string? token)
 {
     if (string.IsNullOrWhiteSpace(token)) return null;
@@ -421,6 +435,31 @@ app.MapPost("/api/submissions/videos", (HttpContext ctx, SubmissionsRepository r
     var s = repo.CreateVideo(who, body);
     return Results.Json(new { submission_id = s.Id, status = s.Status });
 }).WithOpenApi(o => { o.Summary = "Submit a new video for review"; return o; });
+
+app.MapPost("/api/submissions/subtitle-corrections", async (HttpContext ctx, SubmissionsRepository repo, VideoRepository videos) =>
+{
+    if (!IsCorrectionsAuthorized(ctx)) return Results.StatusCode(403);
+    SubtitleCorrectionPayload? body;
+    try
+    {
+        body = await System.Text.Json.JsonSerializer.DeserializeAsync<SubtitleCorrectionPayload>(ctx.Request.Body, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    }
+    catch
+    {
+        return Results.BadRequest(new { error = "invalid_json" });
+    }
+    if (body == null) return Results.BadRequest(new { error = "missing_body" });
+    var validationError = ValidateCorrectionPayload(body);
+    if (validationError != null) return Results.BadRequest(new { error = validationError });
+    var video = videos.All().FirstOrDefault(x => string.Equals(x.Id, body.VideoId, StringComparison.OrdinalIgnoreCase));
+    if (video == null) return Results.NotFound(new { error = "video_not_found" });
+    var basePath = Path.Combine(SubtitlesRoot(), SanitizeId(body.VideoId), $"v{body.SubtitleVersion}.srt");
+    if (!System.IO.File.Exists(basePath)) return Results.BadRequest(new { error = "subtitle_version_missing" });
+    NormalizeCorrectionPayload(body);
+    var submitter = BuildCorrectionSubmitter(body);
+    var s = repo.CreateSubtitleCorrection(submitter, body);
+    return Results.Json(new { submission_id = s.Id, status = s.Status }, statusCode: 201);
+}).WithOpenApi(o => { o.Summary = "Submit a subtitle correction patch for review"; return o; });
 
 app.MapGet("/api/admin/submissions", (SubmissionsRepository repo, string? status, string? type, int? page, int? pageSize) =>
 {
@@ -492,7 +531,7 @@ app.MapGet("/api/admin/submissions/{id}/subtitle", async (string id, Submissions
     return Results.NotFound();
 }).WithOpenApi(o => { o.Summary = "Get subtitle text for a submission (admin preview; staged or external)"; return o; });
 
-app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, SubmissionsRepository repo) =>
+app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, SubmissionsRepository repo, VideoRepository videos) =>
 {
     using var sr = new StreamReader(req.Body);
     var json = await sr.ReadToEndAsync();
@@ -509,7 +548,7 @@ app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, S
     if (string.Equals(action, "approve", StringComparison.OrdinalIgnoreCase))
     {
         var s = repo.Get(id);
-        if (s?.Payload != null)
+        if (s?.Type == "video" && s.Payload != null)
         {
             var vid = s.Payload.YoutubeId;
             if (!string.IsNullOrWhiteSpace(vid))
@@ -529,6 +568,13 @@ app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, S
                 // Upsert in primary videos store (decoupled from legacy videos.json)
                 // Choose canonical creator if available
                 var creatorForStore = s.Payload.CreatorCanonical ?? s.Payload.Creator ?? string.Empty;
+                var contributorEntry = new SubtitleContributor
+                {
+                    Version = version,
+                    UserId = s.SubmittedBy,
+                    DisplayName = s.SubmittedBy,
+                    SubmittedAt = s.SubmittedAt.ToString("u")
+                };
                 UpsertVideoIntoCatalogJson(
                     VideosStorePath(),
                     vid,
@@ -540,9 +586,50 @@ app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, S
                     internalUrl,
                     s.SubmittedBy,
                     s.SubmittedAt,
-                    s.Payload.CreatorOriginal ?? s.Payload.Creator
+                    s.Payload.CreatorOriginal ?? s.Payload.Creator,
+                    new[] { contributorEntry }
                 );
             }
+        }
+        else if (s?.Type == "subtitle_correction" && s.SubtitleCorrection != null)
+        {
+            var payload = s.SubtitleCorrection;
+            var video = videos.All().FirstOrDefault(x => string.Equals(x.Id, payload.VideoId, StringComparison.OrdinalIgnoreCase));
+            if (video == null) return Results.BadRequest(new { error = "video_not_found" });
+            var sanitized = SanitizeId(payload.VideoId);
+            var subsRoot = SubtitlesRoot();
+            var latest = GetCurrentSubtitleVersion(subsRoot, sanitized);
+            if (latest > 0 && payload.SubtitleVersion != latest)
+            {
+                // TODO: support rebasing stale corrections submitted against prior versions.
+                return Results.Conflict(new { error = "stale_version" });
+            }
+            var basePath = Path.Combine(subsRoot, sanitized, $"v{payload.SubtitleVersion}.srt");
+            if (!System.IO.File.Exists(basePath)) return Results.BadRequest(new { error = "base_subtitle_missing" });
+            var apply = TryApplyCueUpdates(basePath, payload.Cues);
+            if (!apply.Ok || string.IsNullOrWhiteSpace(apply.UpdatedContent)) return Results.BadRequest(new { error = apply.Error ?? "apply_failed" });
+            Directory.CreateDirectory(Path.Combine(subsRoot, sanitized));
+            var nextVersion = DetermineNextSubtitleVersion(subsRoot, sanitized);
+            var newPath = Path.Combine(subsRoot, sanitized, $"v{nextVersion}.srt");
+            await System.IO.File.WriteAllTextAsync(newPath, apply.UpdatedContent);
+            var contributors = video.SubtitleContributors != null
+                ? video.SubtitleContributors.Select(c => new SubtitleContributor
+                {
+                    Version = c.Version,
+                    DisplayName = c.DisplayName,
+                    UserId = c.UserId,
+                    SubmittedAt = c.SubmittedAt
+                }).ToList()
+                : new List<SubtitleContributor>();
+            contributors.Add(new SubtitleContributor
+            {
+                Version = nextVersion,
+                UserId = payload.SubmittedByUserId,
+                DisplayName = string.IsNullOrWhiteSpace(payload.SubmittedByDisplayName) ? payload.SubmittedByUserId : payload.SubmittedByDisplayName,
+                SubmittedAt = DateTimeOffset.UtcNow.ToString("u")
+            });
+            var newUrl = $"/api/subtitles/{sanitized}/{nextVersion}.srt";
+            UpdateSubtitleMetadata(VideosStorePath(), payload.VideoId, newUrl, contributors);
         }
     }
     else if (string.Equals(action, "reject", StringComparison.OrdinalIgnoreCase))
@@ -745,7 +832,195 @@ static string? NormalizeRace(string? value)
     };
 }
 
-static void UpsertVideoIntoCatalogJson(string jsonPath, string youtubeId, string title, string? creatorCanonical, string? description, string[]? tags, string? releaseDate, string subtitleUrl, string? submitter, DateTimeOffset submittedAt, string? creatorOriginal = null)
+static SubtitleContributorDto[]? MapContributors(List<SubtitleContributor>? contributors)
+{
+    if (contributors == null || contributors.Count == 0) return null;
+    var list = new List<SubtitleContributorDto>();
+    foreach (var c in contributors.OrderBy(x => x.Version))
+    {
+        DateTimeOffset.TryParse(c.SubmittedAt, out var ts);
+        list.Add(new SubtitleContributorDto(c.Version, c.UserId, c.DisplayName, ts == default ? DateTimeOffset.MinValue : ts));
+    }
+    return list.ToArray();
+}
+
+static List<Dictionary<string, object?>> SerializeContributors(IEnumerable<SubtitleContributor> contributors)
+{
+    var list = new List<Dictionary<string, object?>>();
+    foreach (var c in contributors)
+    {
+        list.Add(new Dictionary<string, object?>
+        {
+            ["version"] = c.Version,
+            ["userId"] = string.IsNullOrWhiteSpace(c.UserId) ? null : c.UserId,
+            ["displayName"] = string.IsNullOrWhiteSpace(c.DisplayName) ? null : c.DisplayName,
+            ["submittedAt"] = string.IsNullOrWhiteSpace(c.SubmittedAt) ? DateTimeOffset.UtcNow.ToString("u") : c.SubmittedAt
+        });
+    }
+    return list;
+}
+
+static string? ValidateCorrectionPayload(SubtitleCorrectionPayload body)
+{
+    if (string.IsNullOrWhiteSpace(body.VideoId)) return "missing_video_id";
+    if (body.SubtitleVersion <= 0) return "invalid_subtitle_version";
+    if (string.IsNullOrWhiteSpace(body.SubmittedByUserId)) return "missing_user";
+    if (body.Cues == null || body.Cues.Count == 0) return "missing_cues";
+    if (body.Cues.Count > 5) return "too_many_cues";
+    foreach (var cue in body.Cues)
+    {
+        if (cue.Sequence <= 0) return "invalid_sequence";
+        if (cue.UpdatedText.Length > 1000 || cue.OriginalText.Length > 1000) return "cue_too_long";
+        if (string.IsNullOrWhiteSpace(cue.UpdatedText)) return "missing_updated_text";
+    }
+    if (!string.IsNullOrWhiteSpace(body.Notes) && body.Notes.Length > 500) return "notes_too_long";
+    if (body.WindowEndSeconds < body.WindowStartSeconds) return "invalid_window";
+    return null;
+}
+
+static void NormalizeCorrectionPayload(SubtitleCorrectionPayload body)
+{
+    body.VideoId = body.VideoId.Trim();
+    body.Notes = string.IsNullOrWhiteSpace(body.Notes) ? null : Truncate(body.Notes.Trim(), 500);
+    body.SubmittedByUserId = body.SubmittedByUserId.Trim();
+    if (!string.IsNullOrWhiteSpace(body.SubmittedByDisplayName))
+    {
+        body.SubmittedByDisplayName = Truncate(body.SubmittedByDisplayName.Trim(), 200);
+    }
+    body.Cues ??= new List<SubtitleCorrectionCue>();
+    foreach (var cue in body.Cues)
+    {
+        cue.OriginalText = NormalizeCorrectionText(cue.OriginalText);
+        cue.UpdatedText = NormalizeCorrectionText(cue.UpdatedText);
+    }
+}
+
+static string BuildCorrectionSubmitter(SubtitleCorrectionPayload body)
+{
+    if (!string.IsNullOrWhiteSpace(body.SubmittedByDisplayName))
+    {
+        return $"{body.SubmittedByDisplayName} ({body.SubmittedByUserId})";
+    }
+    return body.SubmittedByUserId;
+}
+
+static string NormalizeCorrectionText(string value)
+{
+    var normalized = value.Replace("\r\n", "\n").Replace("\r", "\n");
+    return Truncate(normalized, 1000);
+}
+
+static string Truncate(string value, int max)
+{
+    if (string.IsNullOrEmpty(value)) return value;
+    return value.Length <= max ? value : value[..max];
+}
+
+static (bool Ok, string? Error, string? UpdatedContent) TryApplyCueUpdates(string basePath, List<SubtitleCorrectionCue> patches)
+{
+    var cues = ParseSrtFile(basePath);
+    if (cues.Count == 0) return (false, "empty_base_subtitles", null);
+    var map = cues.ToDictionary(c => c.Sequence);
+    foreach (var patch in patches)
+    {
+        if (!map.TryGetValue(patch.Sequence, out var cue))
+        {
+            return (false, "cue_not_found", null);
+        }
+        var current = NormalizeCorrectionText(string.Join("\n", cue.Lines));
+        if (!string.Equals(current, NormalizeCorrectionText(patch.OriginalText), StringComparison.Ordinal))
+        {
+            return (false, "cue_conflict", null);
+        }
+        cue.Lines = NormalizeCorrectionText(patch.UpdatedText).Split('\n', StringSplitOptions.None).ToList();
+    }
+    var ordered = cues.OrderBy(c => c.Sequence).ToList();
+    var builder = new StringBuilder();
+    for (var i = 0; i < ordered.Count; i++)
+    {
+        var cue = ordered[i];
+        builder.Append(cue.Sequence).AppendLine();
+        builder.Append(FormatTimestamp(cue.Start))
+            .Append(" --> ")
+            .Append(FormatTimestamp(cue.End))
+            .AppendLine();
+        foreach (var line in cue.Lines)
+        {
+            builder.AppendLine(line);
+        }
+        if (i < ordered.Count - 1)
+        {
+            builder.AppendLine();
+        }
+    }
+    return (true, null, builder.ToString());
+}
+
+static List<ParsedSrtCue> ParseSrtFile(string path)
+{
+    var text = System.IO.File.ReadAllText(path);
+    var normalized = text.Replace("\r\n", "\n").Replace("\r", "\n");
+    var blocks = normalized.Split("\n\n", StringSplitOptions.RemoveEmptyEntries);
+    var cues = new List<ParsedSrtCue>();
+    foreach (var block in blocks)
+    {
+        var lines = block.Split('\n');
+        if (lines.Length < 2) continue;
+        if (!int.TryParse(lines[0].Trim(), out var seq)) continue;
+        var arrowIdx = lines[1].IndexOf("-->", StringComparison.Ordinal);
+        if (arrowIdx < 0) continue;
+        var startText = lines[1].Substring(0, arrowIdx).Trim();
+        var endText = lines[1].Substring(arrowIdx + 3).Trim();
+        var start = ParseTimestamp(startText);
+        var end = ParseTimestamp(endText);
+        var cueLines = lines.Skip(2).ToList();
+        cues.Add(new ParsedSrtCue(seq, start, end, cueLines));
+    }
+    return cues;
+}
+
+static TimeSpan ParseTimestamp(string value)
+{
+    if (TimeSpan.TryParse(value.Replace(',', '.'), out var direct)) return direct;
+    var parts = value.Split(new[] { ':', ',', '.' }, StringSplitOptions.RemoveEmptyEntries);
+    if (parts.Length < 3) return TimeSpan.Zero;
+    int h = int.Parse(parts[0]);
+    int m = int.Parse(parts[1]);
+    int s = int.Parse(parts[2]);
+    int ms = parts.Length >= 4 ? int.Parse(parts[3]) : 0;
+    return new TimeSpan(0, h, m, s, ms);
+}
+
+static string FormatTimestamp(TimeSpan ts)
+{
+    return $"{(int)ts.TotalHours:D2}:{ts.Minutes:D2}:{ts.Seconds:D2},{ts.Milliseconds:D3}";
+}
+
+static int GetCurrentSubtitleVersion(string root, string sanitizedId)
+{
+    var dir = Path.Combine(root, sanitizedId);
+    if (!Directory.Exists(dir)) return 0;
+    var files = Directory.GetFiles(dir, "v*.srt");
+    var max = 0;
+    foreach (var file in files)
+    {
+        var name = Path.GetFileNameWithoutExtension(file);
+        if (name.StartsWith("v", StringComparison.OrdinalIgnoreCase) && int.TryParse(name.Substring(1), out var ver))
+        {
+            if (ver > max) max = ver;
+        }
+    }
+    return max;
+}
+
+static int DetermineNextSubtitleVersion(string root, string sanitizedId)
+{
+    var current = GetCurrentSubtitleVersion(root, sanitizedId);
+    var next = Math.Max(0, current) + 1;
+    return next <= 0 ? 1 : next;
+}
+
+static void UpsertVideoIntoCatalogJson(string jsonPath, string youtubeId, string title, string? creatorCanonical, string? description, string[]? tags, string? releaseDate, string subtitleUrl, string? submitter, DateTimeOffset submittedAt, string? creatorOriginal = null, IEnumerable<SubtitleContributor>? subtitleContributors = null)
 {
     try
     {
@@ -792,13 +1067,17 @@ static void UpsertVideoIntoCatalogJson(string jsonPath, string youtubeId, string
         if (tags != null && tags.Length > 0) existing["tags"] = tags;
         if (!string.IsNullOrWhiteSpace(releaseDate)) existing["releaseDate"] = releaseDate;
         existing["subtitleUrl"] = subtitleUrl;
+        if (subtitleContributors != null)
+        {
+            existing["subtitleContributors"] = SerializeContributors(subtitleContributors);
+        }
         if (!string.IsNullOrWhiteSpace(submitter)) existing["submitter"] = submitter;
         existing["submissionDate"] = submittedAt.ToString("yyyy-MM-dd");
         var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
         var normalized = list.Select(x =>
         {
             var o = new Dictionary<string, object?>();
-            foreach (var k in new[] { "v", "title", "creator", "creatorOriginal", "description", "tags", "releaseDate", "subtitleUrl", "submitter", "submissionDate" })
+            foreach (var k in new[] { "v", "title", "creator", "creatorOriginal", "description", "tags", "releaseDate", "subtitleUrl", "subtitleContributors", "submitter", "submissionDate" })
             {
                 if (x.ContainsKey(k)) o[k] = x[k];
             }
@@ -1289,9 +1568,34 @@ static void RemoveTag(string jsonPath, string id, string tag)
     catch { }
 }
 
+static void UpdateSubtitleMetadata(string jsonPath, string id, string subtitleUrl, IEnumerable<SubtitleContributor> contributors)
+{
+    try
+    {
+        var full = Path.GetFullPath(jsonPath);
+        if (!File.Exists(full)) return;
+        lock (StoreSync.Lock)
+        {
+            var json = File.ReadAllText(full);
+            var list = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json) ?? new();
+            var item = list.FirstOrDefault(x => (x.TryGetValue("v", out var vv) ? Convert.ToString(vv) : null) == id);
+            if (item == null) return;
+            item["subtitleUrl"] = subtitleUrl;
+            item["subtitleContributors"] = SerializeContributors(contributors);
+            var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(full, System.Text.Json.JsonSerializer.Serialize(list, opts));
+        }
+    }
+    catch { }
+}
+
 // Note: In a file that uses top-level statements, any
 // type declarations must appear after all statements.
 // Keeping these at the end avoids CS8803.
+record ParsedSrtCue(int Sequence, TimeSpan Start, TimeSpan End, List<string> Lines)
+{
+    public List<string> Lines { get; set; } = Lines;
+}
 internal record VideoDto(
     string Id,
     string Title,
@@ -1301,10 +1605,13 @@ internal record VideoDto(
     string? ReleaseDate,
     string YoutubeId,
     string? SubtitleUrl,
+    SubtitleContributorDto[]? SubtitleContributors,
     int Red,
     int Yellow,
     int Green
 );
+
+internal record SubtitleContributorDto(int Version, string? UserId, string? DisplayName, DateTimeOffset SubmittedAt);
 
 // Centralized lock for serializing read-modify-write operations on the videos store file.
 internal static class StoreSync

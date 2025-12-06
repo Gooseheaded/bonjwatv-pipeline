@@ -9,6 +9,7 @@ services:
       - OAUTH_CALLBACK_URL=${OAUTH_CALLBACK_URL}
       - ADMIN_USER_IDS=${ADMIN_USER_IDS}
       - LEGACY_SUBTITLE_API_TOKEN=${LEGACY_SUBTITLE_API_TOKEN}
+      - CATALOG_API_CORRECTIONS_TOKEN=${CATALOG_API_CORRECTIONS_TOKEN}
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -30,6 +31,7 @@ services:
       - API_INGEST_TOKENS=${API_INGEST_TOKENS}
       - DATA_SUBTITLES_ROOT=/app/data/subtitles
       - DATA_SUBMISSIONS_PATH=/app/data/submissions.json
+      - API_CORRECTION_TOKENS=${API_CORRECTION_TOKENS}
     # Expose API for reverse proxy (Nginx) on host port 5002
     ports:
       - "5002:8080"

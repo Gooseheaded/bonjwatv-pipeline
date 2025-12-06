@@ -1,5 +1,6 @@
 @page
 @model bwkt_webapp.Pages.Admin.SubmissionModel
+@using System
 @using System.Text.Json
 @{
     ViewData["Title"] = "Admin — Submission";
@@ -49,7 +50,7 @@ else
     var status = s.GetProperty("status").GetString();
     var submittedAt = s.GetProperty("submitted_at").GetDateTimeOffset();
     var submittedBy = s.TryGetProperty("submitted_by", out var sb) ? sb.GetString() : null;
-    var payload = s.TryGetProperty("payload", out var p) ? p : default(JsonElement);
+    var payload = s.TryGetProperty("payload", out var payloadElement) ? payloadElement : default(JsonElement);
     var youtubeId = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("youtube_id", out var y) ? y.GetString() : null;
     var title = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("title", out var t) ? t.GetString() : null;
     var creator = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("creator", out var c) ? c.GetString() : null;
@@ -57,90 +58,138 @@ else
     var tags = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array ? string.Join(", ", tg.EnumerateArray().Select(x => x.GetString())) : "";
     var storageKey = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("subtitle_storage_key", out var sk) ? sk.GetString() : null;
     var subtitleUrl = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("subtitle_url", out var su) ? su.GetString() : null;
-
-    <div class="card">
-        <div class="card-body">
-            <h5 class="card-title">
-                @title (@youtubeId)
-                @if (Model.IsUpdate == true)
-                {
-                    <span class="badge bg-secondary ms-2" title="Updates existing video">✏️ Update</span>
-                }
-                else if (Model.IsUpdate == false)
-                {
-                    <span class="badge bg-success ms-2" title="New video (not in catalog)">🆕 New</span>
-                }
-            </h5>
-            @if (!string.IsNullOrEmpty(creator)) { <h6 class="card-subtitle mb-2 text-muted">By @creator</h6> }
-            @if (!string.IsNullOrEmpty(description)) { <p class="card-text">@description</p> }
-            <dl class="row">
-                <dt class="col-sm-3">Type</dt>
-                <dd class="col-sm-9">
-                    @if (Model.IsUpdate == true) { <span>✏️ Update (existing video)</span> }
-                    else if (Model.IsUpdate == false) { <span>🆕 New (not in catalog)</span> }
-                    else { <span class="text-muted">(unknown)</span> }
-                </dd>
-                <dt class="col-sm-3">Submitted At</dt>
-                <dd class="col-sm-9">@submittedAt.ToString("u")</dd>
-                <dt class="col-sm-3">Submitted By</dt>
-                <dd class="col-sm-9">@submittedBy</dd>
-                <dt class="col-sm-3">Tags</dt>
-                <dd class="col-sm-9">@tags</dd>
-                <dt class="col-sm-3">Subtitle</dt>
-                <dd class="col-sm-9">
-                    @if (!string.IsNullOrEmpty(storageKey)) { <span>Storage: @storageKey</span> }
-                    else if (!string.IsNullOrEmpty(subtitleUrl)) { <a href="@subtitleUrl" target="_blank" rel="noopener">External URL</a> }
-                    else { <span class="text-muted">(none)</span> }
-                </dd>
-            </dl>
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="mb-3">
-                        <form class="d-inline" method="post" action="/admin/submissions/@id/approve">
-                            <button type="submit" class="btn btn-success">Approve</button>
-                        </form>
-                        <form class="d-inline" method="post" action="/admin/submissions/@id/reject">
-                            <input type="hidden" name="reason" value="Rejected via detail page" />
-                            <button type="submit" class="btn btn-outline-danger">Reject</button>
-                        </form>
-                        <a class="btn btn-link" asp-page="/Admin/Index">Back to Admin</a>
-                    </div>
-                    <div class="mb-3">
-                        <h6>Subtitle Coverage</h6>
-                        <div id="coverage-results" class="small text-muted">Loading…</div>
-                        <div id="yt-container" style="width:0;height:0;overflow:hidden">
-                            <div id="yt-player"></div>
-                        </div>
-                    </div>
+    if (Model.IsCorrection)
+    {
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Subtitle Correction for @Model.CorrectionVideoId (v@(Model.CorrectionVersion))</h5>
+                <dl class="row">
+                    <dt class="col-sm-3">Submitted At</dt>
+                    <dd class="col-sm-9">@submittedAt.ToString("u")</dd>
+                    <dt class="col-sm-3">Submitted By</dt>
+                    <dd class="col-sm-9">@submittedBy</dd>
+                    <dt class="col-sm-3">Notes</dt>
+                    <dd class="col-sm-9">@(!string.IsNullOrWhiteSpace(Model.CorrectionNotes) ? Model.CorrectionNotes : "(none)")</dd>
+                </dl>
+                <div class="mb-3">
+                    <form class="d-inline" method="post" action="/admin/submissions/@id/approve">
+                        <button type="submit" class="btn btn-success">Approve</button>
+                    </form>
+                    <form class="d-inline" method="post" action="/admin/submissions/@id/reject">
+                        <input type="hidden" name="reason" value="Rejected via detail page" />
+                        <button type="submit" class="btn btn-outline-danger">Reject</button>
+                    </form>
+                    <a class="btn btn-link" asp-page="/Admin/Index">Back to Admin</a>
                 </div>
-                <div class="col-md-6">
-                    <h5>Submission Preview</h5>
-                    @if (Model.IsUpdate == true)
+                @if (Model.CorrectionCues.Count > 0)
+                {
+                    <h5>Cues</h5>
+                    @foreach (var cue in Model.CorrectionCues.OrderBy(c => c.Sequence))
                     {
-                        <div class="mb-2 text-center">
-                            <div class="btn-group btn-group-sm" role="group" aria-label="Overlay toggle">
-                                <input type="radio" class="btn-check" name="overlayKind" id="overlay-submission" autocomplete="off" checked>
-                                <label class="btn btn-outline-primary" for="overlay-submission">Submission</label>
-                                <input type="radio" class="btn-check" name="overlayKind" id="overlay-existing" autocomplete="off">
-                                <label class="btn btn-outline-secondary" for="overlay-existing">Existing</label>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Original (#@cue.Sequence, @TimeSpan.FromSeconds(cue.StartSeconds).ToString(@"hh\:mm\:ss") → @TimeSpan.FromSeconds(cue.EndSeconds).ToString(@"hh\:mm\:ss"))</label>
+                                <pre class="form-control" style="min-height: 160px;">@cue.OriginalText</pre>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Proposed</label>
+                                <pre class="form-control" style="min-height: 160px;">@cue.UpdatedText</pre>
                             </div>
                         </div>
                     }
-                    <div class="position-relative ratio ratio-16x9 mb-3 video-wrapper">
-                        <iframe id="admin-preview-player" title="Submission Preview Player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
-                        <div id="admin-subtitle-container" class="position-absolute start-50 translate-middle-x subtitle-overlay"></div>
+                }
+                <div class="mt-4">
+                    <h6>Current Subtitles (v@(Model.CorrectionVersion))</h6>
+                    <textarea class="form-control" readonly style="max-height: 320px; min-height: 200px; overflow: auto; font-family: monospace; font-size: 0.9rem;">@(!string.IsNullOrWhiteSpace(Model.SubtitleText) ? Model.SubtitleText : "(not available)")</textarea>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    @title (@youtubeId)
+                    @if (Model.IsUpdate == true)
+                    {
+                        <span class="badge bg-secondary ms-2" title="Updates existing video">✏️ Update</span>
+                    }
+                    else if (Model.IsUpdate == false)
+                    {
+                        <span class="badge bg-success ms-2" title="New video (not in catalog)">🆕 New</span>
+                    }
+                </h5>
+                @if (!string.IsNullOrEmpty(creator)) { <h6 class="card-subtitle mb-2 text-muted">By @creator</h6> }
+                @if (!string.IsNullOrEmpty(description)) { <p class="card-text">@description</p> }
+                <dl class="row">
+                    <dt class="col-sm-3">Type</dt>
+                    <dd class="col-sm-9">
+                        @if (Model.IsUpdate == true) { <span>✏️ Update (existing video)</span> }
+                        else if (Model.IsUpdate == false) { <span>🆕 New (not in catalog)</span> }
+                        else { <span class="text-muted">(unknown)</span> }
+                    </dd>
+                    <dt class="col-sm-3">Submitted At</dt>
+                    <dd class="col-sm-9">@submittedAt.ToString("u")</dd>
+                    <dt class="col-sm-3">Submitted By</dt>
+                    <dd class="col-sm-9">@submittedBy</dd>
+                    <dt class="col-sm-3">Tags</dt>
+                    <dd class="col-sm-9">@tags</dd>
+                    <dt class="col-sm-3">Subtitle</dt>
+                    <dd class="col-sm-9">
+                        @if (!string.IsNullOrEmpty(storageKey)) { <span>Storage: @storageKey</span> }
+                        else if (!string.IsNullOrEmpty(subtitleUrl)) { <a href="@subtitleUrl" target="_blank" rel="noopener">External URL</a> }
+                        else { <span class="text-muted">(none)</span> }
+                    </dd>
+                </dl>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <form class="d-inline" method="post" action="/admin/submissions/@id/approve">
+                                <button type="submit" class="btn btn-success">Approve</button>
+                            </form>
+                            <form class="d-inline" method="post" action="/admin/submissions/@id/reject">
+                                <input type="hidden" name="reason" value="Rejected via detail page" />
+                                <button type="submit" class="btn btn-outline-danger">Reject</button>
+                            </form>
+                            <a class="btn btn-link" asp-page="/Admin/Index">Back to Admin</a>
+                        </div>
+                        <div class="mb-3">
+                            <h6>Subtitle Coverage</h6>
+                            <div id="coverage-results" class="small text-muted">Loading…</div>
+                            <div id="yt-container" style="width:0;height:0;overflow:hidden">
+                                <div id="yt-player"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="mb-3 text-center">
-                        <label class="form-label me-2 mb-0">Subtitle Font Size:</label>
-                        <div class="btn-group btn-group-sm" role="group" aria-label="Subtitle font size">
-                            <button id="admin-dec-font" type="button" class="btn btn-outline-secondary">A-</button>
-                            <button id="admin-inc-font" type="button" class="btn btn-outline-secondary">A+</button>
+                    <div class="col-md-6">
+                        <h5>Submission Preview</h5>
+                        @if (Model.IsUpdate == true)
+                        {
+                            <div class="mb-2 text-center">
+                                <div class="btn-group btn-group-sm" role="group" aria-label="Overlay toggle">
+                                    <input type="radio" class="btn-check" name="overlayKind" id="overlay-submission" autocomplete="off" checked>
+                                    <label class="btn btn-outline-primary" for="overlay-submission">Submission</label>
+                                    <input type="radio" class="btn-check" name="overlayKind" id="overlay-existing" autocomplete="off">
+                                    <label class="btn btn-outline-secondary" for="overlay-existing">Existing</label>
+                                </div>
+                            </div>
+                        }
+                        <div class="position-relative ratio ratio-16x9 mb-3 video-wrapper">
+                            <iframe id="admin-preview-player" title="Submission Preview Player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+                            <div id="admin-subtitle-container" class="position-absolute start-50 translate-middle-x subtitle-overlay"></div>
+                        </div>
+                        <div class="mb-3 text-center">
+                            <label class="form-label me-2 mb-0">Subtitle Font Size:</label>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Subtitle font size">
+                                <button id="admin-dec-font" type="button" class="btn btn-outline-secondary">A-</button>
+                                <button id="admin-inc-font" type="button" class="btn btn-outline-secondary">A+</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 }
 
 @* Subtitle diff section for updates: render structure even if text unavailable *@
@@ -164,6 +213,7 @@ else
             <textarea id="diff-right" class="form-control" readonly style="max-height: 320px; min-height: 240px; overflow: auto; font-family: monospace; font-size: 0.9rem;">@(!string.IsNullOrWhiteSpace(Model.SubtitleText) ? Model.SubtitleText : "(no submission subtitles available)")</textarea>
         </div>
     </div>
+}
     <script>
         (function(){
             const l = document.getElementById('diff-left');
@@ -202,12 +252,13 @@ else
 @* Coverage calculator and preview scripts (execute only with a valid submission payload) *@
 @if (Model.IsAdmin && Model.Submission.ValueKind == JsonValueKind.Object)
 {
-    var s = Model.Submission;
-    var payload = s.TryGetProperty("payload", out var p2) ? p2 : default(JsonElement);
-    var youtubeId = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("youtube_id", out var y2) ? y2.GetString() : null;
+    var submissionForScript = Model.Submission;
+    var scriptPayload = submissionForScript.TryGetProperty("payload", out var tmpPayload) ? tmpPayload : default(JsonElement);
+    var scriptYoutubeId = scriptPayload.ValueKind == JsonValueKind.Object && scriptPayload.TryGetProperty("youtube_id", out var tmpYt) ? tmpYt.GetString() : null;
+    var ytForScript = scriptYoutubeId ?? string.Empty;
     <script>
         (function(){
-            const ytId = @Html.Raw(JsonSerializer.Serialize(youtubeId ?? ""));
+            const ytId = @Html.Raw(JsonSerializer.Serialize(ytForScript));
             const subText = @Html.Raw(JsonSerializer.Serialize(Model.SubtitleText ?? ""));
             const existingText = @Html.Raw(JsonSerializer.Serialize(Model.ExistingSubtitleText ?? ""));
             const isUpdate = @Html.Raw(JsonSerializer.Serialize(Model.IsUpdate ?? false));

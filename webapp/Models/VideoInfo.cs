@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json.Serialization;
 
 namespace bwkt_webapp.Models
@@ -35,5 +36,26 @@ namespace bwkt_webapp.Models
         public int Yellow { get; set; }
         [JsonPropertyName("Green")]
         public int Green { get; set; }
+
+        [JsonPropertyName("subtitleContributors")]
+        public List<SubtitleContributorInfo>? SubtitleContributors { get; set; }
+
+        [JsonIgnore]
+        public int SubtitleVersion { get; set; } = 1;
+    }
+
+    public class SubtitleContributorInfo
+    {
+        [JsonPropertyName("version")]
+        public int Version { get; set; }
+
+        [JsonPropertyName("userId")]
+        public string? UserId { get; set; }
+
+        [JsonPropertyName("displayName")]
+        public string? DisplayName { get; set; }
+
+        [JsonPropertyName("submittedAt")]
+        public DateTimeOffset SubmittedAt { get; set; }
     }
 }

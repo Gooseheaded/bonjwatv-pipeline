@@ -66,6 +66,7 @@ body {
   background: rgba(0,0,0,0.35);
   border-radius: .375rem; /* match Bootstrap card radius */
   z-index: 1;
+  pointer-events: none; /* Overlay shading should not block clicks */
 }
 .video-card .watched-badge {
   position: absolute;
@@ -77,6 +78,7 @@ body {
   padding: .15rem .4rem;
   font-size: .75rem;
   border-radius: .25rem;
+  pointer-events: none; /* Badge should be decorative only */
 }
 
 .video-card .video-card-body {

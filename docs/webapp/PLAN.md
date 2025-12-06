@@ -63,6 +63,12 @@ A simple Razor‑Pages app serving as a YouTube wrapper with custom subtitles.
 4. Write minimal client‑side JS for SRT parsing and subtitle rendering.
 5. **(Done)** SubtitlesCache + SQLite FTS5 index for full‑text search and BM25‑based ranking.
 6. Implement rate-limited SRT downloader in SubtitlesCache (one fetch per 5 s, exponential backoff on retry).
+
+### Subtitle Corrections
+
+- Authenticated viewers can click the `!!! Report Subtitle Issue` button on the Watch page to capture the current timestamp, edit nearby subtitle lines (text-only), and submit a correction.
+- Webapp enforces a 10s per-user rate limit and proxies submissions to the Catalog API using `CATALOG_API_CORRECTIONS_TOKEN`.
+- Admins see pending corrections in the dashboard and can review cue diffs on the submission detail page before approving, which promotes a new subtitle version and records contributor history.
 7. Apply basic styling (CSS or lightweight framework) to match a YouTube‑like grid.
 8. Plan for future enhancements: fuzzy search, authentication flow, production subtitle-service, etc.
 8. Add a `creator` field to `data/videos.json`, update model, and display creators in the UI pages.

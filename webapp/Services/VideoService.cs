@@ -6,6 +6,7 @@ using System.Text.Json;
 using bwkt_webapp.Models;
 using bwkt_webapp.Helpers;
 using Microsoft.AspNetCore.Hosting;
+using System.IO;
 
 namespace bwkt_webapp.Services
 {
@@ -58,19 +59,40 @@ namespace bwkt_webapp.Services
                     using var doc = JsonDocument.Parse(json);
                     var el = doc.RootElement;
                     // Map API fields into VideoInfo
+                    var vidFromApi = el.GetProperty("id").GetString() ?? videoId;
+                    var apiSubtitleUrl = el.TryGetProperty("subtitleUrl", out var su) ? su.GetString() : null;
+                    var (proxyUrl, version) = BuildSubtitleProxy(vidFromApi, apiSubtitleUrl);
                     var v = new VideoInfo
                     {
-                        VideoId = el.GetProperty("id").GetString() ?? videoId,
+                        VideoId = vidFromApi,
                         Title = el.GetProperty("title").GetString() ?? string.Empty,
                         Creator = el.TryGetProperty("creator", out var c) ? c.GetString() : null,
                         Description = el.TryGetProperty("description", out var d) ? d.GetString() : null,
                         Tags = el.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array
                             ? tg.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToArray()
                             : null,
-                        SubtitleUrl = el.TryGetProperty("subtitleUrl", out var su) ? (su.GetString() ?? string.Empty) : string.Empty
+                        SubtitleUrl = proxyUrl,
+                        SubtitleVersion = version
                     };
-                    // Always use same-origin proxy to avoid mixed-content/CORS
-                    v.SubtitleUrl = $"/subtitles/{v.VideoId}/1.srt";
+                    if (el.TryGetProperty("subtitleContributors", out var contribEl) && contribEl.ValueKind == JsonValueKind.Array)
+                    {
+                        var list = new List<SubtitleContributorInfo>();
+                        foreach (var ce in contribEl.EnumerateArray())
+                        {
+                            var info = new SubtitleContributorInfo
+                            {
+                                Version = ce.TryGetProperty("version", out var vEl) ? vEl.GetInt32() : 0,
+                                UserId = ce.TryGetProperty("userId", out var uEl) ? uEl.GetString() : null,
+                                DisplayName = ce.TryGetProperty("displayName", out var dnEl) ? dnEl.GetString() : null
+                            };
+                            if (ce.TryGetProperty("submittedAt", out var atEl) && atEl.ValueKind == JsonValueKind.String && DateTimeOffset.TryParse(atEl.GetString(), out var ts))
+                            {
+                                info.SubmittedAt = ts;
+                            }
+                            list.Add(info);
+                        }
+                        v.SubtitleContributors = list.OrderBy(c => c.Version).ToList();
+                    }
                     return v;
                 }
             }
@@ -245,6 +267,35 @@ namespace bwkt_webapp.Services
             qb.Set("pageSize", "100");
             var builder = new UriBuilder(uri) { Query = qb.ToString() };
             return builder.ToString();
+        }
+
+        private static (string Url, int Version) BuildSubtitleProxy(string videoId, string? apiSubtitleUrl)
+        {
+            var version = TryParseSubtitleVersion(apiSubtitleUrl) ?? 1;
+            return ($"/subtitles/{videoId}/{version}.srt", version);
+        }
+
+        private static int? TryParseSubtitleVersion(string? apiSubtitleUrl)
+        {
+            if (string.IsNullOrWhiteSpace(apiSubtitleUrl)) return null;
+            try
+            {
+                var file = Path.GetFileName(apiSubtitleUrl);
+                if (string.IsNullOrWhiteSpace(file)) return null;
+                var withoutExt = file.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)
+                    ? file.Substring(0, file.Length - 4)
+                    : file;
+                if (withoutExt.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                {
+                    withoutExt = withoutExt.Substring(1);
+                }
+                if (int.TryParse(withoutExt, out var version) && version > 0)
+                {
+                    return version;
+                }
+            }
+            catch { }
+            return null;
         }
 
         private IEnumerable<VideoInfo> FetchCatalogAllPages(string url)

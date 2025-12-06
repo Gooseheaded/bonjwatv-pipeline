@@ -9,6 +9,7 @@ namespace bwkt_webapp.Pages.Admin
         public bool IsAdmin { get; private set; }
         public List<RatingEvent> Events { get; private set; } = new();
         public List<SubmissionItem> Pending { get; private set; } = new();
+        public List<CorrectionItem> PendingCorrections { get; private set; } = new();
         public List<HiddenItem> Hidden { get; private set; } = new();
 
         // Debug metadata surfaced to the Admin page
@@ -83,19 +84,27 @@ namespace bwkt_webapp.Pages.Admin
                 {
                     foreach (var el in items.EnumerateArray())
                     {
-                        var item = ParseSubmission(el);
-                        // Determine if this submission updates an existing video (by youtube_id)
-                        bool isUpdate = false;
-                        try
+                        var type = el.TryGetProperty("type", out var typeEl) ? typeEl.GetString() : "video";
+                        if (string.Equals(type, "subtitle_correction", StringComparison.OrdinalIgnoreCase))
                         {
-                            if (!string.IsNullOrWhiteSpace(item.YoutubeId))
-                            {
-                                var check = http.GetAsync($"{apiBase}/videos/{item.YoutubeId}").GetAwaiter().GetResult();
-                                isUpdate = check.IsSuccessStatusCode;
-                            }
+                            var corr = ParseCorrection(el);
+                            if (corr != null) PendingCorrections.Add(corr);
                         }
-                        catch { isUpdate = false; }
-                        Pending.Add(item with { IsUpdate = isUpdate });
+                        else
+                        {
+                            var item = ParseSubmission(el);
+                            bool isUpdate = false;
+                            try
+                            {
+                                if (!string.IsNullOrWhiteSpace(item.YoutubeId))
+                                {
+                                    var check = http.GetAsync($"{apiBase}/videos/{item.YoutubeId}").GetAwaiter().GetResult();
+                                    isUpdate = check.IsSuccessStatusCode;
+                                }
+                            }
+                            catch { isUpdate = false; }
+                            Pending.Add(item with { IsUpdate = isUpdate });
+                        }
                     }
                 }
             }
@@ -115,6 +124,18 @@ namespace bwkt_webapp.Pages.Admin
             }
             submittedBy = el.TryGetProperty("submitted_by", out var sb) ? sb.GetString() : null;
             return new SubmissionItem(id, status, submittedAt, submittedBy, youtubeId, title);
+        }
+
+        private static CorrectionItem? ParseCorrection(JsonElement el)
+        {
+            if (!el.TryGetProperty("correction", out var payload) || payload.ValueKind != JsonValueKind.Object) return null;
+            var id = el.GetProperty("id").GetString() ?? string.Empty;
+            var submittedAt = el.TryGetProperty("submitted_at", out var sa) ? sa.GetDateTimeOffset() : DateTimeOffset.MinValue;
+            var submittedBy = el.TryGetProperty("submitted_by", out var sb) ? sb.GetString() : null;
+            var videoId = payload.TryGetProperty("video_id", out var vid) ? vid.GetString() : null;
+            var version = payload.TryGetProperty("subtitle_version", out var ver) ? ver.GetInt32() : 0;
+            var notes = payload.TryGetProperty("notes", out var notesEl) ? notesEl.GetString() : null;
+            return new CorrectionItem(id, submittedAt, submittedBy, videoId, version, notes);
         }
 
         private void TryLoadHidden()
@@ -167,6 +188,7 @@ namespace bwkt_webapp.Pages.Admin
         {
             public bool IsUpdate { get; init; }
         }
+        public record CorrectionItem(string Id, DateTimeOffset SubmittedAt, string? SubmittedBy, string? VideoId, int SubtitleVersion, string? Notes);
         public record HiddenItem(string Id, string Title, string? Reason, string? HiddenAt);
     }
 }
