@@ -184,6 +184,11 @@ public class VideoRepository : IDisposable
         catch { }
     }
 
+    public void ForceReload()
+    {
+        Load();
+    }
+
     public IReadOnlyList<VideoItem> All()
     {
         EnsureFresh();

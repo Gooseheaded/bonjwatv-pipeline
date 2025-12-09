@@ -589,6 +589,7 @@ app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, S
                     s.Payload.CreatorOriginal ?? s.Payload.Creator,
                     new[] { contributorEntry }
                 );
+                videos.ForceReload();
             }
         }
         else if (s?.Type == "subtitle_correction" && s.SubtitleCorrection != null)
@@ -630,6 +631,7 @@ app.MapPatch("/api/admin/submissions/{id}", async (string id, HttpRequest req, S
             });
             var newUrl = $"/api/subtitles/{sanitized}/{nextVersion}.srt";
             UpdateSubtitleMetadata(VideosStorePath(), payload.VideoId, newUrl, contributors);
+            videos.ForceReload();
         }
     }
     else if (string.Equals(action, "reject", StringComparison.OrdinalIgnoreCase))
@@ -675,7 +677,7 @@ app.MapGet("/api/admin/videos/{id}", (string id, [Microsoft.AspNetCore.Mvc.FromS
 
 // Legacy helper removed; use VideosStorePath() instead
 
-app.MapPatch("/api/admin/videos/{id}/hide", async (string id, HttpRequest req) =>
+app.MapPatch("/api/admin/videos/{id}/hide", async (string id, HttpRequest req, VideoRepository repo) =>
 {
     using var sr = new StreamReader(req.Body);
     var body = await sr.ReadToEndAsync();
@@ -686,10 +688,11 @@ app.MapPatch("/api/admin/videos/{id}/hide", async (string id, HttpRequest req) =
         catch { }
     }
     HideOrShowVideo(VideosStorePath(), id, hide: true, reason: reason);
+    repo.ForceReload();
     return Results.Ok(new { ok = true });
 }).WithOpenApi(o => { o.Summary = "Hide a video with reason"; return o; });
 
-app.MapPatch("/api/admin/videos/{id}/duration", async (string id, HttpRequest req) =>
+app.MapPatch("/api/admin/videos/{id}/duration", async (string id, HttpRequest req, VideoRepository repo) =>
 {
     using var sr = new StreamReader(req.Body);
     var body = await sr.ReadToEndAsync();
@@ -701,25 +704,28 @@ app.MapPatch("/api/admin/videos/{id}/duration", async (string id, HttpRequest re
         var val = root.TryGetProperty("durationSeconds", out var d) ? d.GetInt32() : 0;
         if (val <= 0) return Results.BadRequest("Invalid durationSeconds");
         SetDuration(VideosStorePath(), id, val);
+        repo.ForceReload();
         return Results.Ok(new { ok = true });
     }
     catch { return Results.BadRequest("Invalid JSON"); }
 }).WithOpenApi(o => { o.Summary = "Set or update video runtime duration (seconds)"; return o; });
 
-app.MapPatch("/api/admin/videos/{id}/show", (string id) =>
+app.MapPatch("/api/admin/videos/{id}/show", (string id, VideoRepository repo) =>
 {
     HideOrShowVideo(VideosStorePath(), id, hide: false, reason: null);
+    repo.ForceReload();
     return Results.Ok(new { ok = true });
 }).WithOpenApi(o => { o.Summary = "Unhide a video"; return o; });
 
-app.MapDelete("/api/admin/videos/{id}", (string id) =>
+app.MapDelete("/api/admin/videos/{id}", (string id, VideoRepository repo) =>
 {
     DeleteVideo(VideosStorePath(), id);
+    repo.ForceReload();
     return Results.Ok(new { ok = true });
 }).WithOpenApi(o => { o.Summary = "Delete a video from catalog"; return o; });
 
 // Admin: manage tags (add/remove/set)
-app.MapPatch("/api/admin/videos/{id}/tags", async (string id, HttpRequest req) =>
+app.MapPatch("/api/admin/videos/{id}/tags", async (string id, HttpRequest req, VideoRepository repo) =>
 {
     using var sr = new StreamReader(req.Body);
     var body = await sr.ReadToEndAsync();
@@ -742,6 +748,7 @@ app.MapPatch("/api/admin/videos/{id}/tags", async (string id, HttpRequest req) =
                 }
             }
             SetTags(VideosStorePath(), id, tags);
+            repo.ForceReload();
             return Results.Ok(new { ok = true, count = tags.Count });
         }
         else if (string.Equals(action, "add", StringComparison.OrdinalIgnoreCase))
@@ -749,6 +756,7 @@ app.MapPatch("/api/admin/videos/{id}/tags", async (string id, HttpRequest req) =
             var tag = root.TryGetProperty("tag", out var t) ? t.GetString() : null;
             if (string.IsNullOrWhiteSpace(tag)) return Results.BadRequest("Missing tag");
             AddTag(VideosStorePath(), id, tag!);
+            repo.ForceReload();
             return Results.Ok(new { ok = true });
         }
         else if (string.Equals(action, "remove", StringComparison.OrdinalIgnoreCase))
@@ -756,6 +764,7 @@ app.MapPatch("/api/admin/videos/{id}/tags", async (string id, HttpRequest req) =
             var tag = root.TryGetProperty("tag", out var t) ? t.GetString() : null;
             if (string.IsNullOrWhiteSpace(tag)) return Results.BadRequest("Missing tag");
             RemoveTag(VideosStorePath(), id, tag!);
+            repo.ForceReload();
             return Results.Ok(new { ok = true });
         }
         return Results.BadRequest("Unknown action");
