@@ -196,6 +196,67 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Admin_Subtitles_List_Returns_Versions_With_Current_Flag()
+    {
+        await using var ctx = await SeedVideoWithSubtitlesAsync(currentVersion: 2);
+        var client = ctx.Factory.CreateClient();
+        var payload = await client.GetFromJsonAsync<JsonElement>("/api/admin/videos/vid1/subtitles");
+        var items = payload.GetProperty("items").EnumerateArray().ToList();
+        Assert.Equal(2, items.Count);
+        Assert.Equal(2, payload.GetProperty("currentVersion").GetInt32());
+        var v1 = items.First(el => el.GetProperty("version").GetInt32() == 1);
+        var v2 = items.First(el => el.GetProperty("version").GetInt32() == 2);
+        Assert.False(v1.GetProperty("isCurrent").GetBoolean());
+        Assert.True(v2.GetProperty("isCurrent").GetBoolean());
+        Assert.True(v2.GetProperty("sizeBytes").GetInt64() > 0);
+        Assert.True(v2.GetProperty("addedLines").GetInt32() >= 0);
+        Assert.True(v2.GetProperty("removedLines").GetInt32() >= 0);
+    }
+
+    [Fact]
+    public async Task Admin_Subtitles_Diff_Shows_Previous_And_Current_Lines()
+    {
+        await using var ctx = await SeedVideoWithSubtitlesAsync(currentVersion: 2);
+        var client = ctx.Factory.CreateClient();
+        var text = await client.GetStringAsync("/api/admin/videos/vid1/subtitles/2/diff");
+        Assert.Contains("--- v1", text);
+        Assert.Contains("+++ v2", text);
+        Assert.Contains("+Second line updated", text);
+        Assert.Contains("-Second line original", text);
+    }
+
+    [Fact]
+    public async Task Admin_Subtitles_Promote_Updates_SubtitleUrl()
+    {
+        await using var ctx = await SeedVideoWithSubtitlesAsync(currentVersion: 1);
+        var client = ctx.Factory.CreateClient();
+        var res = await client.PostAsync("/api/admin/videos/vid1/subtitles/2/promote", JsonContent.Create(new { }));
+        res.EnsureSuccessStatusCode();
+        var json = await File.ReadAllTextAsync(ctx.VideosPath);
+        using var doc = JsonDocument.Parse(json);
+        var video = doc.RootElement.EnumerateArray().First();
+        Assert.Equal("/api/subtitles/vid1/2.srt", video.GetProperty("subtitleUrl").GetString());
+    }
+
+    [Fact]
+    public async Task Admin_Subtitles_Delete_Removes_File_When_Not_Current()
+    {
+        await using var ctx = await SeedVideoWithSubtitlesAsync(currentVersion: 2);
+        var client = ctx.Factory.CreateClient();
+        var bad = await client.DeleteAsync("/api/admin/videos/vid1/subtitles/2");
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, bad.StatusCode);
+
+        var ok = await client.DeleteAsync("/api/admin/videos/vid1/subtitles/1");
+        ok.EnsureSuccessStatusCode();
+        Assert.False(File.Exists(Path.Combine(ctx.SubtitlesRoot, "vid1", "v1.srt")));
+        var json = await File.ReadAllTextAsync(ctx.VideosPath);
+        using var doc = JsonDocument.Parse(json);
+        var contributors = doc.RootElement.EnumerateArray().First().GetProperty("subtitleContributors").EnumerateArray().ToList();
+        Assert.Single(contributors);
+        Assert.Equal(2, contributors[0].GetProperty("version").GetInt32());
+    }
+
+    [Fact]
     public async Task Subtitles_Upload_And_Serve_Works()
     {
         var client = _factory.CreateClient();
@@ -639,5 +700,80 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.DoesNotContain("p", tags4);
         Assert.Contains("pvz", tags4);
         Assert.Contains("zvz", tags4);
+    }
+
+    private sealed class SubtitleTestContext : IAsyncDisposable
+    {
+        public required WebApplicationFactory<Program> Factory { get; init; }
+        public required string BaseDir { get; init; }
+        public required string VideosPath { get; init; }
+        public required string SubtitlesRoot { get; init; }
+
+        public ValueTask DisposeAsync()
+        {
+            try { if (Directory.Exists(BaseDir)) Directory.Delete(BaseDir, recursive: true); }
+            catch { }
+            Factory.Dispose();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private async Task<SubtitleTestContext> SeedVideoWithSubtitlesAsync(int currentVersion)
+    {
+        var tmp = Directory.CreateTempSubdirectory();
+        var vidsPath = Path.Combine(tmp.FullName, "videos.json");
+        var subsRoot = Path.Combine(tmp.FullName, "subtitles");
+        Directory.CreateDirectory(Path.Combine(subsRoot, "vid1"));
+        await File.WriteAllTextAsync(Path.Combine(subsRoot, "vid1", "v1.srt"),
+@"1
+00:00:00,000 --> 00:00:02,000
+First line
+
+2
+00:00:03,000 --> 00:00:05,000
+Second line original");
+        await File.WriteAllTextAsync(Path.Combine(subsRoot, "vid1", "v2.srt"),
+@"1
+00:00:00,000 --> 00:00:02,000
+First line
+
+2
+00:00:03,000 --> 00:00:05,000
+Second line updated");
+        var contributors = @"[
+  {""version"":1,""userId"":""alice"",""displayName"":""Alice"",""submittedAt"":""2025-01-01T00:00:00Z""},
+  {""version"":2,""userId"":""bob"",""displayName"":""Bob"",""submittedAt"":""2025-01-02T00:00:00Z""}
+]";
+        var subtitleUrl = $"/api/subtitles/vid1/{currentVersion}.srt";
+        await File.WriteAllTextAsync(vidsPath, $"[{{\"v\":\"vid1\",\"title\":\"Test\",\"subtitleUrl\":\"{subtitleUrl}\",\"subtitleContributors\":{contributors}}}]");
+        var ratingsPath = Path.Combine(tmp.FullName, "ratings.json");
+        var submissionsPath = Path.Combine(tmp.FullName, "submissions.json");
+
+        var factory = _factory.WithWebHostBuilder(builder =>
+        {
+            var solutionDir = FindSolutionDirectory();
+            var projectDir = Path.Combine(solutionDir, "catalog-api");
+            builder.UseContentRoot(projectDir);
+            builder.ConfigureAppConfiguration((ctx, cfg) =>
+            {
+                var dict = new Dictionary<string, string?>
+                {
+                    ["Data:VideosStorePath"] = vidsPath,
+                    ["Data:SubtitlesRoot"] = subsRoot,
+                    ["Data:RatingsPath"] = ratingsPath,
+                    ["Data:SubmissionsPath"] = submissionsPath,
+                    ["API_INGEST_TOKENS"] = "TOK_SUB"
+                };
+                cfg.AddInMemoryCollection(dict!);
+            });
+        });
+
+        return new SubtitleTestContext
+        {
+            Factory = factory,
+            BaseDir = tmp.FullName,
+            VideosPath = vidsPath,
+            SubtitlesRoot = subsRoot
+        };
     }
 }
