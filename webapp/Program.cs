@@ -547,7 +547,51 @@ app.MapPost("/admin/videos/{id}/tags/set", async (string id, HttpRequest req, Ht
     };
     var resp = await http.SendAsync(msg);
     if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
-    return Results.Redirect($"/Admin/Video?id={Uri.EscapeDataString(id)}&ok=1");
+    return Results.Redirect($"/Admin/Video?id={Uri.EscapeDataString(id)}&ok=tags_saved");
+});
+
+app.MapGet("/admin/videos/{id}/subtitles", async (string id, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    using var http = new HttpClient();
+    var resp = await http.GetAsync($"{apiBase}/admin/videos/{id}/subtitles");
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    var ct = resp.Content.Headers.ContentType?.ToString() ?? "application/json";
+    var stream = await resp.Content.ReadAsStreamAsync();
+    return Results.Stream(stream, ct);
+});
+
+app.MapGet("/admin/videos/{id}/subtitles/{version}/diff", async (string id, int version, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    using var http = new HttpClient();
+    var resp = await http.GetAsync($"{apiBase}/admin/videos/{id}/subtitles/{version}/diff");
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    var ct = resp.Content.Headers.ContentType?.ToString() ?? "text/plain";
+    var stream = await resp.Content.ReadAsStreamAsync();
+    return Results.Stream(stream, ct);
+});
+
+app.MapPost("/admin/videos/{id}/subtitles/{version}/promote", async (string id, int version, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    using var http = new HttpClient();
+    var resp = await http.PostAsync($"{apiBase}/admin/videos/{id}/subtitles/{version}/promote", new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    return Results.Redirect($"/Admin/Video?id={Uri.EscapeDataString(id)}&ok=subtitle_promoted");
+});
+
+app.MapPost("/admin/videos/{id}/subtitles/{version}/delete", async (string id, int version, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+    using var http = new HttpClient();
+    var resp = await http.DeleteAsync($"{apiBase}/admin/videos/{id}/subtitles/{version}");
+    if (!resp.IsSuccessStatusCode) return Results.StatusCode((int)resp.StatusCode);
+    return Results.Redirect($"/Admin/Video?id={Uri.EscapeDataString(id)}&ok=subtitle_deleted");
 });
 
 app.MapGet("/admin/submissions/{id}", async (string id, HttpContext ctx) =>

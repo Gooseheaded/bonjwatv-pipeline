@@ -766,6 +766,92 @@ app.MapPatch("/api/admin/videos/{id}/tags", async (string id, HttpRequest req) =
     }
 }).WithOpenApi(o => { o.Summary = "Add/remove/set tags for a video (admin)"; return o; });
 
+app.MapGet("/api/admin/videos/{id}/subtitles", (string id, [Microsoft.AspNetCore.Mvc.FromServices] VideoRepository repo) =>
+{
+    var video = repo.All().FirstOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+    if (video == null) return Results.NotFound();
+    var sanitized = SanitizeId(id);
+    var root = SubtitlesRoot();
+    var dir = Path.Combine(root, sanitized);
+    var currentVersion = TryParseSubtitleVersionFromUrl(video.SubtitleUrl);
+    if (!Directory.Exists(dir))
+    {
+        return Results.Json(new { items = Array.Empty<object>(), currentVersion = currentVersion ?? 0 });
+    }
+    var files = Directory.GetFiles(dir, "v*.srt");
+    var list = new List<SubtitleVersionSummary>();
+    foreach (var file in files)
+    {
+        var name = Path.GetFileNameWithoutExtension(file);
+        if (!name.StartsWith("v", StringComparison.OrdinalIgnoreCase)) continue;
+        if (!int.TryParse(name.Substring(1), out var ver) || ver <= 0) continue;
+        var contributor = video.SubtitleContributors?.FirstOrDefault(c => c.Version == ver);
+        var (added, removed) = ComputeSubtitleDiffStats(root, sanitized, ver);
+        list.Add(new SubtitleVersionSummary(
+            Version: ver,
+            DisplayName: contributor?.DisplayName,
+            UserId: contributor?.UserId,
+            SubmittedAt: contributor?.SubmittedAt,
+            SizeBytes: new FileInfo(file).Length,
+            AddedLines: added,
+            RemovedLines: removed,
+            IsCurrent: (currentVersion ?? 0) == ver
+        ));
+    }
+    var ordered = list.OrderBy(x => x.Version).ToList();
+    return Results.Json(new { items = ordered, currentVersion = currentVersion ?? 0 });
+}).WithOpenApi(o => { o.Summary = "List subtitle versions and metadata for a video (admin)"; return o; });
+
+app.MapGet("/api/admin/videos/{id}/subtitles/{version}/diff", (string id, int version) =>
+{
+    if (version <= 0) return Results.BadRequest("Invalid version");
+    var sanitized = SanitizeId(id);
+    var root = SubtitlesRoot();
+    var currentPath = ResolveSubtitlePath(root, sanitized, version);
+    if (currentPath == null) return Results.NotFound();
+    var prevPath = ResolvePreviousSubtitlePath(root, sanitized, version);
+    var currentLines = File.ReadAllLines(currentPath);
+    var prevLines = prevPath != null ? File.ReadAllLines(prevPath) : Array.Empty<string>();
+    var prevLabel = prevPath == null
+        ? "(none)"
+        : (FindVersionFromPath(prevPath) is int prevVer ? $"v{prevVer}" : Path.GetFileName(prevPath));
+    var diff = BuildUnifiedDiff(prevLines, currentLines, prevLabel, $"v{version}");
+    return Results.Text(diff, "text/plain");
+}).WithOpenApi(o => { o.Summary = "Show a plain-text diff between a subtitle version and the previous version (admin)"; return o; });
+
+app.MapPost("/api/admin/videos/{id}/subtitles/{version}/promote", (string id, int version, [Microsoft.AspNetCore.Mvc.FromServices] VideoRepository repo) =>
+{
+    if (version <= 0) return Results.BadRequest("Invalid version");
+    var video = repo.All().FirstOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+    if (video == null) return Results.NotFound();
+    var sanitized = SanitizeId(id);
+    var root = SubtitlesRoot();
+    var path = ResolveSubtitlePath(root, sanitized, version);
+    if (path == null) return Results.NotFound();
+    var newUrl = $"/api/subtitles/{sanitized}/{version}.srt";
+    var contributors = video.SubtitleContributors ?? new List<SubtitleContributor>();
+    UpdateSubtitleMetadata(VideosStorePath(), id, newUrl, contributors);
+    return Results.Ok(new { ok = true, version });
+}).WithOpenApi(o => { o.Summary = "Set the active subtitle version for a video (admin)"; return o; });
+
+app.MapDelete("/api/admin/videos/{id}/subtitles/{version}", (string id, int version, [Microsoft.AspNetCore.Mvc.FromServices] VideoRepository repo) =>
+{
+    if (version <= 0) return Results.BadRequest("Invalid version");
+    var video = repo.All().FirstOrDefault(x => string.Equals(x.Id, id, StringComparison.OrdinalIgnoreCase));
+    if (video == null) return Results.NotFound();
+    var currentVersion = TryParseSubtitleVersionFromUrl(video.SubtitleUrl) ?? 0;
+    if (version == currentVersion) return Results.BadRequest(new { error = "cannot_delete_current_version" });
+    var sanitized = SanitizeId(id);
+    var root = SubtitlesRoot();
+    var path = ResolveSubtitlePath(root, sanitized, version);
+    if (path == null) return Results.NotFound();
+    try { System.IO.File.Delete(path); } catch { }
+    var contributors = video.SubtitleContributors?.Where(c => c.Version != version).ToList() ?? new List<SubtitleContributor>();
+    var existingUrl = string.IsNullOrWhiteSpace(video.SubtitleUrl) ? $"/api/subtitles/{sanitized}/{currentVersion}.srt" : video.SubtitleUrl!;
+    UpdateSubtitleMetadata(VideosStorePath(), id, existingUrl, contributors);
+    return Results.Ok(new { ok = true });
+}).WithOpenApi(o => { o.Summary = "Delete a specific subtitle version (admin)"; return o; });
+
 // ----- Creator Mappings admin endpoints -----
 
 app.MapGet("/api/admin/creators/mappings", (CreatorMappingsRepository repo, string? q, int? page, int? pageSize) =>
@@ -858,6 +944,126 @@ static List<Dictionary<string, object?>> SerializeContributors(IEnumerable<Subti
         });
     }
     return list;
+}
+
+static int? TryParseSubtitleVersionFromUrl(string? subtitleUrl)
+{
+    if (string.IsNullOrWhiteSpace(subtitleUrl)) return null;
+    try
+    {
+        var last = Path.GetFileName(subtitleUrl);
+        if (string.IsNullOrWhiteSpace(last)) return null;
+        if (last.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
+        {
+            last = last[..^4];
+        }
+        if (last.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+        {
+            last = last.Substring(1);
+        }
+        if (int.TryParse(last, out var version) && version > 0)
+        {
+            return version;
+        }
+    }
+    catch { }
+    return null;
+}
+
+static string? ResolveSubtitlePath(string root, string sanitizedId, int version)
+{
+    var path = Path.Combine(root, sanitizedId, $"v{version}.srt");
+    return File.Exists(path) ? path : null;
+}
+
+static string? ResolvePreviousSubtitlePath(string root, string sanitizedId, int version)
+{
+    for (var prev = version - 1; prev >= 1; prev--)
+    {
+        var candidate = ResolveSubtitlePath(root, sanitizedId, prev);
+        if (candidate != null) return candidate;
+    }
+    return null;
+}
+
+static int? FindVersionFromPath(string? path)
+{
+    if (string.IsNullOrWhiteSpace(path)) return null;
+    var name = Path.GetFileNameWithoutExtension(path);
+    if (string.IsNullOrWhiteSpace(name)) return null;
+    if (name.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+    {
+        name = name.Substring(1);
+    }
+    return int.TryParse(name, out var ver) ? ver : null;
+}
+
+static (int Added, int Removed) ComputeSubtitleDiffStats(string root, string sanitizedId, int version)
+{
+    var currentPath = ResolveSubtitlePath(root, sanitizedId, version);
+    if (currentPath == null) return (0, 0);
+    var prevPath = ResolvePreviousSubtitlePath(root, sanitizedId, version);
+    var currLines = File.ReadAllLines(currentPath);
+    var prevLines = prevPath != null ? File.ReadAllLines(prevPath) : Array.Empty<string>();
+    var (_, lcs) = BuildLcsTable(prevLines, currLines);
+    var added = currLines.Length - lcs;
+    var removed = prevLines.Length - lcs;
+    return (Math.Max(0, added), Math.Max(0, removed));
+}
+
+static (int[,] Table, int Length) BuildLcsTable(IReadOnlyList<string> oldLines, IReadOnlyList<string> newLines)
+{
+    var table = new int[oldLines.Count + 1, newLines.Count + 1];
+    for (int i = oldLines.Count - 1; i >= 0; i--)
+    {
+        for (int j = newLines.Count - 1; j >= 0; j--)
+        {
+            if (string.Equals(oldLines[i], newLines[j], StringComparison.Ordinal))
+            {
+                table[i, j] = table[i + 1, j + 1] + 1;
+            }
+            else
+            {
+                table[i, j] = Math.Max(table[i + 1, j], table[i, j + 1]);
+            }
+        }
+    }
+    return (table, table[0, 0]);
+}
+
+static string BuildUnifiedDiff(string[] previous, string[] current, string prevPathLabel, string currentLabel)
+{
+    var (table, _) = BuildLcsTable(previous, current);
+    var sb = new StringBuilder();
+    sb.AppendLine($"--- {prevPathLabel}");
+    sb.AppendLine($"+++ {currentLabel}");
+    int i = 0, j = 0;
+    while (i < previous.Length || j < current.Length)
+    {
+        if (i < previous.Length && j < current.Length && string.Equals(previous[i], current[j], StringComparison.Ordinal))
+        {
+            sb.AppendLine($" {previous[i]}");
+            i++; j++;
+            continue;
+        }
+        var down = i < previous.Length ? table[i + 1, j] : int.MinValue;
+        var right = j < current.Length ? table[i, j + 1] : int.MinValue;
+        if (j < current.Length && (down == int.MinValue || right >= down))
+        {
+            sb.AppendLine($"+{current[j]}");
+            j++;
+        }
+        else if (i < previous.Length)
+        {
+            sb.AppendLine($"-{previous[i]}");
+            i++;
+        }
+        else
+        {
+            break;
+        }
+    }
+    return sb.ToString();
 }
 
 static string? ValidateCorrectionPayload(SubtitleCorrectionPayload body)
@@ -1609,6 +1815,17 @@ internal record VideoDto(
     int Red,
     int Yellow,
     int Green
+);
+
+internal record SubtitleVersionSummary(
+    int Version,
+    string? DisplayName,
+    string? UserId,
+    string? SubmittedAt,
+    long SizeBytes,
+    int AddedLines,
+    int RemovedLines,
+    bool IsCurrent
 );
 
 internal record SubtitleContributorDto(int Version, string? UserId, string? DisplayName, DateTimeOffset SubmittedAt);

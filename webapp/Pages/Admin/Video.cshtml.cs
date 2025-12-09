@@ -15,6 +15,8 @@ namespace bwkt_webapp.Pages.Admin
         public string? SubtitleText { get; private set; }
         public string? Submitter { get; private set; }
         public string? SubmissionDate { get; private set; }
+        public List<SubtitleVersionRow> SubtitleVersions { get; private set; } = new();
+        public int CurrentSubtitleVersion { get; private set; }
         public List<string> AllowedTags { get; } = new() { "z","p","t","story","zvz","zvt","zvp","pvz","pvt","pvp","tvz","tvt","tvp" };
         public HashSet<string> SelectedTags { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
         public string? Info { get; private set; }
@@ -32,9 +34,15 @@ namespace bwkt_webapp.Pages.Admin
             try
             {
                 var ok = Request.Query["ok"].FirstOrDefault();
-                if (!string.IsNullOrWhiteSpace(ok) && (ok == "1" || ok.Equals("true", StringComparison.OrdinalIgnoreCase)))
+                if (!string.IsNullOrWhiteSpace(ok))
                 {
-                    Info = "Tags saved successfully.";
+                    Info = ok switch
+                    {
+                        "1" or "true" or "tags_saved" => "Tags saved successfully.",
+                        "subtitle_promoted" => "Subtitle version promoted.",
+                        "subtitle_deleted" => "Subtitle version deleted.",
+                        _ => Info
+                    };
                 }
             }
             catch { }
@@ -62,6 +70,15 @@ namespace bwkt_webapp.Pages.Admin
                 Video = doc.RootElement.Clone();
                 try
                 {
+                    if (Video.TryGetProperty("subtitleUrl", out var su) && su.ValueKind == JsonValueKind.String)
+                    {
+                        var parsed = TryParseSubtitleVersion(su.GetString());
+                        if (parsed.HasValue) CurrentSubtitleVersion = parsed.Value;
+                    }
+                }
+                catch { }
+                try
+                {
                     if (Video.TryGetProperty("tags", out var tg) && tg.ValueKind == JsonValueKind.Array)
                     {
                         SelectedTags = tg.EnumerateArray().Select(e => e.GetString() ?? string.Empty).Where(s => !string.IsNullOrWhiteSpace(s)).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -81,10 +98,11 @@ namespace bwkt_webapp.Pages.Admin
                 }
                 catch { }
 
-                // Load subtitle text (first‑party SRT, version 1)
+                // Load subtitle text (first-party SRT, current version fallback to v1)
                 try
                 {
-                    SubtitleText = http.GetStringAsync($"{apiBase}/subtitles/{id}/1.srt").GetAwaiter().GetResult();
+                    var previewVersion = CurrentSubtitleVersion > 0 ? CurrentSubtitleVersion : 1;
+                    SubtitleText = http.GetStringAsync($"{apiBase}/subtitles/{id}/{previewVersion}.srt").GetAwaiter().GetResult();
                 }
                 catch { SubtitleText = null; }
 
@@ -96,6 +114,39 @@ namespace bwkt_webapp.Pages.Admin
                     {
                         Submitter = entry.Submitter;
                         SubmissionDate = entry.SubmissionDate;
+                    }
+                }
+                catch { }
+
+                // Load subtitle versions metadata
+                try
+                {
+                    SubtitleVersions.Clear();
+                    var versionsJson = http.GetStringAsync($"{apiBase}/admin/videos/{id}/subtitles").GetAwaiter().GetResult();
+                    using var vdoc = JsonDocument.Parse(versionsJson);
+                    var root = vdoc.RootElement;
+                    CurrentSubtitleVersion = root.TryGetProperty("currentVersion", out var cv) ? cv.GetInt32() : 0;
+                    if (root.TryGetProperty("items", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in arr.EnumerateArray())
+                        {
+                            var row = new SubtitleVersionRow
+                            {
+                                Version = item.TryGetProperty("version", out var vEl) ? vEl.GetInt32() : 0,
+                                DisplayName = item.TryGetProperty("displayName", out var dnEl) ? dnEl.GetString() : null,
+                                UserId = item.TryGetProperty("userId", out var uEl) ? uEl.GetString() : null,
+                                SizeBytes = item.TryGetProperty("sizeBytes", out var szEl) ? szEl.GetInt64() : 0,
+                                AddedLines = item.TryGetProperty("addedLines", out var addEl) ? addEl.GetInt32() : 0,
+                                RemovedLines = item.TryGetProperty("removedLines", out var remEl) ? remEl.GetInt32() : 0,
+                                IsCurrent = item.TryGetProperty("isCurrent", out var curEl) && curEl.GetBoolean()
+                            };
+                            if (item.TryGetProperty("submittedAt", out var atEl) && atEl.ValueKind == JsonValueKind.String && DateTimeOffset.TryParse(atEl.GetString(), out var ts))
+                            {
+                                row.SubmittedAt = ts;
+                            }
+                            SubtitleVersions.Add(row);
+                        }
+                        SubtitleVersions.Sort((a, b) => a.Version.CompareTo(b.Version));
                     }
                 }
                 catch { }
@@ -122,5 +173,43 @@ namespace bwkt_webapp.Pages.Admin
             }
             catch { return null; }
         }
+
+        private static int? TryParseSubtitleVersion(string? url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return null;
+            try
+            {
+                var last = Path.GetFileName(url);
+                if (string.IsNullOrWhiteSpace(last)) return null;
+                if (last.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
+                {
+                    last = last[..^4];
+                }
+                if (last.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                {
+                    last = last.Substring(1);
+                }
+                if (int.TryParse(last, out var ver) && ver > 0)
+                {
+                    return ver;
+                }
+            }
+            catch { }
+            return null;
+        }
+    }
+
+    public class SubtitleVersionRow
+    {
+        public int Version { get; set; }
+        public string? DisplayName { get; set; }
+        public string? UserId { get; set; }
+        public DateTimeOffset? SubmittedAt { get; set; }
+        public long SizeBytes { get; set; }
+        public int AddedLines { get; set; }
+        public int RemovedLines { get; set; }
+        public bool IsCurrent { get; set; }
+
+        public string ContributorLabel => !string.IsNullOrWhiteSpace(DisplayName) ? DisplayName! : (UserId ?? "(unknown)");
     }
 }

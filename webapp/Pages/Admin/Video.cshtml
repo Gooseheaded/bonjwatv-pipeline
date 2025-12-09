@@ -143,18 +143,86 @@ else
             </form>
         </div>
         <div class="col-md-7">
-            <h5>Subtitles (v1)</h5>
-            @if (!string.IsNullOrEmpty(Model.SubtitleText))
+            <h5>Subtitle Versions</h5>
+            @if (Model.SubtitleVersions.Count == 0)
             {
-                <textarea class="form-control" readonly style="max-height: 260px; min-height: 160px; overflow: auto; font-family: monospace; font-size: 0.9rem;">@Model.SubtitleText</textarea>
+                <p class="text-muted">No subtitle versions available.</p>
             }
             else
             {
-                <p class="text-muted">No first-party subtitle found for v1.</p>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th scope="col">Version</th>
+                                <th scope="col">Contributor</th>
+                                <th scope="col">Submitted</th>
+                                <th scope="col">Size</th>
+                                <th scope="col">Diff</th>
+                                <th scope="col" class="text-nowrap">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var ver in Model.SubtitleVersions)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="fw-semibold">v@ver.Version</span>
+                                    @if (ver.IsCurrent)
+                                    {
+                                        <span class="badge bg-success ms-1">Current</span>
+                                    }
+                                </td>
+                                <td>@ver.ContributorLabel</td>
+                                <td>@(ver.SubmittedAt.HasValue ? ver.SubmittedAt.Value.ToString("u") : "—")</td>
+                                <td>@(ver.SizeBytes > 0 ? $"{ver.SizeBytes:N0} B" : "—")</td>
+                                <td>
+                                    <div class="small text-muted">@ver.AddedLines added / @ver.RemovedLines removed</div>
+                                    <button type="button" class="btn btn-link btn-sm px-0" data-diff-version="@ver.Version">View diff</button>
+                                </td>
+                                <td class="text-nowrap">
+                                    @if (!ver.IsCurrent)
+                                    {
+                                        <form method="post" action="/admin/videos/@id/subtitles/@ver.Version/promote" class="d-inline" onsubmit="return confirm('Promote subtitle version v@ver.Version as current?');">
+                                            <button type="submit" class="btn btn-outline-primary btn-sm">Set current</button>
+                                        </form>
+                                    }
+                                    <form method="post" action="/admin/videos/@id/subtitles/@ver.Version/delete" class="d-inline" onsubmit="return confirm('Delete subtitle version v@ver.Version? This cannot be undone.');">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm" @(ver.IsCurrent ? "disabled" : null)>Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
             }
+            <div class="mt-3">
+                <h6>Current Subtitles (@(Model.CurrentSubtitleVersion > 0 ? $"v{Model.CurrentSubtitleVersion}" : "latest"))</h6>
+                @if (!string.IsNullOrEmpty(Model.SubtitleText))
+                {
+                    <textarea class="form-control" readonly style="max-height: 260px; min-height: 160px; overflow: auto; font-family: monospace; font-size: 0.9rem;">@Model.SubtitleText</textarea>
+                }
+                else
+                {
+                    <p class="text-muted">No first-party subtitle text available for the current version.</p>
+                }
+            </div>
         </div>
     </div>
-
+    <div class="modal fade" id="subtitleDiffModal" tabindex="-1" aria-hidden="true" aria-labelledby="subtitleDiffTitle">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="subtitleDiffTitle">Subtitle Diff</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <pre id="subtitleDiffBody" class="small bg-body-tertiary p-3" style="min-height: 200px; max-height: 60vh; overflow: auto;">Loading…</pre>
+                </div>
+            </div>
+        </div>
+    </div>
     <script>
         function askReason(form) {
             const reason = prompt('Reason for hiding this video?');
@@ -162,5 +230,40 @@ else
             form.querySelector('input[name="reason"]').value = reason || 'Hidden via UI';
             return true;
         }
+    </script>
+    <script>
+        (function(){
+            const diffModalEl = document.getElementById('subtitleDiffModal');
+            const diffBody = document.getElementById('subtitleDiffBody');
+            const diffTitle = document.getElementById('subtitleDiffTitle');
+            let diffModal = null;
+            if (diffModalEl && window.bootstrap && window.bootstrap.Modal) {
+                diffModal = new bootstrap.Modal(diffModalEl);
+            }
+            document.querySelectorAll('[data-diff-version]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    if (!diffModalEl) return;
+                    const version = btn.getAttribute('data-diff-version');
+                    diffTitle.textContent = `Subtitle diff for v${version}`;
+                    diffBody.textContent = 'Loading…';
+                    try {
+                        const res = await fetch(`/admin/videos/@id/subtitles/${version}/diff`);
+                        if (!res.ok) {
+                            diffBody.textContent = `Unable to load diff (status ${res.status}).`;
+                        } else {
+                            const text = await res.text();
+                            diffBody.textContent = text || '(no diff)';
+                        }
+                    } catch (err) {
+                        diffBody.textContent = 'Failed to load diff.';
+                    }
+                    if (diffModal) {
+                        diffModal.show();
+                    } else {
+                        diffModalEl.classList.add('show');
+                    }
+                });
+            });
+        })();
     </script>
 }
