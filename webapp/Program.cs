@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Security.Claims;
 using System.Text.Json;
 using bwkt_webapp.Services;
@@ -27,6 +28,15 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     });
 builder.Services.AddAuthorization();
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpLogging(options =>
+{
+    options.LoggingFields = Microsoft.AspNetCore.HttpLogging.HttpLoggingFields.RequestPropertiesAndHeaders
+        | Microsoft.AspNetCore.HttpLogging.HttpLoggingFields.ResponsePropertiesAndHeaders
+        | Microsoft.AspNetCore.HttpLogging.HttpLoggingFields.RequestBody
+        | Microsoft.AspNetCore.HttpLogging.HttpLoggingFields.ResponseBody;
+    options.RequestBodyLogLimit = 4 * 1024;
+    options.ResponseBodyLogLimit = 4 * 1024;
+});
 
 // Per-user "watched" store (server-side persistence under /app/data/watched)
 try
@@ -67,6 +77,9 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+// HTTP logging to help diagnose production issues (includes headers and small bodies)
+app.UseHttpLogging();
 
 app.UseRouting();
 
