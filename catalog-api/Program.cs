@@ -1337,14 +1337,21 @@ static int ReapplyCreatorMappingsToVideos(string jsonPath, CreatorMappingsReposi
         foreach (var v in list)
         {
             var original = Convert.ToString(v.TryGetValue("creatorOriginal", out var co) ? co : v.TryGetValue("creator", out var c) ? c : null);
-            if (string.IsNullOrWhiteSpace(original)) continue;
-            var canonical = repo.Resolve(original) ?? original;
             var current = Convert.ToString(v.TryGetValue("creator", out var cur) ? cur : null);
-            if (!string.Equals(current, canonical, StringComparison.Ordinal))
+            var canonical = repo.Resolve(original) ?? repo.Resolve(current) ?? current;
+            if (!string.IsNullOrWhiteSpace(canonical) && !string.Equals(current, canonical, StringComparison.Ordinal))
             {
                 v["creator"] = canonical;
-                v["creatorOriginal"] = original;
+                if (!string.IsNullOrWhiteSpace(original))
+                {
+                    v["creatorOriginal"] = original;
+                }
                 changes++;
+            }
+            else if (string.IsNullOrWhiteSpace(original) && !string.IsNullOrWhiteSpace(current))
+            {
+                // Preserve original if missing to support future reapply passes
+                v["creatorOriginal"] = current;
             }
         }
         var opts = new JsonSerializerOptions { WriteIndented = true };
