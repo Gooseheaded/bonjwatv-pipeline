@@ -43,19 +43,26 @@
   function hydrateCueList(currentTime) {
     if (!cueContainer) return;
     cueContainer.innerHTML = '';
-    const cues = (window.bwktSubtitles && typeof window.bwktSubtitles.getCuesAround === 'function')
-      ? window.bwktSubtitles.getCuesAround(currentTime, 3)
-      : [];
-    if (!Array.isArray(cues) || cues.length === 0) {
+    const allCues = (window.bwktSubtitles && typeof window.bwktSubtitles.getAllCues === 'function')
+      ? window.bwktSubtitles.getAllCues()
+      : ((window.bwktSubtitles && typeof window.bwktSubtitles.getCuesAround === 'function')
+        ? window.bwktSubtitles.getCuesAround(currentTime, Number.MAX_SAFE_INTEGER)
+        : []);
+    if (!Array.isArray(allCues) || allCues.length === 0) {
       const info = document.createElement('p');
       info.className = 'text-muted';
-      info.textContent = 'No subtitles detected near the current timestamp.';
+      info.textContent = 'No subtitles detected.';
       cueContainer.appendChild(info);
       return;
     }
-    cues.forEach(c => {
+
+    const activeIdx = findActiveCueIndex(allCues, currentTime);
+    allCues.forEach((c, idx) => {
       const wrapper = document.createElement('div');
       wrapper.className = 'mb-3';
+      if (idx === activeIdx) {
+        wrapper.classList.add('border', 'border-2', 'border-primary', 'rounded');
+      }
       wrapper.dataset.sequence = c.sequence;
       wrapper.dataset.original = c.text;
       wrapper.dataset.start = c.start;
@@ -74,6 +81,29 @@
 
       cueContainer.appendChild(wrapper);
     });
+
+    if (activeIdx >= 0) {
+      const activeEl = cueContainer.querySelector(`[data-sequence="${allCues[activeIdx].sequence}"]`);
+      if (activeEl && typeof activeEl.scrollIntoView === 'function') {
+        setTimeout(() => activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' }), 50);
+      }
+    }
+  }
+
+  function findActiveCueIndex(cues, currentTime) {
+    if (!Array.isArray(cues) || cues.length === 0) return -1;
+    const idxInRange = cues.findIndex(c => currentTime >= c.start && currentTime <= c.end);
+    if (idxInRange >= 0) return idxInRange;
+    let nearest = -1;
+    let nearestDelta = Number.MAX_VALUE;
+    cues.forEach((c, idx) => {
+      const delta = Math.abs((c.start ?? 0) - currentTime);
+      if (delta < nearestDelta) {
+        nearestDelta = delta;
+        nearest = idx;
+      }
+    });
+    return nearest;
   }
 
   function collectPayload() {

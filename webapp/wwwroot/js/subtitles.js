@@ -8,8 +8,8 @@ function parseSrt(data) {
         const raw = match[4].trim();
         cues.push({
             sequence: parseInt(match[1], 10),
-            start: toSeconds(match[1]),
-            end: toSeconds(match[2]),
+            start: toSeconds(match[2]),
+            end: toSeconds(match[3]),
             rawText: raw,
             html: raw.replace(/\r?\n/g, '<br>')
         });
@@ -135,6 +135,15 @@ function initSubtitles(srtUrl, playerId, containerId) {
                         end: c.end,
                         text: c.rawText
                     }));
+            },
+            getAllCues: () => {
+                if (!Array.isArray(cues) || !cues.length) return [];
+                return cues.map(c => ({
+                    sequence: c.sequence,
+                    start: c.start,
+                    end: c.end,
+                    text: c.rawText
+                }));
             },
             getPlayer: () => player
         };
