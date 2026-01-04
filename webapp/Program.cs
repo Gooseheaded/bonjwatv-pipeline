@@ -266,21 +266,22 @@ app.MapPost("/corrections", async (HttpContext ctx, IMemoryCache cache) =>
     reqMessage.Headers.Add("X-Api-Key", correctionsToken);
     reqMessage.Content = JsonContent.Create(payload);
     var resp = await http.SendAsync(reqMessage);
-    var text = await resp.Content.ReadAsStringAsync();
-    if (!resp.IsSuccessStatusCode)
-    {
-        try
+        var text = await resp.Content.ReadAsStringAsync();
+        if (!resp.IsSuccessStatusCode)
         {
-            using var doc = JsonDocument.Parse(text);
-            return Results.Json(doc.RootElement, statusCode: (int)resp.StatusCode);
+            try
+            {
+                using var doc = JsonDocument.Parse(text);
+                var errorBody = doc.RootElement.Clone(); // clone before disposing
+                return Results.Json(errorBody, statusCode: (int)resp.StatusCode);
+            }
+            catch
+            {
+                return Results.Json(new { error = text }, statusCode: (int)resp.StatusCode);
+            }
         }
-        catch
-        {
-            return Results.Json(new { error = text }, statusCode: (int)resp.StatusCode);
-        }
-    }
-    return Results.Content(text, "application/json");
-}).RequireAuthorization();
+        return Results.Content(text, "application/json");
+    }).RequireAuthorization();
 
 app.MapGet("/ratings/{id}", async (string id, int? version, HttpContext ctx) =>
 {
