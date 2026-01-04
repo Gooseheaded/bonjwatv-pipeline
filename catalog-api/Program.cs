@@ -1081,7 +1081,6 @@ static string? ValidateCorrectionPayload(SubtitleCorrectionPayload body)
     if (body.SubtitleVersion <= 0) return "invalid_subtitle_version";
     if (string.IsNullOrWhiteSpace(body.SubmittedByUserId)) return "missing_user";
     if (body.Cues == null || body.Cues.Count == 0) return "missing_cues";
-    if (body.Cues.Count > 5) return "too_many_cues";
     foreach (var cue in body.Cues)
     {
         if (cue.Sequence <= 0) return "invalid_sequence";
