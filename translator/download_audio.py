@@ -121,30 +121,46 @@ def run_download_audio(url: str, video_id: str, output_dir: str = "audio") -> bo
         if isinstance(info, dict):
             fmt = _pick_best_audio_format(info)
         # If we didn't find audio-only, let yt-dlp pick best muxed and extract
-        format_selector = fmt if fmt else "best"
-        try:
-            opts_dl = dict(opts)
-            opts_dl["format"] = format_selector
-            ydl = yt_dlp.YoutubeDL(opts_dl)
-            ydl.download([url])
-            if os.path.exists(final_path):
-                logging.info(f"Downloaded audio to {final_path}")
-                return True, info
-            # In rare cases, file may have different name; still treat as success if any mp3 for id exists
-            guessed = os.path.join(output_dir, f"{video_id}.mp3")
-            return (os.path.exists(guessed), info)
-        except Exception as e:
-            # Log a concise formats table to aid debugging
-            if isinstance(info, dict):
-                logging.error(
-                    "yt-dlp error for %s: %s. Available formats: %s",
-                    video_id,
-                    e,
-                    _summarize_formats(info),
-                )
-            else:
-                logging.error("Error downloading audio for %s: %s", video_id, e)
-            return False, info
+        # Prefer best audio; fall back to bestaudio/best on selector errors
+        selectors = [fmt] if fmt else []
+        selectors.append("bestaudio[ext=m4a]/bestaudio/best")
+        selectors.append("best")  # final fallback
+        for selector in selectors:
+            if not selector:
+                continue
+            try:
+                opts_dl = dict(opts)
+                opts_dl["format"] = selector
+                ydl = yt_dlp.YoutubeDL(opts_dl)
+                ydl.download([url])
+                if os.path.exists(final_path):
+                    logging.info(f"Downloaded audio to {final_path} (format {selector})")
+                    return True, info
+                # In rare cases, file may have different name; still treat as success if any mp3 for id exists
+                guessed = os.path.join(output_dir, f"{video_id}.mp3")
+                if os.path.exists(guessed):
+                    logging.info(f"Downloaded audio to {guessed} (format {selector})")
+                    return True, info
+            except Exception as e:
+                # If selector is invalid, try the next fallback
+                if "Requested format is not available" in str(e) or "No video formats found" in str(e):
+                    logging.warning(
+                        "Format %s unavailable for %s, trying next fallback", selector, video_id
+                    )
+                    continue
+                if isinstance(info, dict):
+                    logging.error(
+                        "yt-dlp error for %s (format %s): %s. Available formats: %s",
+                        video_id,
+                        selector,
+                        e,
+                        _summarize_formats(info),
+                    )
+                else:
+                    logging.error("Error downloading audio for %s: %s", video_id, e)
+                return False, info
+        # If all selectors failed
+        return False, info
 
     ok, info = attempt(android_client=True)
     if ok:
