@@ -41,6 +41,57 @@ else if (ok == "1")
         <a class="btn btn-outline-primary" asp-page="/Admin/CreatorMappings/Index">Creator Mappings</a>
         <button id="debug-hidden-btn" type="button" class="btn btn-outline-secondary">Debug: Hidden Videos</button>
     </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="h5 card-title mb-2">Legacy Migration</h2>
+            <p class="text-muted mb-3">
+                Import from legacy <code>videos.json</code> into the catalog store using update-missing-only rules.
+                Catalog values are not overwritten; tags are merged. Legacy file is read-only.
+            </p>
+            <form id="legacy-migration-form" class="d-flex flex-wrap align-items-center gap-3">
+                <div class="form-check m-0">
+                    <input class="form-check-input" type="checkbox" id="legacy-migration-dryrun" checked>
+                    <label class="form-check-label" for="legacy-migration-dryrun">Dry run (preview only)</label>
+                </div>
+                <button id="legacy-migration-submit" type="submit" class="btn btn-outline-warning">Run Migration</button>
+                <span id="legacy-migration-status" class="text-muted small"></span>
+            </form>
+            <div id="legacy-migration-result" class="mt-3 d-none">
+                <div id="legacy-migration-banner" class="alert mb-3" role="alert"></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-2">
+                        <thead>
+                            <tr>
+                                <th>Legacy Count</th>
+                                <th>Created</th>
+                                <th>Updated Missing</th>
+                                <th>Tags Merged</th>
+                                <th>Unchanged</th>
+                                <th>Skipped Invalid</th>
+                                <th>Errors</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr id="legacy-migration-totals-row">
+                                <td data-k="legacyCount">-</td>
+                                <td data-k="created">-</td>
+                                <td data-k="updatedMissingFields">-</td>
+                                <td data-k="tagsMerged">-</td>
+                                <td data-k="unchanged">-</td>
+                                <td data-k="skippedInvalid">-</td>
+                                <td data-k="errors">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <details>
+                    <summary>Details sample</summary>
+                    <pre id="legacy-migration-details" class="small mb-0"></pre>
+                </details>
+            </div>
+        </div>
+    </div>
 }
 <h2 class="mt-4">Pending Submissions</h2>
 @if (Model.IsAdmin && Model.Pending.Count > 0)
@@ -166,6 +217,71 @@ else if (Model.IsAdmin)
 {
     <script>
         (function(){
+            const migrationForm = document.getElementById('legacy-migration-form');
+            const migrationDryRun = document.getElementById('legacy-migration-dryrun');
+            const migrationSubmit = document.getElementById('legacy-migration-submit');
+            const migrationStatus = document.getElementById('legacy-migration-status');
+            const migrationResult = document.getElementById('legacy-migration-result');
+            const migrationBanner = document.getElementById('legacy-migration-banner');
+            const migrationTotalsRow = document.getElementById('legacy-migration-totals-row');
+            const migrationDetails = document.getElementById('legacy-migration-details');
+
+            if (migrationForm) {
+                migrationForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const dryRun = !!(migrationDryRun && migrationDryRun.checked);
+                    if (!dryRun) {
+                        const ok = window.confirm('Run legacy migration with writes enabled? This is idempotent, but it will update the catalog store.');
+                        if (!ok) return;
+                    }
+                    if (migrationSubmit) migrationSubmit.setAttribute('disabled', 'disabled');
+                    if (migrationStatus) migrationStatus.textContent = dryRun ? 'Running dry run...' : 'Running migration...';
+
+                    try {
+                        const res = await fetch('/admin/migrations/legacy-videos/import', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ dryRun })
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        renderMigrationResult(data, res.ok, dryRun);
+                    } catch (err) {
+                        renderMigrationResult({ error: 'Network error while running migration.' }, false, dryRun);
+                    } finally {
+                        if (migrationSubmit) migrationSubmit.removeAttribute('disabled');
+                        if (migrationStatus) migrationStatus.textContent = '';
+                    }
+                });
+            }
+
+            function renderMigrationResult(data, ok, dryRun) {
+                if (!migrationResult || !migrationBanner) return;
+                migrationResult.classList.remove('d-none');
+                migrationBanner.classList.remove('alert-success', 'alert-warning', 'alert-danger');
+                migrationBanner.classList.add(ok ? (dryRun ? 'alert-warning' : 'alert-success') : 'alert-danger');
+
+                const modeLabel = data && data.dryRun ? 'Dry run' : 'Applied';
+                if (ok) {
+                    const totals = data && data.totals ? data.totals : {};
+                    migrationBanner.textContent = `${modeLabel} completed. Created ${totals.created ?? 0}, updated missing ${totals.updatedMissingFields ?? 0}, tags merged ${totals.tagsMerged ?? 0}.`;
+                } else {
+                    migrationBanner.textContent = `Migration failed: ${(data && (data.error || data.errorCode)) ? (data.error || data.errorCode) : 'unknown_error'}`;
+                }
+
+                if (migrationTotalsRow) {
+                    migrationTotalsRow.querySelectorAll('[data-k]').forEach(cell => {
+                        const key = cell.getAttribute('data-k');
+                        const value = data && data.totals && key ? data.totals[key] : null;
+                        cell.textContent = value === null || value === undefined ? '-' : String(value);
+                    });
+                }
+
+                if (migrationDetails) {
+                    const details = data && Array.isArray(data.detailsSample) ? data.detailsSample : [];
+                    migrationDetails.textContent = details.length ? JSON.stringify(details, null, 2) : 'No detail sample returned.';
+                }
+            }
+
             const btn = document.getElementById('debug-hidden-btn');
             if (!btn) return;
             btn.addEventListener('click', async () => {

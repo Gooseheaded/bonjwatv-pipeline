@@ -286,6 +286,39 @@ app.MapGet("/api/admin/ratings/recent", (int? limit, RatingsRepository repo) =>
 })
 .WithOpenApi(o => { o.Summary = "List recent rating events (descending)"; return o; });
 
+app.MapPost("/api/admin/migrations/legacy-videos/import", async (HttpRequest req, VideoRepository repo, ILoggerFactory loggerFactory) =>
+{
+    LegacyVideosMigrationRequest body = new(null);
+    if ((req.ContentLength ?? 0) > 0)
+    {
+        try
+        {
+            body = await req.ReadFromJsonAsync<LegacyVideosMigrationRequest>() ?? new(null);
+        }
+        catch
+        {
+            return Results.BadRequest(new { error = "invalid_json" });
+        }
+    }
+
+    var dryRun = body.DryRun ?? true;
+    var logger = loggerFactory.CreateLogger("LegacyVideosMigration");
+    var result = RunLegacyVideosMigration(VideosStorePath(), LegacyVideosPath(), dryRun, logger);
+
+    if (!dryRun && result.Ok)
+    {
+        repo.ForceReload();
+    }
+
+    var status = result.Ok ? 200 : result.ErrorCode switch
+    {
+        "legacy_file_not_found" => 404,
+        "invalid_legacy_payload" => 400,
+        _ => 500
+    };
+    return Results.Json(result, statusCode: status);
+}).WithOpenApi(o => { o.Summary = "Import legacy videos.json into catalog store (idempotent; dry-run supported)"; return o; });
+
 string SubtitlesRoot()
 {
     var root = app.Configuration["Data:SubtitlesRoot"] ?? app.Configuration["DATA_SUBTITLES_ROOT"] ?? "/app/data/subtitles";
@@ -915,6 +948,12 @@ string VideosStorePath()
         app.Configuration["DATA_VIDEOS_STORE_PATH"] ?? app.Configuration["Data:VideosStorePath"] ?? "data/catalog-videos.json"));
 }
 
+string LegacyVideosPath()
+{
+    return Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath,
+        app.Configuration["DATA_JSON_PATH"] ?? app.Configuration["Data:JsonPath"] ?? "data/videos.json"));
+}
+
 static string? NormalizeRace(string? value)
 {
     if (string.IsNullOrWhiteSpace(value)) return null;
@@ -925,6 +964,396 @@ static string? NormalizeRace(string? value)
         "p" or "protoss" => "p",
         _ => null
     };
+}
+
+static LegacyVideosMigrationResult RunLegacyVideosMigration(string storePath, string legacyPath, bool dryRun, ILogger logger)
+{
+    var startedAt = DateTimeOffset.UtcNow;
+    var totals = new LegacyVideosMigrationTotals();
+    var details = new List<LegacyVideosMigrationDetail>();
+    const int detailSampleLimit = 100;
+
+    try
+    {
+        var fullLegacy = Path.GetFullPath(legacyPath);
+        var fullStore = Path.GetFullPath(storePath);
+        if (!File.Exists(fullLegacy))
+        {
+            return new LegacyVideosMigrationResult(
+                Ok: false,
+                DryRun: dryRun,
+                Mode: "update_missing_only_with_tag_merge",
+                LegacyPath: fullLegacy,
+                Totals: totals,
+                DetailsSample: details,
+                RanAtUtc: startedAt,
+                ErrorCode: "legacy_file_not_found",
+                Error: "Legacy videos.json file not found");
+        }
+
+        lock (StoreSync.Lock)
+        {
+            var legacy = ReadObjectArray(fullLegacy);
+            if (legacy == null)
+            {
+                return new LegacyVideosMigrationResult(
+                    Ok: false,
+                    DryRun: dryRun,
+                    Mode: "update_missing_only_with_tag_merge",
+                    LegacyPath: fullLegacy,
+                    Totals: totals,
+                    DetailsSample: details,
+                    RanAtUtc: startedAt,
+                    ErrorCode: "invalid_legacy_payload",
+                    Error: "Legacy videos.json must contain a JSON array");
+            }
+
+            totals.LegacyCount = legacy.Count;
+
+            var store = ReadObjectArray(fullStore) ?? new List<Dictionary<string, object?>>();
+            var byId = new Dictionary<string, Dictionary<string, object?>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in store)
+            {
+                var id = ReadVideoId(item);
+                if (string.IsNullOrWhiteSpace(id)) continue;
+                if (!byId.ContainsKey(id))
+                {
+                    byId[id] = item;
+                }
+            }
+
+            foreach (var legacyItem in legacy)
+            {
+                try
+                {
+                    var legacyId = ReadVideoId(legacyItem);
+                    if (!IsValidVideoId(legacyId))
+                    {
+                        totals.SkippedInvalid++;
+                        AddDetail(details, detailSampleLimit, new LegacyVideosMigrationDetail(legacyId ?? "(missing)", "skipped_invalid", null, null, "invalid_video_id"));
+                        continue;
+                    }
+
+                    if (!byId.TryGetValue(legacyId!, out var existing))
+                    {
+                        var created = BuildNewCatalogItemFromLegacy(legacyItem, out var invalidReason);
+                        if (created == null)
+                        {
+                            totals.SkippedInvalid++;
+                            AddDetail(details, detailSampleLimit, new LegacyVideosMigrationDetail(legacyId!, "skipped_invalid", null, null, invalidReason ?? "invalid_legacy_item"));
+                            continue;
+                        }
+                        store.Add(created);
+                        byId[legacyId!] = created;
+                        totals.Created++;
+                        AddDetail(details, detailSampleLimit, new LegacyVideosMigrationDetail(legacyId!, "created", null, null, null));
+                        continue;
+                    }
+
+                    var fieldsFilled = new List<string>();
+                    var tagsAdded = new List<string>();
+
+                    MergeMissingString(existing, legacyItem, "title", fieldsFilled);
+                    MergeMissingString(existing, legacyItem, "creator", fieldsFilled);
+                    MergeMissingString(existing, legacyItem, "description", fieldsFilled);
+                    MergeMissingString(existing, legacyItem, "subtitleUrl", fieldsFilled);
+                    MergeMissingString(existing, legacyItem, "submitter", fieldsFilled);
+                    MergeMissingString(existing, legacyItem, "submissionDate", fieldsFilled);
+                    MergeMissingString(existing, legacyItem, "releaseDate", fieldsFilled);
+
+                    if (MergeTags(existing, legacyItem, out var addedTags) && addedTags.Count > 0)
+                    {
+                        tagsAdded.AddRange(addedTags);
+                    }
+
+                    var missingUpdated = fieldsFilled.Count > 0;
+                    var mergedTags = tagsAdded.Count > 0;
+                    if (missingUpdated) totals.UpdatedMissingFields++;
+                    if (mergedTags) totals.TagsMerged++;
+
+                    if (!missingUpdated && !mergedTags)
+                    {
+                        totals.Unchanged++;
+                        continue;
+                    }
+
+                    var action = missingUpdated && mergedTags
+                        ? "updated_missing_and_tags_merged"
+                        : missingUpdated ? "updated_missing" : "tags_merged";
+                    AddDetail(details, detailSampleLimit, new LegacyVideosMigrationDetail(
+                        legacyId!,
+                        action,
+                        fieldsFilled.Count > 0 ? fieldsFilled : null,
+                        tagsAdded.Count > 0 ? tagsAdded : null,
+                        null));
+                }
+                catch (Exception ex)
+                {
+                    totals.Errors++;
+                    var id = ReadVideoId(legacyItem) ?? "(unknown)";
+                    AddDetail(details, detailSampleLimit, new LegacyVideosMigrationDetail(id, "error", null, null, ex.Message));
+                }
+            }
+
+            if (!dryRun)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(fullStore)!);
+                var opts = new JsonSerializerOptions { WriteIndented = true };
+                File.WriteAllText(fullStore, JsonSerializer.Serialize(store, opts));
+                logger.LogInformation(
+                    "Legacy migration applied from {LegacyPath} to {StorePath}: created={Created} updatedMissing={UpdatedMissing} tagsMerged={TagsMerged} unchanged={Unchanged} skippedInvalid={SkippedInvalid} errors={Errors}",
+                    fullLegacy, fullStore, totals.Created, totals.UpdatedMissingFields, totals.TagsMerged, totals.Unchanged, totals.SkippedInvalid, totals.Errors);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Legacy migration dry-run from {LegacyPath} to {StorePath}: created={Created} updatedMissing={UpdatedMissing} tagsMerged={TagsMerged} unchanged={Unchanged} skippedInvalid={SkippedInvalid} errors={Errors}",
+                    fullLegacy, fullStore, totals.Created, totals.UpdatedMissingFields, totals.TagsMerged, totals.Unchanged, totals.SkippedInvalid, totals.Errors);
+            }
+        }
+
+        return new LegacyVideosMigrationResult(
+            Ok: true,
+            DryRun: dryRun,
+            Mode: "update_missing_only_with_tag_merge",
+            LegacyPath: Path.GetFullPath(legacyPath),
+            Totals: totals,
+            DetailsSample: details,
+            RanAtUtc: DateTimeOffset.UtcNow,
+            ErrorCode: null,
+            Error: null);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Legacy migration failed for {LegacyPath} -> {StorePath}", legacyPath, storePath);
+        return new LegacyVideosMigrationResult(
+            Ok: false,
+            DryRun: dryRun,
+            Mode: "update_missing_only_with_tag_merge",
+            LegacyPath: Path.GetFullPath(legacyPath),
+            Totals: totals,
+            DetailsSample: details,
+            RanAtUtc: DateTimeOffset.UtcNow,
+            ErrorCode: "migration_failed",
+            Error: ex.Message);
+    }
+}
+
+static void AddDetail(List<LegacyVideosMigrationDetail> details, int limit, LegacyVideosMigrationDetail detail)
+{
+    if (details.Count < limit) details.Add(detail);
+}
+
+static List<Dictionary<string, object?>>? ReadObjectArray(string path)
+{
+    if (!File.Exists(path)) return new List<Dictionary<string, object?>>();
+    var json = File.ReadAllText(path);
+    if (string.IsNullOrWhiteSpace(json)) return new List<Dictionary<string, object?>>();
+    try
+    {
+        return JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(json);
+    }
+    catch
+    {
+        return null;
+    }
+}
+
+static bool IsValidVideoId(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return false;
+    var s = value.Trim();
+    if (s.Length < 6 || s.Length > 64) return false;
+    return s.All(ch => char.IsLetterOrDigit(ch) || ch == '-' || ch == '_');
+}
+
+static string? ReadVideoId(Dictionary<string, object?> item)
+{
+    var v = ReadNormalizedString(item, "v");
+    if (!string.IsNullOrWhiteSpace(v)) return v;
+    return ReadNormalizedString(item, "id");
+}
+
+static Dictionary<string, object?>? BuildNewCatalogItemFromLegacy(Dictionary<string, object?> legacyItem, out string? invalidReason)
+{
+    invalidReason = null;
+    var id = ReadVideoId(legacyItem);
+    if (!IsValidVideoId(id))
+    {
+        invalidReason = "invalid_video_id";
+        return null;
+    }
+    var title = ReadNormalizedString(legacyItem, "title");
+    if (string.IsNullOrWhiteSpace(title))
+    {
+        invalidReason = "missing_title";
+        return null;
+    }
+
+    var created = new Dictionary<string, object?>(StringComparer.Ordinal);
+    foreach (var kvp in legacyItem)
+    {
+        if (string.Equals(kvp.Key, "id", StringComparison.OrdinalIgnoreCase)) continue;
+        created[kvp.Key] = CloneJsonBackedValue(kvp.Value);
+    }
+    created["v"] = id;
+    created["title"] = title;
+
+    SetNormalizedStringOrRemove(created, "creator", ReadNormalizedString(legacyItem, "creator"));
+    SetNormalizedStringOrRemove(created, "description", ReadNormalizedString(legacyItem, "description"));
+    SetNormalizedStringOrRemove(created, "subtitleUrl", ReadNormalizedString(legacyItem, "subtitleUrl"));
+    SetNormalizedStringOrRemove(created, "submitter", ReadNormalizedString(legacyItem, "submitter"));
+    SetNormalizedStringOrRemove(created, "submissionDate", ReadNormalizedString(legacyItem, "submissionDate"));
+    SetNormalizedStringOrRemove(created, "releaseDate", ReadNormalizedString(legacyItem, "releaseDate"));
+
+    var tags = NormalizeTags(ReadTags(legacyItem, "tags"));
+    if (tags.Count > 0) created["tags"] = tags.ToArray();
+    else created.Remove("tags");
+
+    return created;
+}
+
+static void SetNormalizedStringOrRemove(Dictionary<string, object?> target, string key, string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) target.Remove(key);
+    else target[key] = value;
+}
+
+static bool MergeMissingString(Dictionary<string, object?> target, Dictionary<string, object?> legacy, string field, List<string> fieldsFilled)
+{
+    if (!IsMissingStringField(target, field)) return false;
+    var val = ReadNormalizedString(legacy, field);
+    if (string.IsNullOrWhiteSpace(val)) return false;
+    target[field] = val;
+    fieldsFilled.Add(field);
+    return true;
+}
+
+static bool IsMissingStringField(Dictionary<string, object?> item, string field)
+{
+    var current = ReadNormalizedString(item, field);
+    return string.IsNullOrWhiteSpace(current);
+}
+
+static string? ReadNormalizedString(Dictionary<string, object?> item, string field)
+{
+    if (!item.TryGetValue(field, out var value)) return null;
+    return NormalizeOptionalString(ConvertJsonBackedToString(value));
+}
+
+static string? NormalizeOptionalString(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return null;
+    return value.Trim();
+}
+
+static string? ConvertJsonBackedToString(object? value)
+{
+    if (value == null) return null;
+    if (value is string s) return s;
+    if (value is JsonElement el)
+    {
+        return el.ValueKind switch
+        {
+            JsonValueKind.String => el.GetString(),
+            JsonValueKind.Null or JsonValueKind.Undefined => null,
+            JsonValueKind.Number => el.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => el.ToString()
+        };
+    }
+    return Convert.ToString(value);
+}
+
+static bool MergeTags(Dictionary<string, object?> target, Dictionary<string, object?> legacy, out List<string> tagsAdded)
+{
+    tagsAdded = new List<string>();
+    var currentTags = NormalizeTags(ReadTags(target, "tags"));
+    var legacyTags = NormalizeTags(ReadTags(legacy, "tags"));
+    if (legacyTags.Count == 0) return false;
+
+    var set = new HashSet<string>(currentTags, StringComparer.OrdinalIgnoreCase);
+    foreach (var tag in legacyTags)
+    {
+        if (set.Add(tag))
+        {
+            currentTags.Add(tag);
+            tagsAdded.Add(tag);
+        }
+    }
+    if (tagsAdded.Count == 0) return false;
+    target["tags"] = currentTags.ToArray();
+    return true;
+}
+
+static List<string> ReadTags(Dictionary<string, object?> item, string field)
+{
+    var tags = new List<string>();
+    if (!item.TryGetValue(field, out var value) || value == null) return tags;
+
+    if (value is JsonElement el)
+    {
+        if (el.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var child in el.EnumerateArray())
+            {
+                if (child.ValueKind == JsonValueKind.String)
+                {
+                    var s = child.GetString();
+                    if (!string.IsNullOrWhiteSpace(s)) tags.Add(s!);
+                }
+                else
+                {
+                    var s = child.ToString();
+                    if (!string.IsNullOrWhiteSpace(s)) tags.Add(s);
+                }
+            }
+        }
+        return tags;
+    }
+
+    if (value is IEnumerable<object> enumerable)
+    {
+        foreach (var part in enumerable)
+        {
+            var s = Convert.ToString(part);
+            if (!string.IsNullOrWhiteSpace(s)) tags.Add(s!);
+        }
+        return tags;
+    }
+
+    var single = Convert.ToString(value);
+    if (!string.IsNullOrWhiteSpace(single)) tags.Add(single!);
+    return tags;
+}
+
+static List<string> NormalizeTags(IEnumerable<string> tags)
+{
+    var result = new List<string>();
+    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var raw in tags)
+    {
+        var normalized = NormalizeTag(raw);
+        if (normalized == null) continue;
+        if (seen.Add(normalized))
+        {
+            result.Add(normalized);
+        }
+    }
+    return result;
+}
+
+static string? NormalizeTag(string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return null;
+    return value.Trim().ToLowerInvariant();
+}
+
+static object? CloneJsonBackedValue(object? value)
+{
+    if (value is JsonElement el) return el.Clone();
+    return value;
 }
 
 static SubtitleContributorDto[]? MapContributors(List<SubtitleContributor>? contributors)
@@ -1855,3 +2284,30 @@ internal record RatingRequest([property: JsonConverter(typeof(JsonStringEnumConv
 
 public partial class Program { }
 public record NewMappingDto([property: JsonPropertyName("source")] string? Source, [property: JsonPropertyName("canonical")] string? Canonical, [property: JsonPropertyName("notes")] string? Notes);
+public record LegacyVideosMigrationRequest([property: JsonPropertyName("dryRun")] bool? DryRun);
+public record LegacyVideosMigrationResult(
+    bool Ok,
+    bool DryRun,
+    string Mode,
+    string LegacyPath,
+    LegacyVideosMigrationTotals Totals,
+    IReadOnlyList<LegacyVideosMigrationDetail> DetailsSample,
+    DateTimeOffset RanAtUtc,
+    string? ErrorCode,
+    string? Error);
+public class LegacyVideosMigrationTotals
+{
+    public int LegacyCount { get; set; }
+    public int Created { get; set; }
+    public int UpdatedMissingFields { get; set; }
+    public int TagsMerged { get; set; }
+    public int Unchanged { get; set; }
+    public int SkippedInvalid { get; set; }
+    public int Errors { get; set; }
+}
+public record LegacyVideosMigrationDetail(
+    string VideoId,
+    string Action,
+    IReadOnlyList<string>? FieldsFilled,
+    IReadOnlyList<string>? TagsAdded,
+    string? Error);

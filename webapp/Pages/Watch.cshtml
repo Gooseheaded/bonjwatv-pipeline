@@ -69,14 +69,14 @@ else
             <label for="subtitle-pos-slider" class="form-label mb-0">Subtitle Position:</label>
             <div class="btn-group btn-group-sm" role="group" aria-label="Subtitle position presets">
                 <button type="button" class="btn btn-outline-secondary" data-subtitle-pos-preset="8">Low</button>
-                <button type="button" class="btn btn-outline-secondary" data-subtitle-pos-preset="18">Mid</button>
-                <button type="button" class="btn btn-outline-secondary" data-subtitle-pos-preset="30">High</button>
+                <button type="button" class="btn btn-outline-secondary" data-subtitle-pos-preset="28">Mid</button>
+                <button type="button" class="btn btn-outline-secondary" data-subtitle-pos-preset="68">High</button>
             </div>
             <input id="subtitle-pos-slider"
                    type="range"
                    class="form-range m-0"
                    min="0"
-                   max="40"
+                   max="80"
                    step="1"
                    value="8"
                    style="width: 10rem;"
@@ -189,7 +189,7 @@ else
         const subtitlePosStorageKey = 'subtitleVerticalPct';
         const subtitlePosDefault = 8;
         const subtitlePosMin = 0;
-        const subtitlePosMax = 40;
+        const subtitlePosMax = 80;
         const savedSize = parseFloat(localStorage.getItem('subtitleFontSize'));
         if (!isNaN(savedSize)) {
             subtitleEl.style.fontSize = savedSize + 'px';

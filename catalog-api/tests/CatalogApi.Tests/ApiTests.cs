@@ -702,6 +702,165 @@ public class ApiTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains("zvz", tags4);
     }
 
+    [Fact]
+    public async Task Legacy_Migration_DryRun_Previews_Without_Writing()
+    {
+        var tmp = Directory.CreateTempSubdirectory();
+        try
+        {
+            var storePath = Path.Combine(tmp.FullName, "catalog-videos.json");
+            var legacyPath = Path.Combine(tmp.FullName, "videos.json");
+            var ratingsPath = Path.Combine(tmp.FullName, "ratings.json");
+            var submissionsPath = Path.Combine(tmp.FullName, "submissions.json");
+            var subtitlesRoot = Path.Combine(tmp.FullName, "subtitles");
+
+            await File.WriteAllTextAsync(storePath,
+                "[{\"v\":\"keep001\",\"title\":\"Keep Title\",\"creator\":\"Catalog Creator\",\"tags\":[\"z\"],\"subtitleUrl\":\"/api/subtitles/keep001/2.srt\"}]");
+            await File.WriteAllTextAsync(legacyPath,
+                "[" +
+                "{\"v\":\"keep001\",\"title\":\"Legacy Title\",\"description\":\"Legacy desc\",\"tags\":[\"zvt\",\"story\"],\"subtitleUrl\":\"https://legacy.example/keep001.srt\"}," +
+                "{\"v\":\"new001\",\"title\":\"Brand New\",\"creator\":\"Legacy Creator\",\"tags\":[\"p\",\"pvt\"]}," +
+                "{\"v\":\"bad001\",\"title\":\"   \"}" +
+                "]");
+
+            var factory = _factory.WithWebHostBuilder(builder =>
+            {
+                var solutionDir = FindSolutionDirectory();
+                var projectDir = Path.Combine(solutionDir, "catalog-api");
+                builder.UseContentRoot(projectDir);
+                builder.ConfigureAppConfiguration((ctx, cfg) =>
+                {
+                    cfg.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["Data:VideosStorePath"] = storePath,
+                        ["Data:JsonPath"] = legacyPath,
+                        ["Data:RatingsPath"] = ratingsPath,
+                        ["Data:SubmissionsPath"] = submissionsPath,
+                        ["Data:SubtitlesRoot"] = subtitlesRoot
+                    }!);
+                });
+            });
+            var client = factory.CreateClient();
+
+            var before = await File.ReadAllTextAsync(storePath);
+            var resp = await client.PostAsJsonAsync("/api/admin/migrations/legacy-videos/import", new { dryRun = true });
+            resp.EnsureSuccessStatusCode();
+            var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.True(body.GetProperty("ok").GetBoolean());
+            Assert.True(body.GetProperty("dryRun").GetBoolean());
+            var totals = body.GetProperty("totals");
+            Assert.Equal(3, totals.GetProperty("legacyCount").GetInt32());
+            Assert.Equal(1, totals.GetProperty("created").GetInt32());
+            Assert.Equal(1, totals.GetProperty("updatedMissingFields").GetInt32());
+            Assert.Equal(1, totals.GetProperty("tagsMerged").GetInt32());
+            Assert.Equal(0, totals.GetProperty("unchanged").GetInt32());
+            Assert.Equal(1, totals.GetProperty("skippedInvalid").GetInt32());
+            Assert.Equal(0, totals.GetProperty("errors").GetInt32());
+
+            var after = await File.ReadAllTextAsync(storePath);
+            Assert.Equal(before, after);
+        }
+        finally
+        {
+            try { Directory.Delete(tmp.FullName, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task Legacy_Migration_Applies_UpdateMissing_And_TagUnion_And_Is_Idempotent()
+    {
+        var tmp = Directory.CreateTempSubdirectory();
+        try
+        {
+            var storePath = Path.Combine(tmp.FullName, "catalog-videos.json");
+            var legacyPath = Path.Combine(tmp.FullName, "videos.json");
+            var ratingsPath = Path.Combine(tmp.FullName, "ratings.json");
+            var submissionsPath = Path.Combine(tmp.FullName, "submissions.json");
+            var subtitlesRoot = Path.Combine(tmp.FullName, "subtitles");
+
+            await File.WriteAllTextAsync(storePath,
+                "[" +
+                "{\"v\":\"keep001\",\"title\":\"Keep Title\",\"creator\":\"Catalog Creator\",\"tags\":[\"z\"],\"subtitleUrl\":\"/api/subtitles/keep001/2.srt\"}," +
+                "{\"v\":\"fill001\",\"title\":\"Fill Me\",\"creator\":\"   \",\"description\":\"\",\"tags\":[]}" +
+                "]");
+            await File.WriteAllTextAsync(legacyPath,
+                "[" +
+                "{\"v\":\"keep001\",\"title\":\"Legacy Title\",\"description\":\"Legacy desc\",\"tags\":[\"z\",\"zvt\",\"story\"],\"subtitleUrl\":\"https://legacy.example/keep001.srt\"}," +
+                "{\"v\":\"fill001\",\"title\":\"Legacy Fill\",\"creator\":\"Legacy Creator\",\"description\":\"Legacy Fill Desc\",\"tags\":[\"t\"]}," +
+                "{\"v\":\"new001\",\"title\":\"Brand New\",\"creator\":\"Legacy New Creator\",\"tags\":[\"p\",\"pvt\"],\"submitter\":\"alice\",\"submissionDate\":\"2025-01-01\"}" +
+                "]");
+
+            var factory = _factory.WithWebHostBuilder(builder =>
+            {
+                var solutionDir = FindSolutionDirectory();
+                var projectDir = Path.Combine(solutionDir, "catalog-api");
+                builder.UseContentRoot(projectDir);
+                builder.ConfigureAppConfiguration((ctx, cfg) =>
+                {
+                    cfg.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["Data:VideosStorePath"] = storePath,
+                        ["Data:JsonPath"] = legacyPath,
+                        ["Data:RatingsPath"] = ratingsPath,
+                        ["Data:SubmissionsPath"] = submissionsPath,
+                        ["Data:SubtitlesRoot"] = subtitlesRoot
+                    }!);
+                });
+            });
+            var client = factory.CreateClient();
+
+            var apply = await client.PostAsJsonAsync("/api/admin/migrations/legacy-videos/import", new { dryRun = false });
+            apply.EnsureSuccessStatusCode();
+            var applyBody = await apply.Content.ReadFromJsonAsync<JsonElement>();
+            var applyTotals = applyBody.GetProperty("totals");
+            Assert.Equal(1, applyTotals.GetProperty("created").GetInt32());
+            Assert.Equal(2, applyTotals.GetProperty("updatedMissingFields").GetInt32());
+            Assert.Equal(2, applyTotals.GetProperty("tagsMerged").GetInt32());
+            Assert.Equal(0, applyTotals.GetProperty("errors").GetInt32());
+
+            using (var fs = File.OpenRead(storePath))
+            using (var doc = JsonDocument.Parse(fs))
+            {
+                var arr = doc.RootElement.EnumerateArray().ToList();
+                Assert.Equal(3, arr.Count);
+
+                var keep = arr.First(x => x.GetProperty("v").GetString() == "keep001");
+                Assert.Equal("Keep Title", keep.GetProperty("title").GetString());
+                Assert.Equal("Legacy desc", keep.GetProperty("description").GetString());
+                Assert.Equal("/api/subtitles/keep001/2.srt", keep.GetProperty("subtitleUrl").GetString());
+                var keepTags = keep.GetProperty("tags").EnumerateArray().Select(x => x.GetString()).ToArray();
+                Assert.Contains("z", keepTags);
+                Assert.Contains("zvt", keepTags);
+                Assert.Contains("story", keepTags);
+
+                var fill = arr.First(x => x.GetProperty("v").GetString() == "fill001");
+                Assert.Equal("Fill Me", fill.GetProperty("title").GetString());
+                Assert.Equal("Legacy Creator", fill.GetProperty("creator").GetString());
+                Assert.Equal("Legacy Fill Desc", fill.GetProperty("description").GetString());
+                var fillTags = fill.GetProperty("tags").EnumerateArray().Select(x => x.GetString()).ToArray();
+                Assert.Contains("t", fillTags);
+
+                var created = arr.First(x => x.GetProperty("v").GetString() == "new001");
+                Assert.Equal("Brand New", created.GetProperty("title").GetString());
+                Assert.Equal("alice", created.GetProperty("submitter").GetString());
+            }
+
+            var rerun = await client.PostAsJsonAsync("/api/admin/migrations/legacy-videos/import", new { dryRun = false });
+            rerun.EnsureSuccessStatusCode();
+            var rerunBody = await rerun.Content.ReadFromJsonAsync<JsonElement>();
+            var rerunTotals = rerunBody.GetProperty("totals");
+            Assert.Equal(0, rerunTotals.GetProperty("created").GetInt32());
+            Assert.Equal(0, rerunTotals.GetProperty("updatedMissingFields").GetInt32());
+            Assert.Equal(0, rerunTotals.GetProperty("tagsMerged").GetInt32());
+            Assert.Equal(3, rerunTotals.GetProperty("unchanged").GetInt32());
+        }
+        finally
+        {
+            try { Directory.Delete(tmp.FullName, true); } catch { }
+        }
+    }
+
     private sealed class SubtitleTestContext : IAsyncDisposable
     {
         public required WebApplicationFactory<Program> Factory { get; init; }

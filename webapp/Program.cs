@@ -676,6 +676,42 @@ app.MapPost("/admin/submissions/{id}/reject", async (string id, HttpRequest req,
     return Results.Redirect("/Admin?ok=1&status=rejected");
 });
 
+app.MapPost("/admin/migrations/legacy-videos/import", async (HttpRequest req, HttpContext ctx) =>
+{
+    if (!(ctx.User?.Identity?.IsAuthenticated ?? false) || !IsAdmin(ctx)) return Results.StatusCode(403);
+    if (string.IsNullOrWhiteSpace(apiBase)) return Results.StatusCode(503);
+
+    string payload;
+    var contentType = req.ContentType ?? string.Empty;
+    if (contentType.Contains("application/json", StringComparison.OrdinalIgnoreCase))
+    {
+        using var sr = new StreamReader(req.Body);
+        payload = await sr.ReadToEndAsync();
+        if (string.IsNullOrWhiteSpace(payload)) payload = "{\"dryRun\":true}";
+    }
+    else
+    {
+        var form = await req.ReadFormAsync();
+        var raw = form["dryRun"].FirstOrDefault();
+        var dryRun = string.IsNullOrWhiteSpace(raw)
+            ? true
+            : raw.Equals("true", StringComparison.OrdinalIgnoreCase)
+              || raw.Equals("on", StringComparison.OrdinalIgnoreCase)
+              || raw.Equals("1", StringComparison.OrdinalIgnoreCase);
+        payload = System.Text.Json.JsonSerializer.Serialize(new { dryRun });
+    }
+
+    using var http = new HttpClient();
+    using var msg = new HttpRequestMessage(HttpMethod.Post, $"{apiBase}/admin/migrations/legacy-videos/import")
+    {
+        Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json")
+    };
+    var resp = await http.SendAsync(msg);
+    var text = await resp.Content.ReadAsStringAsync();
+    var ct = resp.Content.Headers.ContentType?.ToString() ?? "application/json";
+    return Results.Content(text, ct, statusCode: (int)resp.StatusCode);
+});
+
 app.Run();
 
 public class CorrectionRequest
