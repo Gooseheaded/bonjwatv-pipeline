@@ -4,6 +4,7 @@ Time-ordered session notes capturing decisions, changes, and next steps. Prefer 
 
 ## Sessions
 
+- [2026-02-23](session-2026-02-23.md)
 - [2025-12-06](session-2025-12-06.md)
 - [2025-12-06-c](session-2025-12-06-c.md)
 - [2025-12-06-b](session-2025-12-06-b.md)

@@ -27,14 +27,17 @@ else
             <span class="badge @css me-1">@text</span>
         }
     </div>
-    <div class="position-relative ratio ratio-16x9 mb-3 video-wrapper">
-        <iframe id="player"
-                src="https://www.youtube.com/embed/@Model.Video.VideoId?enablejsapi=1"
-                title="@Model.Video.Title"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
-        </iframe>
-        <div id="subtitle-container"
-             class="position-absolute start-50 translate-middle-x subtitle-overlay">
+    <div id="theater-backdrop" class="theater-backdrop" hidden aria-hidden="true"></div>
+    <div id="player-theater-shell" class="player-theater-shell">
+        <div class="position-relative ratio ratio-16x9 mb-3 video-wrapper">
+            <iframe id="player"
+                    src="https://www.youtube.com/embed/@Model.Video.VideoId?enablejsapi=1"
+                    title="@Model.Video.Title"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture">
+            </iframe>
+            <div id="subtitle-container"
+                 class="position-absolute start-50 translate-middle-x subtitle-overlay">
+            </div>
         </div>
     </div>
     @if (isAdmin)
@@ -61,6 +64,49 @@ else
                 <button id="dec-font" type="button" class="btn btn-outline-secondary">A-</button>
                 <button id="inc-font" type="button" class="btn btn-outline-secondary">A+</button>
             </div>
+        </div>
+        <div class="d-flex align-items-center flex-wrap gap-2">
+            <label for="subtitle-pos-slider" class="form-label mb-0">Subtitle Position:</label>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Subtitle position presets">
+                <button type="button" class="btn btn-outline-secondary" data-subtitle-pos-preset="8">Low</button>
+                <button type="button" class="btn btn-outline-secondary" data-subtitle-pos-preset="18">Mid</button>
+                <button type="button" class="btn btn-outline-secondary" data-subtitle-pos-preset="30">High</button>
+            </div>
+            <input id="subtitle-pos-slider"
+                   type="range"
+                   class="form-range m-0"
+                   min="0"
+                   max="40"
+                   step="1"
+                   value="8"
+                   style="width: 10rem;"
+                   aria-label="Subtitle position, higher moves subtitles up" />
+            <button id="subtitle-pos-reset" type="button" class="btn btn-outline-secondary btn-sm">Reset</button>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            @if (User?.Identity?.IsAuthenticated ?? false)
+            {
+                <button id="theater-toggle"
+                        type="button"
+                        class="btn btn-outline-secondary btn-sm theater-toggle-btn"
+                        aria-pressed="false"
+                        aria-controls="player-theater-shell"
+                        data-video-id="@Model.Video.VideoId"
+                        data-label-enter="Theater Mode"
+                        data-label-exit="Exit Theater">
+                    Theater Mode
+                </button>
+            }
+            else
+            {
+                <button type="button"
+                        class="btn btn-outline-secondary btn-sm"
+                        disabled
+                        aria-disabled="true">
+                    Theater Mode
+                </button>
+                <small class="text-muted">Login to unlock Theater Mode</small>
+            }
         </div>
         <div class="d-flex align-items-center">
             <div class="me-2">Rate subtitles:</div>
@@ -130,16 +176,25 @@ else
     <script src="~/js/subtitles.js" asp-append-version="true"></script>
     <script src="~/js/watched.js"></script>
     <script src="~/js/corrections.js" asp-append-version="true"></script>
+    <script src="~/js/watch-theater.js" asp-append-version="true"></script>
     <script>
         // Initialize subtitles after the YouTube IFrame API has loaded
         initSubtitles("@Model.Video.SubtitleUrl", "player", "subtitle-container");
 
         // Load saved font size from localStorage, if any
         const subtitleEl = document.getElementById('subtitle-container');
+        const subtitlePosSlider = document.getElementById('subtitle-pos-slider');
+        const subtitlePosReset = document.getElementById('subtitle-pos-reset');
+        const subtitlePosPresetButtons = Array.from(document.querySelectorAll('[data-subtitle-pos-preset]'));
+        const subtitlePosStorageKey = 'subtitleVerticalPct';
+        const subtitlePosDefault = 8;
+        const subtitlePosMin = 0;
+        const subtitlePosMax = 40;
         const savedSize = parseFloat(localStorage.getItem('subtitleFontSize'));
         if (!isNaN(savedSize)) {
             subtitleEl.style.fontSize = savedSize + 'px';
         }
+        initSubtitlePosition();
 
         // Font size adjustment controls
         const decBtn = document.getElementById('dec-font');
@@ -154,6 +209,61 @@ else
             subtitleEl.style.fontSize = next + 'px';
             localStorage.setItem('subtitleFontSize', next);
             try { if (window.gtag) { window.gtag('event', 'subtitle_font_resize', { size_px: next }); } } catch {}
+        }
+
+        function clampSubtitlePos(value) {
+            if (!Number.isFinite(value)) return subtitlePosDefault;
+            return Math.max(subtitlePosMin, Math.min(subtitlePosMax, value));
+        }
+
+        function applySubtitlePosition(value, persist = true) {
+            const next = clampSubtitlePos(value);
+            subtitleEl.style.top = 'auto';
+            subtitleEl.style.bottom = next + '%';
+            subtitleEl.style.width = '100%';
+            if (subtitlePosSlider) subtitlePosSlider.value = String(next);
+            updateSubtitlePresetActive(next);
+            if (persist) {
+                localStorage.setItem(subtitlePosStorageKey, String(next));
+            }
+        }
+
+        function updateSubtitlePresetActive(currentValue) {
+            subtitlePosPresetButtons.forEach(btn => {
+                const preset = Number.parseInt(btn.getAttribute('data-subtitle-pos-preset') || '', 10);
+                const isMatch = Number.isFinite(preset) && preset === currentValue;
+                btn.classList.toggle('active', isMatch);
+                btn.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+            });
+        }
+
+        function initSubtitlePosition() {
+            if (!subtitleEl) return;
+            const saved = parseFloat(localStorage.getItem(subtitlePosStorageKey));
+            applySubtitlePosition(Number.isFinite(saved) ? saved : subtitlePosDefault, false);
+
+            if (subtitlePosSlider) {
+                subtitlePosSlider.addEventListener('input', (e) => {
+                    const target = e.target;
+                    const next = Number.parseFloat(target.value);
+                    applySubtitlePosition(next);
+                });
+            }
+
+            subtitlePosPresetButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const preset = Number.parseInt(btn.getAttribute('data-subtitle-pos-preset') || '', 10);
+                    if (!Number.isFinite(preset)) return;
+                    applySubtitlePosition(preset);
+                });
+            });
+
+            if (subtitlePosReset) {
+                subtitlePosReset.addEventListener('click', () => {
+                    localStorage.removeItem(subtitlePosStorageKey);
+                    applySubtitlePosition(subtitlePosDefault, false);
+                });
+            }
         }
 
         // Ratings wiring
