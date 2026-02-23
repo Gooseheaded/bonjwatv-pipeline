@@ -2,16 +2,29 @@
 set -euo pipefail
 
 # Copy a docker bundle tar.gz to a server and deploy it.
-# Usage: scripts/deploy-to-server.sh user@host /remote/dir /path/to/bwkt-docker-*.tar.gz
+# Usage:
+#   scripts/deploy-to-server.sh /path/to/bwkt-docker-*.tar.gz
+#   scripts/deploy-to-server.sh user@host /remote/dir /path/to/bwkt-docker-*.tar.gz
+# Defaults (1-arg mode):
+#   target: root@157.230.165.165
+#   dir:    /root/bwkt
 
-if [[ $# -lt 3 ]]; then
-  echo "Usage: $0 user@host /remote/dir /path/to/bundle.tar.gz" >&2
+DEFAULT_TARGET="root@157.230.165.165"
+DEFAULT_REMOTE_DIR="/root/bwkt"
+
+if [[ $# -eq 1 ]]; then
+  TARGET="$DEFAULT_TARGET"
+  REMOTE_DIR="$DEFAULT_REMOTE_DIR"
+  BUNDLE="$1"
+elif [[ $# -eq 3 ]]; then
+  TARGET="$1"
+  REMOTE_DIR="$2"
+  BUNDLE="$3"
+else
+  echo "Usage: $0 /path/to/bundle.tar.gz" >&2
+  echo "   or: $0 user@host /remote/dir /path/to/bundle.tar.gz" >&2
   exit 2
 fi
-
-TARGET="$1"
-REMOTE_DIR="$2"
-BUNDLE="$3"
 
 # Reuse a single SSH connection across all ssh/scp calls to avoid multiple password prompts
 SOCK_DIR=$(mktemp -d)
@@ -37,6 +50,15 @@ if ! ssh "${SSH_OPTS[@]}" "$TARGET" "touch '$REMOTE_DIR/.deploy-write-test' && r
   echo "ERROR: Remote directory $REMOTE_DIR is not writable. Choose a different path (e.g. /root/bwkt) and retry." >&2
   exit 1
 fi
+
+echo "Checking Docker bind-mount support for remote directory…"
+if ! ssh "${SSH_OPTS[@]}" "$TARGET" "mkdir -p '$REMOTE_DIR/.docker-bind-test' && docker run --rm -v '$REMOTE_DIR/.docker-bind-test':/test alpine sh -lc 'echo ok >/test/probe && test -s /test/probe' >/dev/null 2>&1"; then
+  echo "ERROR: Docker cannot bind-mount paths under $REMOTE_DIR on the remote host." >&2
+  echo "       This is common on some containerized/LXC hosts for /opt." >&2
+  echo "       Retry with a Docker-friendly path such as /root/bwkt." >&2
+  exit 1
+fi
+ssh "${SSH_OPTS[@]}" "$TARGET" "rm -rf '$REMOTE_DIR/.docker-bind-test'" >/dev/null 2>&1 || true
 
 echo "Uploading bundle: $BUNDLE → $TARGET:$REMOTE_DIR/"
 scp "${SSH_OPTS[@]}" "$BUNDLE" "$TARGET:$REMOTE_DIR/"
